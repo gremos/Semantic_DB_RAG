@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Shared utility functions
+OPTIMIZED Shared utility functions for 500+ object analysis
+Less aggressive filtering to maximize business data discovery
 """
 
 import json
@@ -114,7 +115,71 @@ def load_json_cache(filepath: Path, max_age_hours: int = 24, description: str = 
         return None
 
 def should_exclude_table(table_name: str, schema_name: str) -> bool:
-    """Enhanced exclusion logic for better filtering"""
+    """
+    MINIMAL exclusion logic - Only exclude truly problematic objects
+    
+    CHANGED FROM AGGRESSIVE TO MINIMAL FILTERING:
+    - Previous version excluded many potentially useful business objects
+    - New version only excludes clearly broken/system objects
+    - Goal: Analyze as many of the 500+ objects as possible
+    """
+    full_name = f"{schema_name}.{table_name}"
+    name_lower = table_name.lower()
+    
+    # ONLY exclude clearly problematic objects (minimal list)
+    critical_exclusions = [
+        # System-only objects
+        'msreplication', 'trace_xe', 'syscommittab', 'sysdiagrams',
+        'dtproperties', '__msnpeer', '__msdbm', 'mspeer_',
+        
+        # Clearly corrupted/broken objects
+        'corrupted', 'broken', 'damaged', 'invalid', 'error_log',
+        
+        # SQL Server internal replication
+        'conflict_', 'reseed_', 'msmerge_',
+        
+        # Only backup tables with clear date patterns (not just backup word)
+        '_bck_202', '_backup_202', 'backup_202'  # Only dated backups
+    ]
+    
+    # Check critical exclusions only
+    for exclusion in critical_exclusions:
+        if exclusion in name_lower:
+            return True
+    
+    # DON'T exclude common business objects that were previously filtered
+    # These should be KEPT and analyzed:
+    keep_patterns = [
+        'customer', 'client', 'user', 'account', 'person', 'business',
+        'order', 'sales', 'product', 'item', 'service',
+        'payment', 'invoice', 'transaction', 'financial',
+        'address', 'contact', 'phone', 'email',
+        'company', 'organization', 'vendor', 'supplier',
+        'campaign', 'marketing', 'advertisement',
+        'task', 'assignment', 'project', 'comment',
+        'log', 'audit', 'history'  # Even these can be valuable
+    ]
+    
+    # If it matches business patterns, definitely keep it
+    for pattern in keep_patterns:
+        if pattern in name_lower:
+            return False  # Force keep business objects
+    
+    # Schema-based filtering (only exclude clearly system schemas)
+    system_schemas = ['sys', 'information_schema', 'guest', 'INFORMATION_SCHEMA']
+    if schema_name in system_schemas:
+        return True
+    
+    # DEFAULT: Keep the object (analyze it)
+    # This is a major change from the previous aggressive filtering
+    return False
+
+def should_exclude_table_original_aggressive(table_name: str, schema_name: str) -> bool:
+    """
+    ORIGINAL AGGRESSIVE exclusion logic - REPLACED by minimal version above
+    This version excluded too many potentially useful objects
+    Kept here for reference only - DO NOT USE
+    """
     exclude_patterns = [
         # System and timing tables
         'YPSTimingView', '*Timing*', '*Log*', '*Audit*', 'sys*',
@@ -155,6 +220,77 @@ def should_exclude_table(table_name: str, schema_name: str) -> bool:
             return True
     
     return False
+
+def classify_object_priority(table_name: str, schema_name: str, object_type: str, estimated_rows: int) -> int:
+    """
+    Classify object priority for processing order (higher = more important)
+    Helps ensure business-critical objects are processed first in large datasets
+    """
+    name_lower = table_name.lower()
+    priority = 0
+    
+    # Base priority by object type
+    if object_type in ['BASE TABLE', 'TABLE']:
+        priority += 1000  # Tables get highest base priority
+    elif object_type == 'VIEW':
+        priority += 800   # Views get high priority (many contain business logic)
+    
+    # Business domain priority (VERY HIGH - these are the most valuable)
+    high_value_business = [
+        'customer', 'client', 'businesspoint', 'account', 'user',
+        'order', 'sales', 'purchase', 'transaction', 'payment',
+        'product', 'item', 'service', 'inventory',
+        'invoice', 'billing', 'financial', 'revenue',
+        'person', 'employee', 'staff', 'contact'
+    ]
+    
+    for term in high_value_business:
+        if term in name_lower:
+            priority += 500  # Major business priority boost
+            break
+    
+    # Medium value business objects
+    medium_value_business = [
+        'address', 'phone', 'email', 'communication',
+        'company', 'organization', 'vendor', 'supplier',
+        'campaign', 'marketing', 'advertisement', 'promotion',
+        'task', 'assignment', 'project', 'workflow',
+        'category', 'type', 'status', 'configuration'
+    ]
+    
+    for term in medium_value_business:
+        if term in name_lower:
+            priority += 200
+            break
+    
+    # Data volume consideration (objects with data are more valuable)
+    if estimated_rows > 10000:
+        priority += 100
+    elif estimated_rows > 1000:
+        priority += 50
+    elif estimated_rows > 100:
+        priority += 20
+    elif estimated_rows > 0:
+        priority += 10
+    
+    # Schema priority (business schemas first)
+    if schema_name.lower() == 'dbo':
+        priority += 100
+    elif schema_name.lower() in ['business', 'sales', 'finance', 'hr', 'crm']:
+        priority += 150
+    
+    # Penalize only clearly problematic objects
+    problematic_patterns = [
+        'temp', 'tmp', 'test', 'debug', 'error',
+        'backup_20', 'bck_20', '_old_', '_archive'
+    ]
+    
+    for pattern in problematic_patterns:
+        if pattern in name_lower:
+            priority -= 200
+            break
+    
+    return max(priority, 0)  # Never go below 0
 
 def clean_sql_response(response: str) -> Optional[str]:
     """Clean SQL response from LLM"""
@@ -197,13 +333,13 @@ def extract_sample_greek_text(tables: List['TableInfo']) -> List[str]:
     """Extract sample Greek text for domain analysis context"""
     greek_samples = []
     
-    for table in tables[:10]:  # Check first 10 tables
+    for table in tables[:15]:  # Check more tables for better Greek text detection
         if table.sample_data:
-            for row in table.sample_data[:2]:
+            for row in table.sample_data[:3]:  # Check more samples
                 for key, value in row.items():
                     if isinstance(value, str) and any(ord(char) > 127 for char in value):
                         greek_samples.append(f"{table.name}.{key}: {value[:50]}")
-                        if len(greek_samples) >= 5:
+                        if len(greek_samples) >= 10:  # Collect more samples
                             return greek_samples
     
     return greek_samples
@@ -222,3 +358,61 @@ def format_duration(seconds: float) -> str:
         hours = int(seconds // 3600)
         minutes = int((seconds % 3600) // 60)
         return f"{hours}h {minutes}m"
+
+def estimate_processing_time(object_count: int, workers: int, timeout_per_object: int = 20) -> str:
+    """Estimate total processing time for large datasets"""
+    # Conservative estimate: each object takes average of timeout/2 seconds
+    avg_time_per_object = timeout_per_object / 2
+    
+    # With parallel processing
+    total_time_seconds = (object_count * avg_time_per_object) / workers
+    
+    # Add overhead for batching and setup
+    overhead = object_count * 0.1  # 0.1 seconds overhead per object
+    total_time_seconds += overhead
+    
+    return format_duration(total_time_seconds)
+
+def get_performance_recommendations(object_count: int) -> List[str]:
+    """Get performance recommendations based on dataset size"""
+    recommendations = []
+    
+    if object_count > 500:
+        recommendations.extend([
+            f"🚀 Large dataset detected ({object_count} objects)",
+            "💡 Consider running discovery during off-peak hours",
+            "⚡ Enable aggressive parallelism for faster processing",
+            "📊 Monitor progress - large datasets take 15-30 minutes",
+            "💾 Results will be cached for faster subsequent runs"
+        ])
+    elif object_count > 200:
+        recommendations.extend([
+            f"📊 Medium dataset ({object_count} objects)",
+            "⚡ Default parallelism should work well",
+            "⏱️ Expected completion: 5-15 minutes"
+        ])
+    else:
+        recommendations.extend([
+            f"✅ Small dataset ({object_count} objects)",
+            "🏃 Quick processing expected: 2-5 minutes"
+        ])
+    
+    return recommendations
+
+def log_filtering_statistics(total_found: int, excluded_count: int, processed_count: int):
+    """Log statistics about object filtering for transparency"""
+    kept_count = total_found - excluded_count
+    exclusion_rate = (excluded_count / total_found) * 100 if total_found > 0 else 0
+    
+    print(f"\n📊 Object Filtering Statistics:")
+    print(f"   • Total objects found: {total_found}")
+    print(f"   • Objects excluded: {excluded_count} ({exclusion_rate:.1f}%)")
+    print(f"   • Objects kept for analysis: {kept_count}")
+    print(f"   • Objects successfully processed: {processed_count}")
+    
+    if exclusion_rate > 30:
+        print(f"   ⚠️ High exclusion rate - consider reviewing filtering rules")
+    elif exclusion_rate < 5:
+        print(f"   ✅ Minimal exclusion - analyzing most business objects")
+    else:
+        print(f"   👍 Balanced filtering - keeping business-relevant objects")
