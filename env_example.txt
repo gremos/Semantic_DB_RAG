@@ -1,0 +1,85 @@
+# Enhanced Semantic Database RAG System - Environment Configuration
+# Copy this file to .env and fill in your actual values
+
+# =================================================================
+# AZURE OPENAI CONFIGURATION (Required)
+# =================================================================
+AZURE_OPENAI_API_KEY=your_azure_openai_api_key_here
+AZURE_ENDPOINT=https://gyp-weu-02-res01-prdenv-cog01.openai.azure.com/
+DEPLOYMENT_NAME=gpt-4.1-mini
+MODEL_VERSION=2024-12-01-preview
+
+# =================================================================
+# DATABASE CONFIGURATION (Required)
+# =================================================================
+# SQL Server connection string
+# Example for SQL Server with Windows Authentication:
+# DATABASE_CONNECTION_STRING=Driver={ODBC Driver 17 for SQL Server};Server=localhost;Database=YourDatabase;Trusted_Connection=yes;
+
+# Example for SQL Server with SQL Authentication:
+# DATABASE_CONNECTION_STRING=Driver={ODBC Driver 17 for SQL Server};Server=localhost;Database=YourDatabase;UID=username;PWD=password;
+
+DATABASE_CONNECTION_STRING=your_database_connection_string_here
+
+# =================================================================
+# SYSTEM CONFIGURATION (Optional - defaults provided)
+# =================================================================
+
+# Cache settings (hours)
+DISCOVERY_CACHE_HOURS=24
+SEMANTIC_CACHE_HOURS=48
+
+# Database connection timeouts (seconds)
+CONNECTION_TIMEOUT=15
+COMMAND_TIMEOUT=10
+
+# Query processing limits
+MAX_RESULTS=100
+MAX_BATCH_SIZE=5
+RATE_LIMIT_DELAY=0.5
+
+# Logging configuration
+LOG_LEVEL=INFO
+LOG_FILE=data/logs/semantic_rag.log
+USE_COLORED_LOGS=true
+
+# =================================================================
+# ADVANCED CONFIGURATION (Optional)
+# =================================================================
+
+# Discovery settings
+EXCLUDE_BACKUP_TABLES=true
+EXCLUDE_SYSTEM_TABLES=true
+USE_FAST_QUERIES=true
+
+# Semantic analysis settings
+CLASSIFICATION_CONFIDENCE_THRESHOLD=0.5
+RELATIONSHIP_CONFIDENCE_THRESHOLD=0.6
+MAX_RELATIONSHIPS=100
+
+# Query generation settings
+SQL_TIMEOUT_SECONDS=30
+USE_QUERY_OPTIMIZATION=true
+ENABLE_VIEW_PREFERENCE=true
+
+# =================================================================
+# EXAMPLE CONFIGURATIONS FOR COMMON SCENARIOS
+# =================================================================
+
+# Local SQL Server Express:
+# DATABASE_CONNECTION_STRING=Driver={ODBC Driver 17 for SQL Server};Server=localhost\SQLEXPRESS;Database=YourDB;Trusted_Connection=yes;
+
+# Azure SQL Database:
+# DATABASE_CONNECTION_STRING=Driver={ODBC Driver 17 for SQL Server};Server=yourserver.database.windows.net;Database=YourDB;UID=username;PWD=password;Encrypt=yes;TrustServerCertificate=no;Connection Timeout=30;
+
+# SQL Server with custom port:
+# DATABASE_CONNECTION_STRING=Driver={ODBC Driver 17 for SQL Server};Server=localhost,1433;Database=YourDB;UID=username;PWD=password;
+
+# =================================================================
+# NOTES
+# =================================================================
+# 1. Keep your .env file secure and never commit it to version control
+# 2. The system will work with defaults for most optional settings
+# 3. Greek/Unicode text is automatically supported
+# 4. FAST queries are enabled by default for better performance
+# 5. Views are now properly handled and included in analysis
