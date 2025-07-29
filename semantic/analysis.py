@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Semantic Analysis Module
+Semantic Analysis Module - Clean implementation with proper imports
 Handles LLM-based semantic classification, relationship discovery, and business domain analysis
 """
 
 import asyncio
+import json
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from collections import defaultdict
@@ -23,6 +24,7 @@ except ImportError:
 from langchain_openai import AzureChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
 
+# Import from shared modules
 from shared.config import Config
 from shared.models import (
     TableInfo, SemanticProfile, BusinessDomain, Relationship,
@@ -162,7 +164,7 @@ class SemanticAnalyzer:
             
             # Add performance context for views
             if table.object_type == 'VIEW' and table.query_performance:
-                if table.query_performance['fast_query_used']:
+                if table.query_performance.get('fast_optimized'):
                     summary['note'] = 'Complex view - data retrieved using optimized query'
                 elif not table.sample_data:
                     summary['note'] = 'View may be empty or highly filtered'
@@ -241,7 +243,7 @@ Respond with JSON array:
         fk_count = 0
         for table in self.tables:
             for col in table.columns:
-                if col['is_foreign_key']:
+                if col.get('is_foreign_key', False):
                     relationships.append(Relationship(
                         from_table=table.full_name,
                         to_table='Unknown',  # Would need FK target info

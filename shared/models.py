@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Shared data models and structures
+Shared data models and structures - Enhanced for consistency
 """
 
 from dataclasses import dataclass, asdict
-from typing import Dict, List, Any, Optional, NamedTuple
+from typing import Dict, List, Any, Optional
 from datetime import datetime
 
 @dataclass
@@ -53,12 +53,49 @@ class Relationship:
     confidence: float
     description: str = ""
 
-class DatabaseObject(NamedTuple):
-    """Database object information for discovery"""
-    schema: str
-    name: str
-    object_type: str
-    estimated_rows: int
+class DatabaseObject:
+    """Enhanced database object information for discovery"""
+    
+    def __init__(self, schema: str, name: str, object_type: str, estimated_rows: int = 0):
+        self.schema = schema
+        self.name = name
+        self.object_type = object_type
+        self.estimated_rows = estimated_rows
+        self.priority = self._calculate_priority()
+    
+    def _calculate_priority(self) -> int:
+        """Calculate priority score for processing order"""
+        score = 0
+        name_lower = self.name.lower()
+        
+        # Tables get higher priority than views
+        if self.object_type == 'BASE TABLE':
+            score += 100
+        elif self.object_type == 'TABLE':
+            score += 100
+        
+        # Objects with data get priority
+        if self.estimated_rows > 0:
+            score += min(50, self.estimated_rows // 1000)
+        
+        # Business objects get priority
+        business_keywords = [
+            'customer', 'product', 'order', 'sales', 'user', 'account',
+            'transaction', 'payment', 'invoice', 'contract', 'person',
+            'company', 'address', 'contact', 'item', 'service'
+        ]
+        if any(word in name_lower for word in business_keywords):
+            score += 30
+        
+        # Penalize problematic objects
+        problem_keywords = [
+            'temp', 'tmp', 'backup', 'bck', 'log', 'audit', 'trace',
+            'error', 'debug', 'test', 'staging', 'stage'
+        ]
+        if any(word in name_lower for word in problem_keywords):
+            score -= 50
+        
+        return score
 
 @dataclass
 class SystemStatus:

@@ -21,9 +21,20 @@ MODEL_VERSION=2024-12-01-preview
 
 DATABASE_CONNECTION_STRING=your_database_connection_string_here
 
+# Alternative: Individual database connection components
+DB_SERVER=localhost
+DB_DATABASE=YourDatabase
+DB_USERNAME=your_username
+DB_PASSWORD=your_password
+
 # =================================================================
-# SYSTEM CONFIGURATION (Optional - defaults provided)
+# DISCOVERY CONFIGURATION (Optional - defaults provided)
 # =================================================================
+
+# Discovery limits and performance
+MAX_DISCOVERY_OBJECTS=50
+MAX_PARALLEL_WORKERS=8
+QUERY_TIMEOUT_SECONDS=30
 
 # Cache settings (hours)
 DISCOVERY_CACHE_HOURS=24
@@ -38,19 +49,18 @@ MAX_RESULTS=100
 MAX_BATCH_SIZE=5
 RATE_LIMIT_DELAY=0.5
 
+# Advanced discovery options
+USE_FAST_QUERIES=true
+EXCLUDE_BACKUP_TABLES=true
+
+# =================================================================
+# SYSTEM CONFIGURATION (Optional)
+# =================================================================
+
 # Logging configuration
 LOG_LEVEL=INFO
 LOG_FILE=data/logs/semantic_rag.log
 USE_COLORED_LOGS=true
-
-# =================================================================
-# ADVANCED CONFIGURATION (Optional)
-# =================================================================
-
-# Discovery settings
-EXCLUDE_BACKUP_TABLES=true
-EXCLUDE_SYSTEM_TABLES=true
-USE_FAST_QUERIES=true
 
 # Semantic analysis settings
 CLASSIFICATION_CONFIDENCE_THRESHOLD=0.5
@@ -61,6 +71,9 @@ MAX_RELATIONSHIPS=100
 SQL_TIMEOUT_SECONDS=30
 USE_QUERY_OPTIMIZATION=true
 ENABLE_VIEW_PREFERENCE=true
+
+# System behavior
+EXCLUDE_SYSTEM_TABLES=true
 
 # =================================================================
 # EXAMPLE CONFIGURATIONS FOR COMMON SCENARIOS
@@ -76,10 +89,20 @@ ENABLE_VIEW_PREFERENCE=true
 # DATABASE_CONNECTION_STRING=Driver={ODBC Driver 17 for SQL Server};Server=localhost,1433;Database=YourDB;UID=username;PWD=password;
 
 # =================================================================
-# NOTES
+# PERFORMANCE TUNING NOTES
 # =================================================================
-# 1. Keep your .env file secure and never commit it to version control
-# 2. The system will work with defaults for most optional settings
-# 3. Greek/Unicode text is automatically supported
-# 4. FAST queries are enabled by default for better performance
-# 5. Views are now properly handled and included in analysis
+# - Increase MAX_PARALLEL_WORKERS for faster discovery (but more DB load)
+# - Reduce QUERY_TIMEOUT_SECONDS for faster failure recovery
+# - Increase MAX_DISCOVERY_OBJECTS to analyze more database objects
+# - Set USE_FAST_QUERIES=true for 2-5x speed improvement
+# - Greek/Unicode text is automatically supported with proper encoding
+# - Views are now fully supported and analyzed properly
+
+# =================================================================
+# TROUBLESHOOTING
+# =================================================================
+# If you get "Config object has no attribute" errors:
+# 1. Make sure all required environment variables are set
+# 2. Check that the .env file is in the root directory
+# 3. Restart the application after changing .env values
+# 4. Enable DEBUG logging to see more details: LOG_LEVEL=DEBUG

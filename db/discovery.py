@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Fixed and Optimized Database Discovery Module
-Resolves the method name error and adds massive performance improvements
+Uses shared Config and models - Clean, maintainable implementation
 """
 
 import pyodbc
@@ -16,6 +16,11 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 
+# Import from shared modules
+from shared.config import Config
+from shared.models import TableInfo, DatabaseObject, AnalysisStats
+from shared.utils import safe_database_value, should_exclude_table
+
 # Load environment variables
 load_dotenv()
 
@@ -27,158 +32,6 @@ except ImportError:
     import subprocess
     subprocess.check_call(["pip", "install", "tqdm"])
     from tqdm import tqdm
-
-class Config:
-    """Enhanced configuration class"""
-    def __init__(self):
-        # Azure OpenAI Configuration
-        self.model_version = os.getenv('MODEL_VERSION', '2024-12-01-preview')
-        self.azure_endpoint = os.getenv('AZURE_ENDPOINT', 'https://gyp-weu-02-res01-prdenv-cog01.openai.azure.com/')
-        self.deployment_name = os.getenv('DEPLOYMENT_NAME', 'gpt-4.1-mini')
-        
-        # Database Configuration
-        self.server = os.getenv('DB_SERVER', 'localhost')
-        self.database = os.getenv('DB_DATABASE', 'master')
-        self.username = os.getenv('DB_USERNAME', '')
-        self.password = os.getenv('DB_PASSWORD', '')
-        
-        # Discovery Settings
-        self.discovery_cache_hours = int(os.getenv('DISCOVERY_CACHE_HOURS', '24'))
-        self.max_discovery_objects = int(os.getenv('MAX_DISCOVERY_OBJECTS', '50'))
-        self.max_parallel_workers = int(os.getenv('MAX_PARALLEL_WORKERS', '8'))
-        self.query_timeout_seconds = int(os.getenv('QUERY_TIMEOUT_SECONDS', '30'))
-        
-    def get_database_connection_string(self):
-        """Get optimized database connection string"""
-        return (f"DRIVER={{ODBC Driver 17 for SQL Server}};"
-                f"SERVER={self.server};"
-                f"DATABASE={self.database};"
-                f"UID={self.username};"
-                f"PWD={self.password};"
-                f"MARS_Connection=yes;"
-                f"Connection Timeout=20;"
-                f"Query Timeout={self.query_timeout_seconds};")
-    
-    def get_cache_path(self, filename: str) -> Path:
-        """Get cache file path"""
-        cache_dir = Path("cache")
-        cache_dir.mkdir(exist_ok=True)
-        return cache_dir / filename
-
-class TableInfo:
-    """Table information class"""
-    def __init__(self, name: str, schema: str, full_name: str, object_type: str, 
-                 row_count: int, columns: List[Dict], sample_data: List[Dict], 
-                 relationships: List = None, query_performance: Dict = None):
-        self.name = name
-        self.schema = schema
-        self.full_name = full_name
-        self.object_type = object_type
-        self.row_count = row_count
-        self.columns = columns
-        self.sample_data = sample_data
-        self.relationships = relationships or []
-        self.query_performance = query_performance or {}
-
-class DatabaseObject:
-    """Database object info"""
-    def __init__(self, schema: str, name: str, object_type: str, estimated_rows: int = 0):
-        self.schema = schema
-        self.name = name
-        self.object_type = object_type
-        self.estimated_rows = estimated_rows
-        self.priority = self._calculate_priority()
-    
-    def _calculate_priority(self) -> int:
-        """Calculate priority score for processing order"""
-        score = 0
-        name_lower = self.name.lower()
-        
-        # Tables get higher priority than views
-        if self.object_type == 'BASE TABLE':
-            score += 100
-        elif self.object_type == 'TABLE':
-            score += 100
-        
-        # Objects with data get priority
-        if self.estimated_rows > 0:
-            score += min(50, self.estimated_rows // 1000)
-        
-        # Business objects get priority
-        business_keywords = [
-            'customer', 'product', 'order', 'sales', 'user', 'account',
-            'transaction', 'payment', 'invoice', 'contract', 'person',
-            'company', 'address', 'contact', 'item', 'service'
-        ]
-        if any(word in name_lower for word in business_keywords):
-            score += 30
-        
-        # Penalize problematic objects
-        problem_keywords = [
-            'temp', 'tmp', 'backup', 'bck', 'log', 'audit', 'trace',
-            'error', 'debug', 'test', 'staging', 'stage'
-        ]
-        if any(word in name_lower for word in problem_keywords):
-            score -= 50
-        
-        return score
-
-class AnalysisStats:
-    """Statistics tracking"""
-    def __init__(self):
-        self.reset()
-    
-    def reset(self):
-        self.total_objects_found = 0
-        self.objects_processed = 0
-        self.successful_analyses = 0
-        self.analysis_errors = 0
-        self.objects_excluded = 0
-        self.backup_tables_excluded = 0
-        self.sample_data_errors = 0
-        self.fast_query_successes = 0
-    
-    def to_dict(self):
-        return self.__dict__
-
-def safe_database_value(value):
-    """Safely convert database value to JSON-serializable format"""
-    if value is None:
-        return None
-    elif isinstance(value, (int, float, str, bool)):
-        return value
-    elif hasattr(value, 'isoformat'):  # datetime objects
-        return value.isoformat()
-    else:
-        # Convert to string and truncate if too long
-        str_value = str(value)
-        return str_value[:500] if len(str_value) > 500 else str_value
-
-def should_exclude_table(table_name: str, schema_name: str) -> bool:
-    """Check if table should be excluded"""
-    name_lower = table_name.lower()
-    schema_lower = schema_name.lower()
-    
-    # System schemas
-    if schema_lower in ['sys', 'information_schema', 'db_owner', 'db_accessadmin']:
-        return True
-    
-    # System tables
-    system_patterns = [
-        'sysdiagram', 'dtproperties', '__refactorlog', 'aspnet_',
-        'elmah_', 'webpages_', 'migrationhistory'
-    ]
-    if any(pattern in name_lower for pattern in system_patterns):
-        return True
-    
-    # Backup and temp tables
-    backup_patterns = [
-        'backup', 'bckp', '_bck', 'bck_', 'temp_', 'tmp_', '_temp', '_tmp'
-    ]
-    if any(pattern in name_lower for pattern in backup_patterns):
-        return True
-    
-    return False
 
 class DatabaseDiscovery:
     """Fixed and optimized database discovery class"""
@@ -200,10 +53,9 @@ class DatabaseDiscovery:
         
         return conn
     
-    # 🔧 FIXED: Method name matches expected interface
     async def discover_database(self, limit: Optional[int] = None) -> bool:
         """
-        FIXED: Main discovery method with proper name and massive performance improvements
+        Main discovery method with proper name and massive performance improvements
         
         Args:
             limit: Maximum number of objects to process (defaults to config setting)
@@ -294,7 +146,7 @@ class DatabaseDiscovery:
           AND v.name NOT LIKE '%To%'        -- Often problematic cross-db views
           AND v.name NOT LIKE '%External%'
           AND v.name NOT LIKE '%Linked%'
-          AND v.name NOT LIKE '%XO%'        -- Based on your errors, these seem problematic
+          AND v.name NOT LIKE '%XO%'        -- Based on errors, these seem problematic
         
         ORDER BY object_type DESC, estimated_rows DESC
         """
@@ -335,8 +187,8 @@ class DatabaseDiscovery:
             
             filtered.append(obj)
         
-        # Sort by priority (highest first)
-        filtered.sort(key=lambda x: x.priority, reverse=True)
+        # Sort by priority (highest first) - using estimated_rows as simple priority
+        filtered.sort(key=lambda x: x.estimated_rows, reverse=True)
         
         # Apply limit
         if limit and limit < len(filtered):
@@ -521,7 +373,7 @@ class DatabaseDiscovery:
         """Save discovery results to cache"""
         print(f"\n💾 Saving optimized results to cache...")
         
-        cache_file = self.config.get_cache_path("database_structure_optimized.json")
+        cache_file = self.config.get_cache_path("database_structure.json")
         
         # Convert TableInfo objects to dictionaries
         tables_data = []
@@ -581,7 +433,7 @@ class DatabaseDiscovery:
     
     def load_from_cache(self) -> bool:
         """Load from cache if available and recent"""
-        cache_file = self.config.get_cache_path("database_structure_optimized.json")
+        cache_file = self.config.get_cache_path("database_structure.json")
         
         if not cache_file.exists():
             return False
@@ -636,7 +488,7 @@ async def main():
     config = Config()
     discovery = DatabaseDiscovery(config)
     
-    # Run the FIXED discovery method
+    # Run the discovery method
     print(f"🚀 Starting discovery with limit={config.max_discovery_objects}")
     success = await discovery.discover_database(limit=50)  # Process top 50 objects
     
