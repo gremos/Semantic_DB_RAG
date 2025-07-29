@@ -16,9 +16,9 @@ from shared.config import Config
 from shared.models import TableInfo, BusinessDomain, Relationship, QueryResult
 from shared.utils import safe_database_value, clean_sql_response, extract_json_from_response
 
-# Simple LLM client for query interface
-class SimpleLLMClient:
-    """Simple LLM client for query interface"""
+# Interactive LLM client for query interface
+class InteractiveLLMClient:
+    """LLM client specifically for interactive query operations"""
     
     def __init__(self, config: Config):
         from langchain_openai import AzureChatOpenAI
@@ -58,7 +58,7 @@ class SmartBusinessQueryProcessor:
     
     def __init__(self, config: Config):
         self.config = config
-        self.llm = SimpleLLMClient(config)
+        self.llm = InteractiveLLMClient(config)
         self.tables: List[TableInfo] = []
         self.domain: Optional[BusinessDomain] = None
         self.relationships: List[Relationship] = []
@@ -725,6 +725,10 @@ class EnhancedQueryInterface:
                 print(f"     via {rel.column} (confidence: {rel.confidence:.2f})")
             if len(rels) > 5:
                 print(f"   ... and {len(rels) - 5} more")
+    
+    def _show_system_status(self):
+        """Show system status"""
+        self._show_enhanced_system_status()
     
     def _display_enhanced_query_result(self, result: QueryResult, query_number: int):
         """Display enhanced query result with business interpretation"""

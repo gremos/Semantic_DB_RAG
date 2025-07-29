@@ -35,8 +35,8 @@ from shared.utils import (
     extract_sample_greek_text
 )
 
-class BusinessEntityAnalyzer:
-    """Enhanced business entity analyzer that focuses on REAL business relationships"""
+class SemanticLLMClient:
+    """LLM client specifically for semantic analysis operations"""
     
     def __init__(self, config: Config):
         self.config = config
@@ -48,6 +48,30 @@ class BusinessEntityAnalyzer:
             temperature=0.1,
             request_timeout=120
         )
+    
+    async def ask(self, prompt: str, system_message: str = "You are a helpful database semantic analysis expert.") -> str:
+        """Ask LLM a question with retry logic for semantic analysis"""
+        messages = [
+            SystemMessage(content=system_message),
+            HumanMessage(content=prompt)
+        ]
+        
+        for attempt in range(3):
+            try:
+                response = await asyncio.to_thread(self.llm.invoke, messages)
+                return response.content
+            except Exception as e:
+                if attempt < 2:
+                    await asyncio.sleep(2 ** attempt)
+                else:
+                    raise e
+
+class BusinessEntityAnalyzer:
+    """Enhanced business entity analyzer that focuses on REAL business relationships"""
+    
+    def __init__(self, config: Config):
+        self.config = config
+        self.llm_client = SemanticLLMClient(config)
         
         # Business entity templates for better recognition
         self.business_patterns = self._init_business_entity_templates()
@@ -314,13 +338,8 @@ Respond with ONLY valid JSON array:
 Pay special attention to customer and payment tables as these are critical for business queries.
 Provide detailed, accurate business analysis. Respond with valid JSON only."""
             
-            messages = [
-                SystemMessage(content=system_message),
-                HumanMessage(content=prompt)
-            ]
-            
-            response = await asyncio.to_thread(self.llm.invoke, messages)
-            classifications = extract_json_from_response(response.content)
+            response = await self.llm_client.ask(prompt, system_message)
+            classifications = extract_json_from_response(response)
             
             results = {}
             if classifications and isinstance(classifications, list):
@@ -449,13 +468,8 @@ Respond with ONLY JSON:
         try:
             system_message = "You are a database relationship expert. Analyze table relationships based on business logic and data patterns."
             
-            messages = [
-                SystemMessage(content=system_message),
-                HumanMessage(content=prompt)
-            ]
-            
-            response = await asyncio.to_thread(self.llm.invoke, messages)
-            analysis = extract_json_from_response(response.content)
+            response = await self.llm_client.ask(prompt, system_message)
+            analysis = extract_json_from_response(response)
             
             if analysis and analysis.get('has_relationship', False):
                 return {
@@ -833,5 +847,5 @@ class EnhancedSemanticAnalyzer:
 # Export classes for import
 SemanticAnalyzer = EnhancedSemanticAnalyzer
 
-# Make SimpleLLMClient available at module level
-__all__ = ['EnhancedSemanticAnalyzer', 'SemanticAnalyzer', 'SimpleLLMClient', 'BusinessEntityAnalyzer']
+# Make all classes available at module level
+__all__ = ['EnhancedSemanticAnalyzer', 'SemanticAnalyzer', 'SemanticLLMClient', 'BusinessEntityAnalyzer']
