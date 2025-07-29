@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-ENHANCED Interactive Query Interface Module
-Superior table selection and SQL generation for business queries
+ENHANCED Query Interface - Smart Business Query Processing
+Focuses on accurate business query understanding and SQL generation
 """
 
 import pyodbc
@@ -15,10 +15,46 @@ from collections import defaultdict
 from shared.config import Config
 from shared.models import TableInfo, BusinessDomain, Relationship, QueryResult
 from shared.utils import safe_database_value, clean_sql_response, extract_json_from_response
-from semantic.analysis import SimpleLLMClient
 
-class EnhancedQueryInterface:
-    """ENHANCED Interactive Query Interface with superior business logic"""
+# Simple LLM client for query interface
+class SimpleLLMClient:
+    """Simple LLM client for query interface"""
+    
+    def __init__(self, config: Config):
+        from langchain_openai import AzureChatOpenAI
+        from langchain.schema import HumanMessage, SystemMessage
+        
+        self.llm = AzureChatOpenAI(
+            azure_endpoint=config.azure_endpoint,
+            api_key=config.api_key,
+            azure_deployment=config.deployment_name,
+            api_version=config.api_version,
+            temperature=0.1,
+            request_timeout=120
+        )
+    
+    async def ask(self, prompt: str, system_message: str = "You are a helpful database expert.") -> str:
+        """Ask LLM a question with retry logic"""
+        from langchain.schema import HumanMessage, SystemMessage
+        import asyncio
+        
+        messages = [
+            SystemMessage(content=system_message),
+            HumanMessage(content=prompt)
+        ]
+        
+        for attempt in range(3):
+            try:
+                response = await asyncio.to_thread(self.llm.invoke, messages)
+                return response.content
+            except Exception as e:
+                if attempt < 2:
+                    await asyncio.sleep(2 ** attempt)
+                else:
+                    raise e
+
+class SmartBusinessQueryProcessor:
+    """Smart processor that understands business queries and generates accurate SQL"""
     
     def __init__(self, config: Config):
         self.config = config
@@ -26,50 +62,355 @@ class EnhancedQueryInterface:
         self.tables: List[TableInfo] = []
         self.domain: Optional[BusinessDomain] = None
         self.relationships: List[Relationship] = []
+        self.business_analysis: Dict[str, Any] = {}
         
-        # Business query patterns for better table selection
-        self.business_query_patterns = self._init_business_query_patterns()
+        # Business query intelligence
+        self.business_query_patterns = self._init_business_query_intelligence()
     
-    def _init_business_query_patterns(self) -> Dict[str, Dict[str, Any]]:
-        """Initialize business query patterns for intelligent table selection"""
+    def _init_business_query_intelligence(self) -> Dict[str, Dict[str, Any]]:
+        """Initialize intelligent business query processing patterns"""
         return {
-            'customer_queries': {
-                'keywords': [
-                    'customer', 'client', 'account', 'user', 'buyer', 'subscriber',
-                    'contact', 'person', 'member', 'businesspoint'
-                ],
-                'required_entity_types': ['Customer'],
-                'preferred_entity_types': ['Customer', 'Order', 'Payment'],
-                'avoid_entity_types': ['Support', 'System', 'Reference']
+            'paid_customers': {
+                'keywords': ['paid', 'customer', 'payment', 'transaction'],
+                'intent': 'Find customers who have made payments',
+                'required_entities': ['Customer', 'Payment'],
+                'sql_strategy': 'customer_payment_join',
+                'business_logic': 'Join customer tables with payment tables on customer ID'
             },
-            'payment_queries': {
-                'keywords': [
-                    'paid', 'payment', 'transaction', 'invoice', 'billing', 'revenue',
-                    'money', 'amount', 'financial', 'charge', 'receipt'
-                ],
-                'required_entity_types': ['Payment'],
-                'preferred_entity_types': ['Payment', 'Customer', 'Order', 'Invoice'],
-                'avoid_entity_types': ['Support', 'Marketing', 'System']
+            'customer_count': {
+                'keywords': ['how many customers', 'count customers', 'number of customers'],
+                'intent': 'Count total customers',
+                'required_entities': ['Customer'],
+                'sql_strategy': 'simple_count',
+                'business_logic': 'Count records in primary customer table'
             },
-            'order_queries': {
-                'keywords': [
-                    'order', 'sale', 'purchase', 'booking', 'reservation',
-                    'buy', 'sold', 'transaction'
-                ],
-                'required_entity_types': ['Order'],
-                'preferred_entity_types': ['Order', 'Customer', 'Payment', 'Product'],
-                'avoid_entity_types': ['Support', 'System']
+            'revenue_total': {
+                'keywords': ['total revenue', 'revenue', 'income', 'earnings'],
+                'intent': 'Calculate total revenue',
+                'required_entities': ['Payment', 'Order'],
+                'sql_strategy': 'sum_amounts',
+                'business_logic': 'Sum payment amounts or order totals'
             },
-            'revenue_queries': {
-                'keywords': [
-                    'revenue', 'income', 'sales', 'earnings', 'profit',
-                    'total', 'sum', 'amount'
-                ],
-                'required_entity_types': ['Payment', 'Order'],
-                'preferred_entity_types': ['Payment', 'Order', 'Customer', 'Invoice'],
-                'avoid_entity_types': ['Support', 'Marketing', 'System']
+            'order_count': {
+                'keywords': ['how many orders', 'count orders', 'number of orders'],
+                'intent': 'Count total orders',
+                'required_entities': ['Order'],
+                'sql_strategy': 'simple_count',
+                'business_logic': 'Count records in primary order table'
             }
         }
+    
+    def analyze_business_query(self, question: str) -> Dict[str, Any]:
+        """Analyze business query to understand intent and requirements"""
+        question_lower = question.lower()
+        
+        # Identify query pattern
+        for pattern_name, pattern_info in self.business_query_patterns.items():
+            if all(keyword in question_lower for keyword in pattern_info['keywords'][:2]):  # Match at least 2 keywords
+                return {
+                    'pattern': pattern_name,
+                    'intent': pattern_info['intent'],
+                    'required_entities': pattern_info['required_entities'],
+                    'sql_strategy': pattern_info['sql_strategy'],
+                    'business_logic': pattern_info['business_logic']
+                }
+        
+        # Default analysis for unmatched queries
+        if any(word in question_lower for word in ['customer', 'client']):
+            required_entities = ['Customer']
+            if any(word in question_lower for word in ['paid', 'payment', 'revenue']):
+                required_entities.append('Payment')
+        elif any(word in question_lower for word in ['payment', 'revenue', 'income']):
+            required_entities = ['Payment']
+        elif any(word in question_lower for word in ['order', 'sale']):
+            required_entities = ['Order']
+        else:
+            required_entities = ['Customer', 'Payment', 'Order']
+        
+        return {
+            'pattern': 'general_business',
+            'intent': 'General business query',
+            'required_entities': required_entities,
+            'sql_strategy': 'adaptive',
+            'business_logic': 'Determine based on available data'
+        }
+    
+    def find_relevant_tables_smart(self, query_analysis: Dict[str, Any]) -> List[TableInfo]:
+        """Smart table selection based on business analysis and relationships"""
+        
+        required_entities = query_analysis['required_entities']
+        pattern = query_analysis['pattern']
+        
+        # Get tables by entity type from business analysis
+        entity_tables = defaultdict(list)
+        for table in self.tables:
+            if table.semantic_profile:
+                entity_type = table.semantic_profile.entity_type
+                confidence = table.semantic_profile.confidence
+                
+                # Only include high-confidence tables for critical queries
+                if confidence >= 0.7 or pattern == 'general_business':
+                    entity_tables[entity_type].append((table, confidence))
+        
+        selected_tables = []
+        
+        # Select best tables for each required entity
+        for entity_type in required_entities:
+            tables_for_entity = entity_tables.get(entity_type, [])
+            if tables_for_entity:
+                # Sort by confidence and data availability
+                tables_for_entity.sort(key=lambda x: (x[1], len(x[0].sample_data)), reverse=True)
+                
+                # Select top 2 tables for this entity
+                for table, confidence in tables_for_entity[:2]:
+                    if table not in selected_tables:
+                        selected_tables.append(table)
+        
+        # For paid customer queries, ensure we have both customer and payment tables
+        if pattern == 'paid_customers':
+            customer_tables = [t for t in selected_tables if t.semantic_profile.entity_type == 'Customer']
+            payment_tables = [t for t in selected_tables if t.semantic_profile.entity_type == 'Payment']
+            
+            if not customer_tables or not payment_tables:
+                print(f"   ⚠️ Paid customer query missing required tables!")
+                print(f"      Customer tables: {len(customer_tables)}, Payment tables: {len(payment_tables)}")
+                
+                # Try to find additional tables
+                for table in self.tables:
+                    if table.semantic_profile:
+                        if table.semantic_profile.entity_type == 'Customer' and not customer_tables:
+                            selected_tables.append(table)
+                        elif table.semantic_profile.entity_type == 'Payment' and not payment_tables:
+                            selected_tables.append(table)
+        
+        # Add related tables based on relationships
+        related_tables = self._find_related_tables(selected_tables)
+        for table in related_tables:
+            if table not in selected_tables and len(selected_tables) < 5:
+                selected_tables.append(table)
+        
+        return selected_tables[:5]  # Limit to top 5 tables
+    
+    def _find_related_tables(self, primary_tables: List[TableInfo]) -> List[TableInfo]:
+        """Find tables related to primary tables through relationships"""
+        related_tables = []
+        
+        primary_table_names = {table.full_name for table in primary_tables}
+        
+        for relationship in self.relationships:
+            # If one table is in primary, add the other
+            if relationship.from_table in primary_table_names:
+                related_table = self._find_table_by_full_name(relationship.to_table)
+                if related_table and related_table not in related_tables:
+                    related_tables.append(related_table)
+            elif relationship.to_table in primary_table_names:
+                related_table = self._find_table_by_full_name(relationship.from_table)
+                if related_table and related_table not in related_tables:
+                    related_tables.append(related_table)
+        
+        return related_tables
+    
+    def _find_table_by_full_name(self, full_name: str) -> Optional[TableInfo]:
+        """Find table by full name"""
+        for table in self.tables:
+            if table.full_name == full_name:
+                return table
+        return None
+    
+    async def generate_smart_sql(self, question: str, query_analysis: Dict[str, Any], 
+                               relevant_tables: List[TableInfo]) -> Optional[str]:
+        """Generate SQL using smart business understanding"""
+        
+        pattern = query_analysis['pattern']
+        sql_strategy = query_analysis['sql_strategy']
+        
+        # Prepare enhanced table context for LLM
+        table_context = []
+        for table in relevant_tables:
+            context = {
+                'table_name': table.name,
+                'full_name': table.full_name,
+                'entity_type': table.semantic_profile.entity_type if table.semantic_profile else 'Unknown',
+                'business_purpose': table.semantic_profile.primary_purpose if table.semantic_profile else 'Unknown',
+                'confidence': table.semantic_profile.confidence if table.semantic_profile else 0.0,
+                'columns': [
+                    {
+                        'name': col['name'],
+                        'type': col['data_type'],
+                        'is_id': col['name'].lower().endswith('id'),
+                        'is_amount': any(word in col['name'].lower() for word in ['amount', 'total', 'price', 'cost', 'value']),
+                        'is_date': any(word in col['name'].lower() for word in ['date', 'time', 'created', 'modified'])
+                    } for col in table.columns[:15]
+                ],
+                'sample_data': table.sample_data[:2] if table.sample_data else []
+            }
+            table_context.append(context)
+        
+        # Get relationship context
+        relationship_context = []
+        table_names = {table.full_name for table in relevant_tables}
+        for rel in self.relationships:
+            if rel.from_table in table_names and rel.to_table in table_names:
+                relationship_context.append({
+                    'from_table': rel.from_table,
+                    'to_table': rel.to_table,
+                    'link_column': rel.column,
+                    'relationship_type': rel.relationship_type,
+                    'description': rel.description
+                })
+        
+        # Create specialized prompt based on query pattern
+        if pattern == 'paid_customers':
+            prompt = self._create_paid_customers_prompt(question, table_context, relationship_context)
+        elif pattern == 'customer_count':
+            prompt = self._create_customer_count_prompt(question, table_context)
+        elif pattern == 'revenue_total':
+            prompt = self._create_revenue_prompt(question, table_context)
+        else:
+            prompt = self._create_general_prompt(question, table_context, relationship_context, query_analysis)
+        
+        try:
+            system_message = """You are an expert SQL developer specializing in business queries. 
+Generate accurate SQL Server T-SQL that correctly answers business questions.
+Focus on proper table joins and business logic.
+Respond with ONLY the SQL query - no explanations."""
+            
+            response = await self.llm.ask(prompt, system_message)
+            cleaned_sql = clean_sql_response(response)
+            return cleaned_sql
+            
+        except Exception as e:
+            print(f"⚠️ Smart SQL generation failed: {e}")
+            return None
+    
+    def _create_paid_customers_prompt(self, question: str, table_context: List[Dict], 
+                                    relationship_context: List[Dict]) -> str:
+        """Create specialized prompt for paid customer queries"""
+        
+        customer_tables = [t for t in table_context if t['entity_type'] == 'Customer']
+        payment_tables = [t for t in table_context if t['entity_type'] == 'Payment']
+        
+        prompt = f"""
+BUSINESS QUERY: "{question}"
+
+This is a PAID CUSTOMER query. You need to find customers who have made payments.
+
+CUSTOMER TABLES:
+{json.dumps(customer_tables, indent=2)}
+
+PAYMENT TABLES:  
+{json.dumps(payment_tables, indent=2)}
+
+RELATIONSHIPS:
+{json.dumps(relationship_context, indent=2)}
+
+PAID CUSTOMER SQL RULES:
+1. JOIN customer tables with payment tables
+2. Use DISTINCT COUNT to avoid counting same customer multiple times
+3. Look for common ID columns (CustomerID, ClientID, BusinessPointID, AccountID)
+4. Filter by payment amounts > 0 or payment status = 'completed'
+5. Apply date filters if specified (e.g., year 2025)
+6. Return COUNT of DISTINCT customers who have payment records
+
+SQL PATTERN FOR PAID CUSTOMERS:
+```sql
+SELECT COUNT(DISTINCT c.CustomerID) as PaidCustomerCount
+FROM CustomerTable c
+INNER JOIN PaymentTable p ON c.CustomerID = p.CustomerID  
+WHERE p.Amount > 0 
+  AND YEAR(p.PaymentDate) = 2025  -- if year specified
+```
+
+Generate the SQL query for this specific database:
+"""
+        return prompt
+    
+    def _create_customer_count_prompt(self, question: str, table_context: List[Dict]) -> str:
+        """Create prompt for customer count queries"""
+        
+        customer_tables = [t for t in table_context if t['entity_type'] == 'Customer']
+        
+        prompt = f"""
+BUSINESS QUERY: "{question}"
+
+This is a CUSTOMER COUNT query.
+
+CUSTOMER TABLES:
+{json.dumps(customer_tables, indent=2)}
+
+Generate SQL to count total customers:
+- Use the primary customer table (highest confidence)
+- Use COUNT(*) or COUNT(DISTINCT CustomerID) 
+- Apply any date filters if mentioned
+- Return simple count result
+
+Generate the SQL query:
+"""
+        return prompt
+    
+    def _create_revenue_prompt(self, question: str, table_context: List[Dict]) -> str:
+        """Create prompt for revenue queries"""
+        
+        payment_tables = [t for t in table_context if t['entity_type'] in ['Payment', 'Order']]
+        
+        prompt = f"""
+BUSINESS QUERY: "{question}"
+
+This is a REVENUE/INCOME query.
+
+PAYMENT/ORDER TABLES:
+{json.dumps(payment_tables, indent=2)}
+
+Generate SQL to calculate revenue:
+- SUM payment amounts or order totals
+- Look for columns like Amount, Total, Price, Value
+- Apply date filters if specified
+- Handle NULL values appropriately
+
+Generate the SQL query:
+"""
+        return prompt
+    
+    def _create_general_prompt(self, question: str, table_context: List[Dict], 
+                             relationship_context: List[Dict], query_analysis: Dict) -> str:
+        """Create general prompt for other business queries"""
+        
+        prompt = f"""
+BUSINESS QUERY: "{question}"
+
+QUERY ANALYSIS:
+- Intent: {query_analysis['intent']}
+- Required Entities: {query_analysis['required_entities']}
+- Business Logic: {query_analysis['business_logic']}
+
+AVAILABLE TABLES:
+{json.dumps(table_context, indent=2)}
+
+TABLE RELATIONSHIPS:
+{json.dumps(relationship_context, indent=2)}
+
+BUSINESS SQL RULES:
+1. Use proper table joins based on relationships
+2. Apply appropriate filters for business logic
+3. Use meaningful column aliases
+4. Handle date filters correctly
+5. Limit results if needed (TOP 100)
+
+Generate accurate SQL Server T-SQL query:
+"""
+        return prompt
+
+
+class EnhancedQueryInterface:
+    """Enhanced query interface with smart business query processing"""
+    
+    def __init__(self, config: Config):
+        self.config = config
+        self.query_processor = SmartBusinessQueryProcessor(config)
+        self.tables: List[TableInfo] = []
+        self.domain: Optional[BusinessDomain] = None
+        self.relationships: List[Relationship] = []
+        self.business_analysis: Dict[str, Any] = {}
     
     def get_database_connection(self):
         """Get database connection for query execution"""
@@ -85,13 +426,21 @@ class EnhancedQueryInterface:
     
     async def start_interactive_session(self, tables: List[TableInfo], 
                                        domain: Optional[BusinessDomain], 
-                                       relationships: List[Relationship]):
+                                       relationships: List[Relationship],
+                                       business_analysis: Dict[str, Any] = None):
         """Start enhanced interactive query session"""
         self.tables = tables
         self.domain = domain
         self.relationships = relationships
+        self.business_analysis = business_analysis or {}
         
-        # Enhanced system status with entity breakdown
+        # Configure query processor
+        self.query_processor.tables = tables
+        self.query_processor.domain = domain
+        self.query_processor.relationships = relationships
+        self.query_processor.business_analysis = business_analysis
+        
+        # Enhanced system status
         self._show_enhanced_system_status()
         
         query_count = 0
@@ -110,14 +459,17 @@ class EnhancedQueryInterface:
                 elif question.lower() == 'entities':
                     self._show_entity_breakdown()
                     continue
+                elif question.lower() == 'relationships':
+                    self._show_relationships()
+                    continue
                 elif not question:
                     continue
                 
                 query_count += 1
-                print(f"🔍 Processing query #{query_count} with ENHANCED business logic...")
+                print(f"🔍 Processing query #{query_count} with SMART business logic...")
                 start_time = time.time()
                 
-                result = await self._process_question_enhanced_business(question)
+                result = await self._process_question_smart(question)
                 elapsed = time.time() - start_time
                 
                 print(f"⏱️ Completed in {elapsed:.1f}s")
@@ -134,117 +486,18 @@ class EnhancedQueryInterface:
         print(f"\n📊 Session summary: {query_count} queries processed")
         print("👋 Thanks for using the ENHANCED Semantic Database RAG System!")
     
-    def _show_enhanced_system_status(self):
-        """Show enhanced system status with entity breakdown"""
-        table_count = sum(1 for t in self.tables if t.object_type == 'BASE TABLE')
-        view_count = sum(1 for t in self.tables if t.object_type == 'VIEW')
-        views_with_data = sum(1 for t in self.tables if t.object_type == 'VIEW' and t.sample_data)
-        
-        # Entity breakdown
-        entity_counts = defaultdict(int)
-        for table in self.tables:
-            if table.semantic_profile:
-                entity_counts[table.semantic_profile.entity_type] += 1
-        
-        print(f"✅ ENHANCED system ready! Domain: {self.domain.domain_type if self.domain else 'Unknown'}")
-        print(f"📊 Available: {views_with_data}/{view_count} views, {table_count} tables")
-        
-        # Show critical entity status
-        core_entities = ['Customer', 'Payment', 'Order', 'Product', 'Invoice']
-        core_status = []
-        missing_core = []
-        
-        for entity in core_entities:
-            count = entity_counts.get(entity, 0)
-            if count > 0:
-                core_status.append(f"{entity}: {count}")
-            else:
-                missing_core.append(entity)
-        
-        if core_status:
-            print(f"🎯 Core entities: {', '.join(core_status)}")
-        
-        if missing_core:
-            print(f"⚠️  Missing entities: {', '.join(missing_core)}")
-            print("💡 This may affect query accuracy - run semantic analysis again")
-        
-        print("💡 Type 'help' for examples, 'entities' for entity breakdown, 'quit' to exit")
-    
-    def _show_enhanced_help(self):
-        """Show enhanced help with entity-based examples"""
-        print("\n💡 ENHANCED HELP - Business Entity Queries:")
-        
-        # Show examples based on available entities
-        entity_counts = defaultdict(int)
-        for table in self.tables:
-            if table.semantic_profile:
-                entity_counts[table.semantic_profile.entity_type] += 1
-        
-        if entity_counts.get('Customer', 0) > 0:
-            print("\n👥 CUSTOMER QUERIES:")
-            print("   • How many customers do we have?")
-            print("   • Show me active customers")
-            print("   • List customers registered in 2025")
-        
-        if entity_counts.get('Payment', 0) > 0:
-            print("\n💰 PAYMENT QUERIES:")
-            print("   • Count total paid customers for 2025")
-            print("   • What is our total revenue?")
-            print("   • Show recent payments")
-        
-        if entity_counts.get('Order', 0) > 0:
-            print("\n📦 ORDER QUERIES:")
-            print("   • How many orders this year?")
-            print("   • Show recent orders")
-            print("   • What is our average order value?")
-        
-        if entity_counts.get('Product', 0) > 0:
-            print("\n🛍️ PRODUCT QUERIES:")
-            print("   • List our top products")
-            print("   • Show product categories")
-            print("   • What products are most popular?")
-        
-        print("\n🎯 BUSINESS ANALYSIS:")
-        print("   • Total revenue for 2025")
-        print("   • Customer growth trends")
-        print("   • Monthly sales summary")
-        
-        print("\n📋 SPECIAL COMMANDS:")
-        print("   • 'entities' - Show entity breakdown")
-        print("   • 'status' - Show system status")
-        print("   • 'help' - Show this help")
-    
-    def _show_entity_breakdown(self):
-        """Show detailed entity breakdown"""
-        print("\n📊 ENTITY BREAKDOWN:")
-        
-        entity_tables = defaultdict(list)
-        for table in self.tables:
-            if table.semantic_profile:
-                entity_type = table.semantic_profile.entity_type
-                confidence = table.semantic_profile.confidence
-                entity_tables[entity_type].append((table.name, confidence))
-        
-        for entity_type, tables_list in sorted(entity_tables.items()):
-            print(f"\n{entity_type.upper()} ({len(tables_list)} tables):")
-            # Sort by confidence
-            tables_list.sort(key=lambda x: x[1], reverse=True)
-            for table_name, confidence in tables_list[:5]:  # Show top 5
-                print(f"   • {table_name} (confidence: {confidence:.2f})")
-            if len(tables_list) > 5:
-                print(f"   ... and {len(tables_list) - 5} more")
-    
-    async def _process_question_enhanced_business(self, question: str) -> QueryResult:
-        """ENHANCED question processing with superior business logic"""
+    async def _process_question_smart(self, question: str) -> QueryResult:
+        """Process question using smart business logic"""
         try:
-            # Step 1: Identify query type and required entities
-            print(f"   🎯 Analyzing query type for: '{question}'")
-            query_type, required_entities = self._identify_query_type(question)
-            print(f"   📋 Query type: {query_type}, Required entities: {required_entities}")
+            # Step 1: Analyze business query
+            print(f"   🎯 Analyzing business intent...")
+            query_analysis = self.query_processor.analyze_business_query(question)
+            print(f"   📋 Intent: {query_analysis['intent']}")
+            print(f"   📋 Required entities: {query_analysis['required_entities']}")
             
-            # Step 2: Find tables using ENHANCED business logic
-            print(f"   🔍 Finding tables with ENHANCED business logic...")
-            relevant_tables = self._find_relevant_tables_enhanced_business(question, required_entities)
+            # Step 2: Find relevant tables using smart selection
+            print(f"   🔍 Smart table selection...")
+            relevant_tables = self.query_processor.find_relevant_tables_smart(query_analysis)
             
             if not relevant_tables:
                 return QueryResult(
@@ -253,10 +506,10 @@ class EnhancedQueryInterface:
                     sql_query="",
                     results=[],
                     results_count=0,
-                    execution_error=f'Could not find relevant {", ".join(required_entities)} tables for this query'
+                    execution_error=f'Could not find relevant tables for: {", ".join(query_analysis["required_entities"])}'
                 )
             
-            # Step 3: Show selected tables with reasoning
+            # Step 3: Show selected tables with business context
             table_names = [t.name for t in relevant_tables]
             print(f"   📋 Selected tables: {', '.join(table_names)}")
             
@@ -266,9 +519,9 @@ class EnhancedQueryInterface:
                 data_status = "has data" if table.sample_data else "no data"
                 print(f"      • {table.name}: {entity_type} (confidence: {confidence:.2f}, {data_status})")
             
-            # Step 4: Generate SQL with ENHANCED business context
-            print(f"   🧠 Generating SQL with ENHANCED business context...")
-            sql_query = await self._generate_sql_business_enhanced(question, relevant_tables, query_type)
+            # Step 4: Generate SQL using smart business logic
+            print(f"   🧠 Generating SQL with smart business understanding...")
+            sql_query = await self.query_processor.generate_smart_sql(question, query_analysis, relevant_tables)
             
             if not sql_query:
                 return QueryResult(
@@ -313,250 +566,6 @@ class EnhancedQueryInterface:
                 execution_error=f'Processing failed: {str(e)}'
             )
     
-    def _identify_query_type(self, question: str) -> tuple[str, List[str]]:
-        """Identify query type and required entity types"""
-        question_lower = question.lower()
-        
-        # Check against business query patterns
-        for query_type, pattern in self.business_query_patterns.items():
-            if any(keyword in question_lower for keyword in pattern['keywords']):
-                return query_type, pattern['required_entity_types']
-        
-        # Default analysis for unmatched queries
-        if any(word in question_lower for word in ['customer', 'client', 'account', 'user']):
-            return 'customer_queries', ['Customer']
-        elif any(word in question_lower for word in ['paid', 'payment', 'revenue', 'money']):
-            return 'payment_queries', ['Payment']
-        elif any(word in question_lower for word in ['order', 'sale', 'purchase']):
-            return 'order_queries', ['Order']
-        else:
-            return 'general_queries', ['Customer', 'Payment', 'Order']
-    
-    def _find_relevant_tables_enhanced_business(self, question: str, required_entities: List[str]) -> List[TableInfo]:
-        """ENHANCED table finding with business entity prioritization"""
-        question_lower = question.lower()
-        question_words = set(question_lower.split())
-        
-        scored_tables = []
-        
-        for table in self.tables:
-            score = 0
-            reasons = []
-            
-            # PRIORITY 1: Required entity types (CRITICAL)
-            if table.semantic_profile and table.semantic_profile.entity_type in required_entities:
-                score += 1000  # Very high priority for required entities
-                confidence = table.semantic_profile.confidence
-                score += confidence * 500  # Boost by confidence
-                reasons.append(f"required entity: {table.semantic_profile.entity_type} (conf: {confidence:.2f})")
-            
-            # PRIORITY 2: Entity type relevance for business queries
-            if table.semantic_profile:
-                entity_type = table.semantic_profile.entity_type
-                
-                # Special business logic for paid customer queries
-                if 'paid' in question_lower and 'customer' in question_lower:
-                    if entity_type == 'Payment':
-                        score += 800  # Payment tables are crucial for paid customer queries
-                        reasons.append("payment table for paid customers")
-                    elif entity_type == 'Customer':
-                        score += 600  # Customer tables needed for customer identification
-                        reasons.append("customer table for customer identification")
-                    elif entity_type == 'Order':
-                        score += 400  # Orders might link customers to payments
-                        reasons.append("order table for customer-payment link")
-                
-                # Revenue/financial queries
-                if any(word in question_lower for word in ['revenue', 'total', 'amount', 'money']):
-                    if entity_type in ['Payment', 'Invoice', 'Order']:
-                        score += 700
-                        reasons.append(f"financial entity: {entity_type}")
-            
-            # PRIORITY 3: Name matching (still important)
-            table_name_words = set(re.findall(r'\w+', table.name.lower()))
-            name_matches = question_words.intersection(table_name_words)
-            if name_matches:
-                score += len(name_matches) * 200
-                reasons.append(f"name matches: {', '.join(name_matches)}")
-            
-            # PRIORITY 4: Column relevance
-            relevant_columns = 0
-            for col in table.columns:
-                col_name_lower = col['name'].lower()
-                
-                # Look for business-critical columns
-                if 'paid' in question_lower and any(term in col_name_lower for term in ['amount', 'payment', 'total', 'price']):
-                    relevant_columns += 3
-                    reasons.append(f"payment column: {col['name']}")
-                elif 'customer' in question_lower and any(term in col_name_lower for term in ['customer', 'client', 'account']):
-                    relevant_columns += 2
-                    reasons.append(f"customer column: {col['name']}")
-                elif question_words.intersection(set(col_name_lower.split('_'))):
-                    relevant_columns += 1
-            
-            score += relevant_columns * 50
-            
-            # PRIORITY 5: Data availability bonus
-            if table.sample_data:
-                score += 100
-                reasons.append("has sample data")
-                
-                # Check sample data for relevant business indicators
-                for row in table.sample_data[:2]:
-                    for key, value in row.items():
-                        if isinstance(value, (int, float)) and 'paid' in question_lower:
-                            if any(term in key.lower() for term in ['amount', 'total', 'price', 'payment']):
-                                score += 150
-                                reasons.append("contains monetary data")
-                                break
-            
-            # PENALTY: Avoid irrelevant entity types
-            if table.semantic_profile:
-                entity_type = table.semantic_profile.entity_type
-                if entity_type in ['System', 'Reference'] and 'paid customer' in question_lower:
-                    score -= 200  # Penalize system/reference tables for business queries
-                    reasons.append(f"penalized: {entity_type} table")
-            
-            if score > 0:
-                scored_tables.append((table, score, reasons))
-        
-        # Sort by score and return top tables
-        scored_tables.sort(key=lambda x: x[1], reverse=True)
-        
-        # Ensure we have required entity types
-        selected_tables = []
-        required_entity_found = {entity: False for entity in required_entities}
-        
-        # First pass: Get tables of required entity types
-        for table, score, reasons in scored_tables:
-            if table.semantic_profile and table.semantic_profile.entity_type in required_entities:
-                selected_tables.append(table)
-                required_entity_found[table.semantic_profile.entity_type] = True
-                if len(selected_tables) >= 5:  # Limit to top 5
-                    break
-        
-        # Second pass: Add high-scoring tables if we need more
-        if len(selected_tables) < 3:
-            for table, score, reasons in scored_tables[:10]:
-                if table not in selected_tables:
-                    selected_tables.append(table)
-                    if len(selected_tables) >= 3:
-                        break
-        
-        # Check if we found required entities
-        missing_entities = [entity for entity, found in required_entity_found.items() if not found]
-        if missing_entities:
-            print(f"   ⚠️  Missing required entities: {', '.join(missing_entities)}")
-            print(f"       Query results may be inaccurate!")
-        
-        return selected_tables[:5]  # Return top 5 tables
-    
-    async def _generate_sql_business_enhanced(self, question: str, tables: List[TableInfo], query_type: str) -> Optional[str]:
-        """Generate SQL with ENHANCED business context and logic"""
-        
-        # Prepare detailed table information for LLM
-        table_info = []
-        for table in tables:
-            # More comprehensive table analysis
-            columns_detail = []
-            for col in table.columns[:20]:  # Include more columns
-                col_detail = {
-                    'name': col['name'],
-                    'type': col['data_type'],
-                    'nullable': col['nullable']
-                }
-                columns_detail.append(col_detail)
-            
-            info = {
-                'name': table.name,
-                'schema': table.schema,
-                'full_name': table.full_name,
-                'object_type': table.object_type,
-                'row_count': table.row_count,
-                'columns': columns_detail,
-                'sample_data': table.sample_data[:2] if table.sample_data else [],
-                'entity_type': table.semantic_profile.entity_type if table.semantic_profile else 'Unknown',
-                'business_role': table.semantic_profile.business_role if table.semantic_profile else 'Unknown',
-                'confidence': table.semantic_profile.confidence if table.semantic_profile else 0.0
-            }
-            table_info.append(info)
-        
-        # Enhanced business context
-        domain_context = f"{self.domain.domain_type} system" if self.domain else "Business system"
-        
-        # Special handling for paid customer queries
-        if 'paid' in question.lower() and 'customer' in question.lower():
-            business_context = """
-CRITICAL: This is a PAID CUSTOMER query. You must:
-1. Find tables that contain PAYMENT/TRANSACTION data (entity_type: Payment)
-2. Find tables that contain CUSTOMER data (entity_type: Customer)  
-3. JOIN these tables to identify customers who have made payments
-4. Count DISTINCT customers who have payment records
-5. Apply date filters if specified (e.g., year 2025)
-
-PAID CUSTOMER LOGIC:
-- A paid customer is someone who appears in payment/transaction records
-- Look for tables with monetary amounts, payment dates, transaction IDs
-- JOIN customer tables with payment tables on customer ID
-- Use DISTINCT COUNT to avoid counting same customer multiple times
-"""
-        else:
-            business_context = f"Business query in {domain_context} context."
-        
-        prompt = f"""
-You are an expert SQL developer for business systems. Generate a precise SQL query for this business question.
-
-BUSINESS CONTEXT:
-{business_context}
-
-Question: "{question}"
-Query Type: {query_type}
-Domain: {domain_context}
-
-AVAILABLE TABLES WITH BUSINESS CONTEXT:
-{json.dumps(table_info, indent=2, default=str)}
-
-SQL GENERATION RULES:
-1. Use proper SQL Server syntax with [schema].[table] format
-2. For PAID CUSTOMER queries:
-   - Join Customer and Payment tables
-   - Count DISTINCT customers who have payment records
-   - Apply appropriate date filters
-3. For REVENUE queries: Sum amounts from Payment/Invoice tables
-4. For COUNT queries: Use COUNT(*) or COUNT(DISTINCT) as appropriate
-5. Apply date filters correctly (e.g., >= '2025-01-01' AND < '2026-01-01')
-6. Use meaningful aliases and column names
-7. Include TOP clause for large result sets
-8. Handle NULL values appropriately
-
-BUSINESS LOGIC PATTERNS:
-- Customer identification: Use CustomerID, ClientID, BusinessPointID, AccountID
-- Payment identification: Use PaymentID, TransactionID, InvoiceID, Amount columns
-- Date filtering: Use PaymentDate, TransactionDate, CreatedDate, CompletedDate
-- Monetary amounts: Sum Amount, Total, Price, Value columns
-
-IMPORTANT: 
-- Only use columns that exist in the provided table schemas
-- Generate syntactically correct SQL Server T-SQL
-- Focus on business logic accuracy over complexity
-
-Respond with ONLY the SQL query, no explanations:
-"""
-        
-        try:
-            system_message = """You are a senior SQL developer specializing in business intelligence queries. 
-Generate accurate, business-focused SQL queries that answer the specific question asked.
-Pay special attention to paid customer queries - these require joining customer and payment data.
-Respond with only valid SQL Server T-SQL syntax."""
-            
-            response = await self.llm.ask(prompt, system_message)
-            cleaned_sql = clean_sql_response(response)
-            return cleaned_sql
-                
-        except Exception as e:
-            print(f"⚠️ Enhanced SQL generation failed: {e}")
-            return None
-    
     async def _execute_sql_enhanced(self, sql_query: str) -> Dict[str, Any]:
         """Execute SQL with enhanced error handling"""
         try:
@@ -597,17 +606,137 @@ Respond with only valid SQL Server T-SQL syntax."""
             
             return {'data': [], 'count': 0, 'error': error_msg}
     
+    def _show_enhanced_system_status(self):
+        """Show enhanced system status with business context"""
+        table_count = sum(1 for t in self.tables if t.object_type == 'BASE TABLE')
+        view_count = sum(1 for t in self.tables if t.object_type == 'VIEW')
+        views_with_data = sum(1 for t in self.tables if t.object_type == 'VIEW' and t.sample_data)
+        
+        # Entity breakdown from business analysis
+        validation_results = self.business_analysis.get('validation_results', {})
+        entity_counts = validation_results.get('entity_counts', {})
+        
+        print(f"✅ ENHANCED system ready! Domain: {self.domain.domain_type if self.domain else 'Unknown'}")
+        print(f"📊 Available: {views_with_data}/{view_count} views, {table_count} tables")
+        
+        # Show business entity status
+        core_entities = ['Customer', 'Payment', 'Order', 'Product', 'Invoice']
+        core_status = []
+        missing_core = []
+        
+        for entity in core_entities:
+            count = entity_counts.get(entity, 0)
+            if count > 0:
+                core_status.append(f"{entity}: {count}")
+            else:
+                missing_core.append(entity)
+        
+        if core_status:
+            print(f"🎯 Core entities: {', '.join(core_status)}")
+        
+        if missing_core:
+            print(f"⚠️  Missing entities: {', '.join(missing_core)}")
+        
+        # Show relationship status
+        customer_payment_links = validation_results.get('customer_payment_links', 0)
+        if customer_payment_links > 0:
+            print(f"🔗 Customer-payment links: {customer_payment_links}")
+        else:
+            print(f"❌ No customer-payment relationships found!")
+            print(f"   This may cause 'paid customer' queries to fail")
+        
+        print("💡 Type 'help' for examples, 'entities' for breakdown, 'relationships' for links")
+    
+    def _show_enhanced_help(self):
+        """Show enhanced help with smart query examples"""
+        validation_results = self.business_analysis.get('validation_results', {})
+        entity_counts = validation_results.get('entity_counts', {})
+        
+        print("\n💡 ENHANCED HELP - Smart Business Queries:")
+        
+        if entity_counts.get('Customer', 0) > 0:
+            print("\n👥 CUSTOMER QUERIES:")
+            print("   • How many customers do we have?")
+            print("   • Show me customer details")
+            print("   • List customers by registration date")
+            
+            if entity_counts.get('Payment', 0) > 0:
+                print("   • How many customers have paid? (SMART: joins customer+payment tables)")
+                print("   • Count paid customers for 2025")
+        
+        if entity_counts.get('Payment', 0) > 0:
+            print("\n💰 PAYMENT QUERIES:")
+            print("   • What is our total revenue?")
+            print("   • Show recent payments")
+            print("   • Count payments this year")
+        
+        if entity_counts.get('Order', 0) > 0:
+            print("\n📦 ORDER QUERIES:")
+            print("   • How many orders this year?")
+            print("   • Show recent orders")
+            print("   • What is our average order value?")
+        
+        print("\n🧠 SMART FEATURES:")
+        print("   • Automatic entity detection")
+        print("   • Intelligent table relationships")
+        print("   • Business-focused SQL generation")
+        print("   • Enhanced error handling")
+        
+        print("\n📋 COMMANDS:")
+        print("   • 'entities' - Show entity breakdown")
+        print("   • 'relationships' - Show table relationships")
+        print("   • 'status' - Show system status")
+    
+    def _show_entity_breakdown(self):
+        """Show detailed entity breakdown with business context"""
+        validation_results = self.business_analysis.get('validation_results', {})
+        high_confidence = validation_results.get('high_confidence_entities', {})
+        
+        print("\n📊 BUSINESS ENTITY BREAKDOWN:")
+        
+        for entity_type, tables_list in high_confidence.items():
+            if tables_list:
+                print(f"\n{entity_type.upper()} ({len(tables_list)} tables):")
+                for table_info in tables_list[:5]:  # Show top 5
+                    name = table_info['name']
+                    confidence = table_info['confidence']
+                    purpose = table_info.get('purpose', 'No description')[:60]
+                    print(f"   • {name} (confidence: {confidence:.2f}) - {purpose}")
+                if len(tables_list) > 5:
+                    print(f"   ... and {len(tables_list) - 5} more")
+    
+    def _show_relationships(self):
+        """Show discovered relationships"""
+        print("\n🔗 DISCOVERED RELATIONSHIPS:")
+        
+        if not self.relationships:
+            print("   No relationships found")
+            return
+        
+        # Group by relationship type
+        by_type = defaultdict(list)
+        for rel in self.relationships:
+            by_type[rel.relationship_type].append(rel)
+        
+        for rel_type, rels in by_type.items():
+            print(f"\n{rel_type.upper()}:")
+            for rel in rels[:5]:  # Show top 5
+                print(f"   • {rel.from_table} → {rel.to_table}")
+                print(f"     via {rel.column} (confidence: {rel.confidence:.2f})")
+            if len(rels) > 5:
+                print(f"   ... and {len(rels) - 5} more")
+    
     def _display_enhanced_query_result(self, result: QueryResult, query_number: int):
-        """Display enhanced query result with business context"""
+        """Display enhanced query result with business interpretation"""
         if result.execution_error:
             print(f"❌ Error: {result.execution_error}")
             
-            # Provide helpful suggestions for common errors
+            # Provide helpful business context for errors
             if "not found" in result.execution_error.lower():
-                print("💡 Suggestions:")
-                print("   • Check if the required entity tables exist")
-                print("   • Run semantic analysis again to improve entity recognition")
-                print("   • Try a simpler query to test table access")
+                print("💡 Business Analysis:")
+                print("   • Tables may not be properly classified")
+                print("   • Run semantic analysis again for better entity recognition")
+                print("   • Check if required business entities were identified")
         else:
             print(f"📋 Generated SQL:")
             print(f"   {result.sql_query}")
@@ -616,7 +745,7 @@ Respond with only valid SQL Server T-SQL syntax."""
             print(f"📊 Results: {count} rows")
             
             if result.results:
-                # Enhanced result display
+                # Enhanced result display with business context
                 for i, row in enumerate(result.results[:5], 1):
                     display_row = {}
                     for key, value in list(row.items())[:6]:
@@ -630,17 +759,7 @@ Respond with only valid SQL Server T-SQL syntax."""
                     print(f"   ... and {count - 5} more rows")
                 
                 # Business interpretation of results
-                if count == 0 and 'paid customer' in result.question.lower():
-                    print("\n💡 BUSINESS ANALYSIS:")
-                    print("   ❌ No paid customers found - this suggests:")
-                    print("      • Payment tables may not be properly identified")
-                    print("      • Customer-Payment relationships may be incorrect")
-                    print("      • Date filters may be too restrictive")
-                    print("      • Table joins may need adjustment")
-                    print("\n🔧 RECOMMENDED ACTIONS:")
-                    print("   1. Type 'entities' to verify Payment and Customer tables were found")
-                    print("   2. Check if payment data exists for the specified period")
-                    print("   3. Try a simpler query like 'how many payments in 2025'")
+                self._provide_business_interpretation(result)
             
             # Show execution time
             if result.execution_time > 0:
@@ -649,6 +768,38 @@ Respond with only valid SQL Server T-SQL syntax."""
             # Show tables used
             if result.relevant_tables:
                 print(f"📋 Used tables: {', '.join(result.relevant_tables)}")
+    
+    def _provide_business_interpretation(self, result: QueryResult):
+        """Provide business interpretation of query results"""
+        question_lower = result.question.lower()
+        count = result.results_count
+        
+        if 'paid customer' in question_lower and count == 0:
+            print("\n💡 BUSINESS INTERPRETATION:")
+            print("   ❌ Zero paid customers found - This suggests:")
+            print("      • Customer and payment tables may not be properly linked")
+            print("      • Payment data may not exist for the specified period")
+            print("      • Table relationships need verification")
+            
+            print("\n🔧 RECOMMENDED ACTIONS:")
+            print("   1. Type 'relationships' to verify customer-payment links")
+            print("   2. Check payment data: 'Show me recent payments'")
+            print("   3. Verify customer data: 'How many customers do we have?'")
+            
+        elif 'customer' in question_lower and count > 0:
+            print(f"\n💡 BUSINESS INTERPRETATION:")
+            print(f"   ✅ Found {count} customers - Business looks healthy!")
+            
+        elif 'revenue' in question_lower or 'payment' in question_lower:
+            if count > 0 and result.results:
+                # Try to extract monetary values
+                first_result = result.results[0]
+                for key, value in first_result.items():
+                    if isinstance(value, (int, float)) and value > 0:
+                        print(f"\n💡 BUSINESS INTERPRETATION:")
+                        print(f"   💰 {key}: {value:,.2f}")
+                        break
+
 
 # Update the main query interface class
 QueryInterface = EnhancedQueryInterface

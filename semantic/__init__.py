@@ -1,7 +1,10 @@
 """
-Semantic analysis module for AI-powered classification and relationship discovery
+Enhanced semantic analysis module for AI-powered classification and relationship discovery
 """
 
-from .analysis import SemanticAnalyzer, SimpleLLMClient
+from .analysis import EnhancedSemanticAnalyzer, SimpleLLMClient, BusinessEntityAnalyzer
 
-__all__ = ["SemanticAnalyzer", "SimpleLLMClient"]
+# Maintain backward compatibility
+SemanticAnalyzer = EnhancedSemanticAnalyzer
+
+__all__ = ["EnhancedSemanticAnalyzer", "SemanticAnalyzer", "SimpleLLMClient", "BusinessEntityAnalyzer"]

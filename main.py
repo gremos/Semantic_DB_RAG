@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-HIGH-PERFORMANCE SEMANTIC DATABASE RAG SYSTEM - Main Entry Point
-Optimized for analyzing 500+ database objects with 5 samples each
+ENHANCED SEMANTIC DATABASE RAG SYSTEM - Main Entry Point
+Integrated Smart Business Analysis for Accurate Query Processing
 """
 
 import asyncio
@@ -11,8 +11,8 @@ from pathlib import Path
 
 # Import modules
 from db.discovery import DatabaseDiscovery
-from semantic.analysis import SemanticAnalyzer
-from interactive.query_interface import QueryInterface
+from semantic.analysis import EnhancedSemanticAnalyzer as SemanticAnalyzer
+from interactive.query_interface import EnhancedQueryInterface as QueryInterface
 from shared.config import Config
 from shared.models import SystemStatus
 from shared.utils import get_performance_recommendations, estimate_processing_time, log_filtering_statistics
@@ -27,8 +27,8 @@ def load_environment():
                     key, value = line.strip().split('=', 1)
                     os.environ[key] = value.strip('"\'')
 
-class HighPerformanceSemanticRAGSystem:
-    """HIGH-PERFORMANCE system orchestrator for 500+ objects"""
+class EnhancedSemanticRAGSystem:
+    """Enhanced system orchestrator with smart business analysis"""
     
     def __init__(self):
         self.config = Config()
@@ -41,19 +41,19 @@ class HighPerformanceSemanticRAGSystem:
         print(self.config.get_performance_summary())
     
     async def run_step1_discovery_all_objects(self, limit: int = None):
-        """Run Step 1: HIGH-PERFORMANCE Database Discovery for ALL Objects"""
-        print("🚀 Step 1: HIGH-PERFORMANCE Database Discovery (ALL Objects)")
+        """Run Step 1: Database Discovery for Enhanced Analysis"""
+        print("🚀 Step 1: Enhanced Database Discovery")
         print("=" * 70)
         
         if limit is None:
-            print("📊 Mode: UNLIMITED - Analyzing ALL database objects (500+)")
+            print("📊 Mode: UNLIMITED - Analyzing ALL database objects for best results")
         else:
-            print(f"📊 Mode: LIMITED - Analyzing top {limit} objects")
+            print(f"📊 Mode: LIMITED - Analyzing top {limit} priority objects")
         
-        print("📝 Samples per object: 5 rows (as requested)")
-        print("⚡ Using aggressive parallelism and FAST queries")
+        print("📝 Enhanced sampling: 5 rows per object with business focus")
+        print("⚡ Optimized for business entity recognition")
         
-        # Get initial count estimate for performance planning
+        # Get initial count estimate
         print("\n🔍 Estimating database size...")
         await self._show_database_size_estimate()
         
@@ -72,7 +72,7 @@ class HighPerformanceSemanticRAGSystem:
             views_count = sum(1 for t in tables if t.object_type == 'VIEW')
             total_samples = sum(len(t.sample_data) for t in tables)
             
-            print(f"\n✅ HIGH-PERFORMANCE discovery completed!")
+            print(f"\n✅ Enhanced discovery completed!")
             print(f"   📊 Objects analyzed: {len(tables)} (Tables: {tables_count}, Views: {views_count})")
             print(f"   📝 Total samples collected: {total_samples} rows")
             print(f"   📈 Success rate: {(stats.successful_analyses/max(stats.objects_processed,1)*100):.1f}%")
@@ -130,9 +130,9 @@ class HighPerformanceSemanticRAGSystem:
             print(f"   ⚠️ Could not estimate database size: {e}")
             return None
     
-    async def run_step2_analysis_enhanced(self):
-        """Run Step 2: Enhanced Semantic Analysis for Large Datasets"""
-        print("\n🧠 Step 2: Enhanced Semantic Analysis (Large Dataset Support)")
+    async def run_step2_enhanced_semantic_analysis(self):
+        """Run Step 2: Enhanced Semantic Analysis with Smart Business Understanding"""
+        print("\n🧠 Step 2: Enhanced Semantic Analysis with Smart Business Understanding")
         print("=" * 70)
         
         if not self.status.discovery_completed:
@@ -141,13 +141,14 @@ class HighPerformanceSemanticRAGSystem:
                 print("❌ No discovery data found. Run Step 1 first.")
                 return False
         
-        # Pass discovery results to analyzer
+        # Pass discovery results to enhanced analyzer
         tables = self.discovery.get_tables()
         
         if len(tables) > 100:
-            print(f"🚀 LARGE DATASET MODE: Analyzing {len(tables)} objects")
-            print("   ⚡ Using optimized batch processing")
-            print("   🧠 Enhanced AI classification for views")
+            print(f"🚀 LARGE DATASET MODE: Enhanced analysis of {len(tables)} objects")
+            print("   🧠 Smart business entity recognition")
+            print("   🔗 Intelligent relationship discovery")
+            print("   ✅ Business logic validation")
         
         success = await self.analyzer.analyze_semantics(tables)
         
@@ -155,28 +156,40 @@ class HighPerformanceSemanticRAGSystem:
             self.status.analysis_completed = True
             self.status.relationships_found = len(self.analyzer.get_relationships())
             domain = self.analyzer.get_domain()
+            business_analysis = self.analyzer.get_business_analysis()
             
-            # Show detailed analysis results
+            # Show enhanced analysis results
             classified_count = sum(1 for t in tables if t.semantic_profile)
             views_classified = sum(1 for t in tables if t.object_type == 'VIEW' and t.semantic_profile)
             
             print(f"✅ Enhanced semantic analysis completed!")
             print(f"   🧠 Objects classified: {classified_count}/{len(tables)}")
-            print(f"   📊 Views classified: {views_classified} (major improvement)")
+            print(f"   📊 Views classified: {views_classified}")
             print(f"   🔗 Relationships found: {len(self.analyzer.get_relationships())}")
             print(f"   🏢 Domain identified: {domain.domain_type if domain else 'Unknown'}")
             
             if domain and domain.industry:
                 print(f"   🏭 Industry: {domain.industry}")
             
+            # Show business validation summary
+            validation = business_analysis.get('validation_results', {})
+            status = validation.get('overall_status', 'Unknown')
+            customer_payment_links = validation.get('customer_payment_links', 0)
+            
+            print(f"   ✅ Business validation: {status}")
+            if customer_payment_links > 0:
+                print(f"   🔗 Customer-payment links: {customer_payment_links}")
+            else:
+                print(f"   ⚠️ No customer-payment links found - paid customer queries may fail")
+            
             return True
         else:
-            print("❌ Analysis failed")
+            print("❌ Enhanced analysis failed")
             return False
     
-    async def run_step3_queries_enhanced(self):
-        """Run Step 3: Enhanced Interactive Queries with Large Dataset Support"""
-        print("\n💬 Step 3: Enhanced Interactive Queries (Large Dataset Support)")
+    async def run_step3_smart_queries(self):
+        """Run Step 3: Smart Interactive Queries with Business Intelligence"""
+        print("\n💬 Step 3: Smart Interactive Queries with Business Intelligence")
         print("=" * 70)
         
         if not self.status.analysis_completed:
@@ -185,32 +198,36 @@ class HighPerformanceSemanticRAGSystem:
                 print("❌ System not ready. Run Steps 1 and 2 first.")
                 return False
         
-        # Pass semantic analysis results to query interface
+        # Pass enhanced analysis results to query interface
         tables = self.discovery.get_tables()
         domain = self.analyzer.get_domain()
         relationships = self.analyzer.get_relationships()
+        business_analysis = self.analyzer.get_business_analysis()
         
         if len(tables) > 100:
-            print(f"🚀 LARGE DATASET MODE: {len(tables)} objects available for queries")
-            print("   💡 Enhanced table relevance scoring")
-            print("   🧠 Improved SQL generation with view support")
+            print(f"🚀 LARGE DATASET MODE: {len(tables)} objects available for smart queries")
+            print("   🧠 Smart business query understanding")
+            print("   🎯 Intelligent table selection")
+            print("   ⚡ Enhanced SQL generation")
         
-        await self.query_interface.start_interactive_session(tables, domain, relationships)
+        await self.query_interface.start_interactive_session(
+            tables, domain, relationships, business_analysis
+        )
     
-    async def run_full_demo_high_performance(self):
-        """Run complete high-performance demonstration"""
-        print("🚀 HIGH-PERFORMANCE Full Demo (500+ Objects)")
+    async def run_full_enhanced_demo(self):
+        """Run complete enhanced demonstration with smart business analysis"""
+        print("🚀 ENHANCED Full Demo with Smart Business Analysis")
         print("=" * 70)
-        print("This will analyze ALL database objects with 5 samples each")
-        print("Estimated time: 15-30 minutes for large databases")
+        print("This will analyze ALL database objects with enhanced business understanding")
+        print("Focus: Customer-Payment relationships for accurate business queries")
         
         # Confirm for large datasets
-        confirm = input("\nProceed with full analysis? (y/N): ").strip().lower()
+        confirm = input("\nProceed with enhanced full analysis? (y/N): ").strip().lower()
         if confirm != 'y':
             print("Demo cancelled")
             return
         
-        print("\n🚀 Starting HIGH-PERFORMANCE full analysis...")
+        print("\n🚀 Starting ENHANCED full analysis...")
         
         # Step 1: Discovery (all objects)
         success1 = await self.run_step1_discovery_all_objects()
@@ -218,27 +235,28 @@ class HighPerformanceSemanticRAGSystem:
             print("❌ Discovery failed - stopping demo")
             return
         
-        # Step 2: Semantic Analysis
-        success2 = await self.run_step2_analysis_enhanced()
+        # Step 2: Enhanced Semantic Analysis
+        success2 = await self.run_step2_enhanced_semantic_analysis()
         if not success2:
-            print("❌ Analysis failed - stopping demo")
+            print("❌ Enhanced analysis failed - stopping demo")
             return
         
         # Show comprehensive status
         self.show_enhanced_status()
         
-        print("\n✅ HIGH-PERFORMANCE system ready!")
-        print("🎯 All database objects analyzed with 5 samples each")
-        print("🧠 Semantic classification completed")
-        print("🔗 Relationships discovered")
+        print("\n✅ ENHANCED system ready with smart business understanding!")
+        print("🎯 All database objects analyzed with business focus")
+        print("🧠 Smart entity classification completed")
+        print("🔗 Business relationships discovered")
+        print("💡 Ready for accurate business queries!")
         
-        # Start interactive mode
-        print("\n💬 Starting enhanced interactive mode...")
-        await self.run_step3_queries_enhanced()
+        # Start smart interactive mode
+        print("\n💬 Starting smart interactive mode...")
+        await self.run_step3_smart_queries()
     
     def show_enhanced_status(self):
-        """Show comprehensive system status for large datasets"""
-        print("\n📊 HIGH-PERFORMANCE SYSTEM STATUS")
+        """Show comprehensive system status with business analysis"""
+        print("\n📊 ENHANCED SYSTEM STATUS with Smart Business Analysis")
         print("=" * 70)
         
         # Try to load data from cache if not in memory
@@ -266,35 +284,64 @@ class HighPerformanceSemanticRAGSystem:
             print(f"   • Total samples collected: {total_samples} rows")
             print(f"   • Average samples per object: {avg_samples:.1f}")
             
-            # Semantic analysis status
+            # Enhanced semantic analysis status
             classified_count = sum(1 for t in tables if t.semantic_profile)
             if classified_count > 0:
                 print(f"   • 🧠 Semantically classified: {classified_count} ({(classified_count/len(tables)*100):.1f}%)")
                 
-                # Views classification (major improvement)
-                views_classified = sum(1 for t in tables if t.object_type == 'VIEW' and t.semantic_profile)
-                if view_count > 0:
-                    print(f"   • 📊 Views classified: {views_classified}/{view_count} (improved from 0)")
+                # Business entity breakdown
+                business_analysis = self.analyzer.get_business_analysis()
+                if business_analysis:
+                    validation = business_analysis.get('validation_results', {})
+                    entity_counts = validation.get('entity_counts', {})
+                    
+                    core_entities = ['Customer', 'Payment', 'Order', 'Product']
+                    for entity in core_entities:
+                        count = entity_counts.get(entity, 0)
+                        if count > 0:
+                            print(f"     ✅ {entity}: {count} tables")
+                    
+                    # Business validation status
+                    status = validation.get('overall_status', 'Unknown')
+                    customer_payment_links = validation.get('customer_payment_links', 0)
+                    
+                    print(f"   • 🏢 Business validation: {status}")
+                    if customer_payment_links > 0:
+                        print(f"   • 🔗 Customer-payment links: {customer_payment_links}")
+                    else:
+                        print(f"   • ❌ No customer-payment links found!")
         
         # Show semantic analysis status
         domain = self.analyzer.get_domain()
         relationships = self.analyzer.get_relationships()
         if domain:
-            print(f"\n🏢 Business Domain Analysis:")
+            print(f"\n🏢 Enhanced Business Domain Analysis:")
             print(f"   • Domain Type: {domain.domain_type}")
             print(f"   • Industry: {domain.industry}")
             print(f"   • Confidence: {domain.confidence:.2f}")
-            print(f"   • Key Entities: {', '.join(domain.entities[:5])}")
+            
+            if domain.sample_questions:
+                print(f"   • Sample Questions Available: {len(domain.sample_questions)}")
         
         if relationships:
-            print(f"   • 🔗 Relationships Discovered: {len(relationships)}")
+            print(f"   • 🔗 Smart Relationships Discovered: {len(relationships)}")
+            
+            # Show relationship types
+            rel_types = {}
+            for rel in relationships:
+                rel_type = rel.relationship_type
+                rel_types[rel_type] = rel_types.get(rel_type, 0) + 1
+            
+            for rel_type, count in rel_types.items():
+                print(f"     • {rel_type}: {count}")
         
         # Performance metrics
-        print(f"\n⚡ Performance Configuration:")
+        print(f"\n⚡ Enhanced Performance Configuration:")
         print(f"   • Parallel Workers: {self.config.max_parallel_workers}")
         print(f"   • Batch Size: {self.config.max_batch_size}")
         print(f"   • Samples per Object: {self.config.samples_per_object}")
-        print(f"   • FAST Queries: {'Enabled' if self.config.use_fast_queries else 'Disabled'}")
+        print(f"   • Business Focus: Enabled")
+        print(f"   • Smart Query Processing: Enabled")
         
         # Cache status
         self._show_cache_status()
@@ -303,7 +350,7 @@ class HighPerformanceSemanticRAGSystem:
         """Show cache file status"""
         cache_files = [
             ('data/database_structure.json', 'Discovery Cache'),
-            ('data/semantic_analysis.json', 'Semantic Cache')
+            ('data/semantic_analysis.json', 'Enhanced Semantic Cache')
         ]
         
         print(f"\n💾 Cache Status:")
@@ -321,20 +368,21 @@ class HighPerformanceSemanticRAGSystem:
             else:
                 print(f"   ⚠️  {description}: Not found")
 
+
 def main():
-    """HIGH-PERFORMANCE main application entry point"""
-    print("🚀 HIGH-PERFORMANCE SEMANTIC DATABASE RAG SYSTEM")
-    print("Optimized for 500+ Objects with 5 Samples Each")
+    """Enhanced main application entry point"""
+    print("🚀 ENHANCED SEMANTIC DATABASE RAG SYSTEM")
+    print("Smart Business Analysis for Accurate Query Processing")
     print("=" * 80)
     
     # Load environment
     load_environment()
     
-    # Initialize system
+    # Initialize enhanced system
     try:
-        system = HighPerformanceSemanticRAGSystem()
+        system = EnhancedSemanticRAGSystem()
     except Exception as e:
-        print(f"❌ Failed to initialize system: {e}")
+        print(f"❌ Failed to initialize enhanced system: {e}")
         print("💡 Check your .env configuration:")
         print("   - AZURE_OPENAI_API_KEY")
         print("   - DATABASE_CONNECTION_STRING")
@@ -342,18 +390,18 @@ def main():
         print("   - DEPLOYMENT_NAME")
         return
     
-    print("✅ HIGH-PERFORMANCE system initialized successfully")
+    print("✅ ENHANCED system initialized with smart business analysis")
     
     while True:
         print("\n" + "="*80)
-        print("HIGH-PERFORMANCE MENU OPTIONS:")
-        print("1. 🚀 Discover ALL Objects (500+) - 5 samples each")
-        print("2. 🎯 Discover Limited Objects - specify count")
-        print("3. 🧠 Semantic Analysis - enhanced for large datasets")
-        print("4. 💬 Interactive Queries - improved table selection")
-        print("5. 🌟 FULL DEMO - complete analysis of all objects")
-        print("6. 📊 Show Enhanced System Status")
-        print("7. ⚡ Performance Information & Recommendations")
+        print("ENHANCED MENU OPTIONS - Smart Business Analysis:")
+        print("1. 🚀 Discover Database Objects - Enhanced for business entities")
+        print("2. 🎯 Discover Limited Objects - specify count for testing")
+        print("3. 🧠 Enhanced Semantic Analysis - Smart business entity recognition")
+        print("4. 💬 Smart Interactive Queries - Intelligent business query processing")
+        print("5. 🌟 FULL ENHANCED DEMO - Complete smart business analysis")
+        print("6. 📊 Show Enhanced System Status - Business entity breakdown")
+        print("7. ⚡ Smart Features Information")
         print("8. 🧪 Database Size Estimate")
         print("0. Exit")
         print("="*80)
@@ -362,14 +410,14 @@ def main():
             choice = input("Enter your choice (0-8): ").strip()
             
             if choice == '0':
-                print("👋 Thanks for using the HIGH-PERFORMANCE Semantic Database RAG System!")
+                print("👋 Thanks for using the ENHANCED Semantic Database RAG System!")
                 break
             
             elif choice == '1':
-                print("\n🚀 UNLIMITED DISCOVERY MODE")
-                print("This will analyze ALL database objects (500+) with 5 samples each")
+                print("\n🚀 ENHANCED DISCOVERY MODE")
+                print("This will analyze ALL database objects with business focus")
                 print("⚠️  This may take 15-30 minutes for large databases")
-                confirm = input("Continue? (y/N): ").strip().lower()
+                confirm = input("Continue with enhanced discovery? (y/N): ").strip().lower()
                 if confirm == 'y':
                     asyncio.run(system.run_step1_discovery_all_objects())
             
@@ -384,43 +432,53 @@ def main():
                     print("❌ Please enter a valid number")
             
             elif choice == '3':
-                asyncio.run(system.run_step2_analysis_enhanced())
+                asyncio.run(system.run_step2_enhanced_semantic_analysis())
             
             elif choice == '4':
-                asyncio.run(system.run_step3_queries_enhanced())
+                asyncio.run(system.run_step3_smart_queries())
             
             elif choice == '5':
-                asyncio.run(system.run_full_demo_high_performance())
+                asyncio.run(system.run_full_enhanced_demo())
             
             elif choice == '6':
                 system.show_enhanced_status()
             
             elif choice == '7':
-                print("\n⚡ HIGH-PERFORMANCE FEATURES & RECOMMENDATIONS")
+                print("\n⚡ ENHANCED SMART FEATURES")
                 print("=" * 60)
-                print("✅ Optimizations Applied:")
-                print("   • Removed artificial object limits (analyze ALL 500+ objects)")
-                print("   • Increased parallel workers for faster processing")
-                print("   • FAST query option for 2-5x speed improvement")
-                print("   • Enhanced view analysis (previous versions showed 0 views)")
-                print("   • 5 samples per object (as requested)")
-                print("   • Minimal filtering - keeps business objects")
-                print("   • Large dataset mode with optimized batching")
-                print("   • Connection pooling and query optimization")
+                print("✅ Smart Business Entity Recognition:")
+                print("   • Advanced pattern matching for customers, payments, orders")
+                print("   • LLM-powered business purpose identification")
+                print("   • Confidence scoring and validation")
                 
-                print("\n💡 Performance Recommendations:")
-                print("   • Run discovery during off-peak hours for large databases")
-                print("   • Use cached results for repeated analysis")
-                print("   • Monitor system resources during large discoveries")
-                print("   • Consider increasing parallel workers if system can handle it")
+                print("\n✅ Intelligent Relationship Discovery:")
+                print("   • Automatic customer-payment link detection")
+                print("   • Business logic validation")
+                print("   • Relationship confidence scoring")
+                
+                print("\n✅ Smart Query Processing:")
+                print("   • Business intent analysis")
+                print("   • Intelligent table selection")
+                print("   • Context-aware SQL generation")
+                print("   • Enhanced error handling and suggestions")
+                
+                print("\n💡 Key Improvements for 'Paid Customer' Queries:")
+                print("   • Identifies customer and payment tables accurately")
+                print("   • Discovers relationships between customer and payment data")
+                print("   • Generates proper JOIN queries for business questions")
+                print("   • Validates results and provides business interpretation")
+                
+                print("\n🎯 Business Query Examples That Now Work Better:")
+                print("   • 'How many customers have paid in 2025?' - Smart customer-payment joins")
+                print("   • 'What is our total revenue?' - Intelligent payment amount aggregation")
+                print("   • 'Show paid customers' - Proper relationship understanding")
                 
                 print(f"\n📊 Current Configuration:")
                 config = system.config
-                print(f"   • Max parallel workers: {config.max_parallel_workers}")
-                print(f"   • Batch size: {config.max_batch_size}")
-                print(f"   • Samples per object: {config.samples_per_object}")
-                print(f"   • Query timeout: {config.query_timeout_seconds}s")
-                print(f"   • Rate limit delay: {config.rate_limit_delay}s")
+                print(f"   • Enhanced semantic analysis: Enabled")
+                print(f"   • Smart query processing: Enabled")
+                print(f"   • Business entity focus: Enabled")
+                print(f"   • Relationship validation: Enabled")
             
             elif choice == '8':
                 print("\n🧪 Database Size Estimation")
