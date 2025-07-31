@@ -1194,9 +1194,12 @@ class IntelligentQueryInterface:
                 print(f"📋 Tables: {', '.join(result.relevant_tables)}")
 
 
-# Export the intelligent interface as the main class
+# Export classes with consistent naming for backward compatibility
+EnhancedQueryInterface = IntelligentQueryInterface
 QueryInterface = IntelligentQueryInterface
+InteractiveLLMClient = IntelligentLLMClient
 
 # Make all classes available at module level
-__all__ = ['IntelligentQueryInterface', 'QueryInterface', 'IntelligentQueryProcessor', 
-           'RelationshipIntelligenceEngine', 'IntelligentLLMClient']
+__all__ = ['IntelligentQueryInterface', 'EnhancedQueryInterface', 'QueryInterface', 
+           'IntelligentQueryProcessor', 'RelationshipIntelligenceEngine', 
+           'IntelligentLLMClient', 'InteractiveLLMClient']
