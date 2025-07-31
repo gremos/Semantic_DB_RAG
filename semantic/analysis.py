@@ -434,7 +434,7 @@ class EnhancedForeignKeyAnalyzer:
         self.config = config
     
     async def analyze_all_foreign_keys(self, conn) -> List[ForeignKeyRelationship]:
-        """Comprehensive foreign key analysis with business context"""
+        """Comprehensive foreign key analysis with business context - FIXED SQL query"""
         
         fk_query = """
         SELECT 
@@ -449,9 +449,9 @@ class EnhancedForeignKeyAnalyzer:
             fk.is_not_trusted,
             fk.delete_referential_action_desc,
             fk.update_referential_action_desc,
-            -- Additional metadata
-            cp.data_type AS parent_column_type,
-            cr.data_type AS referenced_column_type,
+            -- FIXED: Get data types correctly from sys.types
+            pt.name AS parent_column_type,
+            rt.name AS referenced_column_type,
             cp.is_nullable AS parent_nullable,
             -- Business context hints
             CASE 
@@ -472,6 +472,9 @@ class EnhancedForeignKeyAnalyzer:
         INNER JOIN sys.foreign_key_columns fkc ON fk.object_id = fkc.constraint_object_id
         INNER JOIN sys.columns cp ON fkc.parent_object_id = cp.object_id AND fkc.parent_column_id = cp.column_id
         INNER JOIN sys.columns cr ON fkc.referenced_object_id = cr.object_id AND fkc.referenced_column_id = cr.column_id
+        -- FIXED: Join with sys.types to get actual data type names
+        INNER JOIN sys.types pt ON cp.user_type_id = pt.user_type_id
+        INNER JOIN sys.types rt ON cr.user_type_id = rt.user_type_id
         WHERE tp.is_ms_shipped = 0 AND tr.is_ms_shipped = 0
         ORDER BY business_context, parent_schema, parent_table, referenced_schema, referenced_table
         """
@@ -485,10 +488,10 @@ class EnhancedForeignKeyAnalyzer:
         
         for row in cursor.fetchall():
             (constraint_name, parent_schema, parent_table, parent_column,
-             referenced_schema, referenced_table, referenced_column,
-             is_disabled, is_not_trusted, delete_action, update_action,
-             parent_column_type, referenced_column_type, parent_nullable,
-             business_context, estimated_cardinality) = row
+            referenced_schema, referenced_table, referenced_column,
+            is_disabled, is_not_trusted, delete_action, update_action,
+            parent_column_type, referenced_column_type, parent_nullable,
+            business_context, estimated_cardinality) = row
             
             fk_relationship = ForeignKeyRelationship(
                 constraint_name=constraint_name,
