@@ -1,10 +1,12 @@
 """
 Enhanced semantic analysis module for AI-powered classification and relationship discovery
+Updated for intelligent metadata-first approach
 """
 
-from .analysis import EnhancedSemanticAnalyzer, BusinessEntityAnalyzer, SemanticLLMClient
+from .analysis import IntelligentSemanticAnalyzer, IntelligentMetadataAnalyzer
 
 # Maintain backward compatibility
-SemanticAnalyzer = EnhancedSemanticAnalyzer
+EnhancedSemanticAnalyzer = IntelligentSemanticAnalyzer
+SemanticAnalyzer = IntelligentSemanticAnalyzer
 
-__all__ = ["EnhancedSemanticAnalyzer", "SemanticAnalyzer", "BusinessEntityAnalyzer", "SemanticLLMClient"]
+__all__ = ["IntelligentSemanticAnalyzer", "EnhancedSemanticAnalyzer", "SemanticAnalyzer", "IntelligentMetadataAnalyzer"]
