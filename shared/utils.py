@@ -1,418 +1,347 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3  
 # -*- coding: utf-8 -*-
 """
-OPTIMIZED Shared utility functions for 500+ object analysis
-Less aggressive filtering to maximize business data discovery
+Simplified utility functions - Focus on core functionality
 """
 
 import json
 import re
-from datetime import datetime
-from pathlib import Path
 from typing import Dict, List, Any, Optional
+from pathlib import Path
+from datetime import datetime
 
 def extract_json_from_response(response: str) -> Optional[Dict]:
-    """Extract JSON from LLM response with improved parsing"""
+    """Extract JSON from LLM response"""
     try:
-        # First try direct parsing
-        parsed = json.loads(response.strip())
-        return decode_unicode_in_dict(parsed)
-    except:
-        # Try extracting from code blocks and patterns
-        patterns = [
-            r'```json\s*(.*?)\s*```',
-            r'```\s*(.*?)\s*```',
-            r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}',
-            r'\[.*?\]'
-        ]
+        # Clean the response
+        cleaned = response.strip()
         
-        for pattern in patterns:
-            matches = re.findall(pattern, response, re.DOTALL)
-            for match in matches:
-                try:
-                    clean_match = match if 'json' not in pattern else match
-                    parsed = json.loads(clean_match)
-                    return decode_unicode_in_dict(parsed)
-                except:
-                    continue
+        # Remove markdown code blocks
+        if '```json' in cleaned:
+            cleaned = re.search(r'```json\s*(.*?)\s*```', cleaned, re.DOTALL)
+            if cleaned:
+                cleaned = cleaned.group(1)
+        elif '```' in cleaned:
+            cleaned = re.search(r'```\s*(.*?)\s*```', cleaned, re.DOTALL)
+            if cleaned:
+                cleaned = cleaned.group(1)
+        
+        # Try to parse JSON
+        return json.loads(cleaned)
+        
+    except Exception as e:
+        print(f"   ⚠️ Failed to parse JSON: {e}")
         return None
 
-def decode_unicode_in_dict(obj):
-    """Recursively decode Unicode escape sequences in dictionary/list structures"""
-    if isinstance(obj, dict):
-        return {key: decode_unicode_in_dict(value) for key, value in obj.items()}
-    elif isinstance(obj, list):
-        return [decode_unicode_in_dict(item) for item in obj]
-    elif isinstance(obj, str):
-        try:
-            # Handle Unicode properly - simplified approach
-            return obj
-        except UnicodeError:
-            return obj
-    else:
-        return obj
+def classify_entity_type_simple(table_name: str, columns: List[Dict], sample_data: List[Dict]) -> tuple:
+    """
+    Simple entity classification based on name patterns and column analysis
+    Returns: (entity_type, confidence)
+    """
+    name_lower = table_name.lower()
+    
+    # High confidence patterns
+    if any(word in name_lower for word in ['customer', 'client', 'account']):
+        return 'Customer', 0.9
+    
+    if any(word in name_lower for word in ['order', 'sale', 'purchase']):
+        return 'Order', 0.9
+        
+    if any(word in name_lower for word in ['product', 'item', 'inventory']):
+        return 'Product', 0.9
+        
+    if any(word in name_lower for word in ['payment', 'invoice', 'billing', 'transaction']):
+        return 'Payment', 0.9
+        
+    if any(word in name_lower for word in ['user', 'person', 'employee', 'contact']):
+        return 'Person', 0.8
+        
+    if any(word in name_lower for word in ['company', 'business', 'organization', 'vendor']):
+        return 'Organization', 0.8
+        
+    # Column-based analysis
+    column_names = [col.get('name', '').lower() for col in columns]
+    
+    # Look for ID patterns that suggest entity type
+    if any('customer' in col for col in column_names):
+        return 'Customer', 0.7
+    if any('order' in col for col in column_names):
+        return 'Order', 0.7
+    if any('product' in col for col in column_names):
+        return 'Product', 0.7
+    if any('payment' in col for col in column_names):
+        return 'Payment', 0.7
+        
+    # Check for common entity indicators
+    if any(col in column_names for col in ['email', 'phone', 'address']):
+        return 'Contact', 0.6
+        
+    if any(col in column_names for col in ['amount', 'total', 'price', 'cost']):
+        return 'Financial', 0.6
+        
+    return 'Unknown', 0.0
+
+def find_table_relationships_simple(tables: List['TableInfo']) -> List[tuple]:
+    """
+    Simple relationship discovery based on column name matching
+    Returns: List of (from_table, to_table, relationship_type, confidence)
+    """
+    relationships = []
+    
+    # Create column index for faster lookups
+    table_columns = {}
+    for table in tables:
+        table_columns[table.full_name] = [col.get('name', '').lower() for col in table.columns]
+    
+    # Look for foreign key patterns
+    for table in tables:
+        table_cols = table_columns[table.full_name]
+        
+        for col_name in table_cols:
+            if col_name.endswith('id') and col_name != 'id':
+                # Look for matching table
+                entity_name = col_name[:-2]  # Remove 'id'
+                
+                for other_table in tables:
+                    if table.full_name == other_table.full_name:
+                        continue
+                        
+                    other_name = other_table.name.lower()
+                    if entity_name in other_name or other_name in entity_name:
+                        relationships.append((
+                            table.full_name,
+                            other_table.full_name,
+                            'foreign_key',
+                            0.8
+                        ))
+    
+    return relationships
+
+def create_llm_classification_prompt(tables_batch: List['TableInfo']) -> str:
+    """Create focused LLM prompt for entity classification"""
+    
+    table_info = []
+    for table in tables_batch:
+        columns_str = ', '.join([col.get('name', '') for col in table.columns[:10]])
+        sample_str = str(table.sample_data[0]) if table.sample_data else "No sample data"
+        
+        table_info.append({
+            'name': table.name,
+            'full_name': table.full_name,
+            'columns': columns_str,
+            'sample': sample_str,
+            'row_count': table.row_count
+        })
+    
+    prompt = f"""
+Analyze these database tables and classify each one as a business entity type.
+
+TABLES TO CLASSIFY:
+{json.dumps(table_info, indent=2)}
+
+For each table, determine:
+1. Entity Type: Customer, Order, Product, Payment, User, Company, Contact, Financial, Lookup, or Unknown
+2. Confidence: 0.0 to 1.0 (how sure you are)
+3. Business Role: Core, Supporting, Reference, or System
+
+Look for patterns in:
+- Table names (customers, orders, products, payments)
+- Column names (customer_id, order_date, product_name, amount)
+- Sample data content and structure
+
+Respond with JSON only:
+{{
+  "classifications": [
+    {{
+      "table_name": "full_table_name",
+      "entity_type": "Customer",
+      "confidence": 0.9,
+      "business_role": "Core"
+    }}
+  ]
+}}
+"""
+    return prompt
+
+def find_related_tables_fuzzy(question: str, tables: List['TableInfo']) -> List['TableInfo']:
+    """
+    Find tables related to question using fuzzy matching
+    Much simpler than the complex relationship-aware approach
+    """
+    question_lower = question.lower()
+    scored_tables = []
+    
+    # Keywords to table type mapping
+    keywords = {
+        'customer': ['Customer', 'Contact', 'User', 'Person'],
+        'client': ['Customer', 'Contact', 'User', 'Person'],
+        'payment': ['Payment', 'Financial', 'Order'],
+        'paid': ['Payment', 'Financial', 'Order'],
+        'order': ['Order', 'Product', 'Customer'],
+        'sale': ['Order', 'Product', 'Customer'],
+        'product': ['Product', 'Order'],
+        'revenue': ['Payment', 'Financial', 'Order'],
+        'total': ['Payment', 'Financial', 'Order'],
+        'count': ['Customer', 'Order', 'Product', 'Payment']
+    }
+    
+    for table in tables:
+        score = 0
+        
+        # Direct name matching
+        for keyword, entity_types in keywords.items():
+            if keyword in question_lower:
+                if table.entity_type in entity_types:
+                    score += 10
+                elif keyword in table.name.lower():
+                    score += 8
+        
+        # Confidence boost
+        if table.confidence > 0.7:
+            score += 5
+        elif table.confidence > 0.5:
+            score += 3
+        
+        # Row count consideration (prefer tables with data)
+        if table.row_count > 1000:
+            score += 3
+        elif table.row_count > 100:
+            score += 2
+        elif table.row_count > 0:
+            score += 1
+        
+        if score > 0:
+            scored_tables.append((table, score))
+    
+    # Sort by score and return top matches
+    scored_tables.sort(key=lambda x: x[1], reverse=True)
+    
+    # Return top 5 tables
+    return [table for table, score in scored_tables[:5]]
+
+def generate_simple_sql_prompt(question: str, tables: List['TableInfo']) -> str:
+    """Generate simple SQL prompt for LLM"""
+    
+    table_schemas = []
+    for table in tables:
+        columns = []
+        for col in table.columns[:10]:  # Limit columns
+            col_name = col.get('name', '')
+            col_type = col.get('data_type', '')
+            columns.append(f"{col_name} ({col_type})")
+        
+        table_schemas.append({
+            'table': table.full_name,
+            'entity_type': table.entity_type,
+            'columns': columns,
+            'sample_row_count': table.row_count
+        })
+    
+    prompt = f"""
+Generate SQL Server T-SQL query to answer this question: "{question}"
+
+Available tables:
+{json.dumps(table_schemas, indent=2)}
+
+Rules:
+1. Use proper SQL Server syntax with square brackets for names
+2. Use appropriate JOINs if multiple tables are needed
+3. Add reasonable WHERE clauses to filter data
+4. Use TOP 100 to limit results unless asking for totals/counts
+5. Return ONLY the SQL query, no explanations
+
+SQL Query:
+"""
+    return prompt
+
+def save_cache(filepath: Path, data: Dict, description: str = "data"):
+    """Save data to cache file"""
+    try:
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False, default=str)
+        print(f"   💾 Saved {description} to cache")
+    except Exception as e:
+        print(f"   ⚠️ Failed to save {description}: {e}")
+
+def load_cache(filepath: Path, max_age_hours: int = 24) -> Optional[Dict]:
+    """Load data from cache file"""
+    if not filepath.exists():
+        return None
+        
+    try:
+        # Check age
+        age_hours = (datetime.now().timestamp() - filepath.stat().st_mtime) / 3600
+        if age_hours > max_age_hours:
+            print(f"   ⏰ Cache expired ({age_hours:.1f}h old)")
+            return None
+            
+        with open(filepath, 'r', encoding='utf-8') as f:
+            return json.load(f)
+            
+    except Exception as e:
+        print(f"   ⚠️ Failed to load cache: {e}")
+        return None
+
+def clean_sql_query(response: str) -> Optional[str]:
+    """Clean SQL response from LLM"""
+    # Remove markdown
+    cleaned = re.sub(r'```sql\s*', '', response)
+    cleaned = re.sub(r'```\s*', '', cleaned)
+    
+    # Extract SQL (look for SELECT statement)
+    lines = cleaned.split('\n')
+    sql_lines = []
+    
+    for line in lines:
+        line = line.strip()
+        if line.upper().startswith('SELECT') or sql_lines:
+            sql_lines.append(line)
+            if line.endswith(';'):
+                break
+    
+    if sql_lines:
+        return '\n'.join(sql_lines).rstrip(';')
+    
+    # Fallback
+    if 'SELECT' in response.upper():
+        return response.strip().rstrip(';')
+        
+    return None
+
+# Alias for backward compatibility
+def clean_sql_response(response: str) -> Optional[str]:
+    """Backward compatibility alias"""
+    return clean_sql_query(response)
 
 def safe_database_value(value) -> Any:
-    """Convert database value to JSON-safe format with proper UTF-8 handling"""
+    """Convert database value to safe format"""
     if value is None:
         return None
     elif isinstance(value, datetime):
         return value.isoformat()
-    elif isinstance(value, bytes):
-        try:
-            decoded = value.decode('utf-8')
-            return decoded[:500] if len(decoded) > 500 else decoded
-        except UnicodeDecodeError:
-            return f"<binary_{len(value)}_bytes>"
-    elif isinstance(value, str):
-        return value[:500] if len(value) > 500 else value
-    elif isinstance(value, (int, float, bool)):
+    elif isinstance(value, (str, int, float, bool)):
         return value
     else:
-        try:
-            str_value = str(value)
-            return str_value[:500] if len(str_value) > 500 else str_value
-        except UnicodeError:
-            return str(value).encode('utf-8', errors='replace').decode('utf-8')[:500]
-
-def save_json_cache(filepath: Path, data: Dict, description: str = "data"):
-    """Save data to JSON cache file with proper UTF-8 encoding"""
-    try:
-        with open(filepath, 'w', encoding='utf-8') as f:
-            json.dump(data, f, indent=2, default=str, ensure_ascii=False)
-        print(f"   💾 {description} saved to: {filepath}")
-    except Exception as e:
-        print(f"⚠️ Failed to save {description}: {e}")
-
-def load_json_cache(filepath: Path, max_age_hours: int = 24, description: str = "data") -> Optional[Dict]:
-    """Load data from JSON cache file with age checking"""
-    if not filepath.exists():
-        return None
-    
-    try:
-        with open(filepath, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        
-        # Ensure Unicode characters are properly handled
-        data = decode_unicode_in_dict(data)
-        
-        # Check age if created timestamp exists
-        if 'created' in data:
-            try:
-                created = datetime.fromisoformat(data['created'])
-                age_hours = (datetime.now() - created).total_seconds() / 3600
-                
-                if age_hours > max_age_hours:
-                    print(f"⏰ {description} cache expired ({age_hours:.1f}h old)")
-                    return None
-            except:
-                pass  # Continue with data if timestamp parsing fails
-        
-        return data
-        
-    except Exception as e:
-        print(f"⚠️ Failed to load {description}: {e}")
-        return None
+        return str(value)[:200]  # Truncate long values
 
 def should_exclude_table(table_name: str, schema_name: str) -> bool:
     """
     MINIMAL exclusion logic - Only exclude truly problematic objects
-    
-    CHANGED FROM AGGRESSIVE TO MINIMAL FILTERING:
-    - Previous version excluded many potentially useful business objects
-    - New version only excludes clearly broken/system objects
-    - Goal: Analyze as many of the 500+ objects as possible
     """
     full_name = f"{schema_name}.{table_name}"
     name_lower = table_name.lower()
     
-    # ONLY exclude clearly problematic objects (minimal list)
+    # Only exclude clearly problematic objects
     critical_exclusions = [
-        # System-only objects
         'msreplication', 'trace_xe', 'syscommittab', 'sysdiagrams',
         'dtproperties', '__msnpeer', '__msdbm', 'mspeer_',
-        
-        # Clearly corrupted/broken objects
-        'corrupted', 'broken', 'damaged', 'invalid', 'error_log',
-        
-        # SQL Server internal replication
-        'conflict_', 'reseed_', 'msmerge_',
-        
-        # Only backup tables with clear date patterns (not just backup word)
-        '_bck_202', '_backup_202', 'backup_202'  # Only dated backups
+        'corrupted', 'broken', 'damaged', 'invalid',
+        'conflict_', 'reseed_', 'msmerge_'
     ]
     
-    # Check critical exclusions only
     for exclusion in critical_exclusions:
         if exclusion in name_lower:
             return True
     
-    # DON'T exclude common business objects that were previously filtered
-    # These should be KEPT and analyzed:
-    keep_patterns = [
-        'customer', 'client', 'user', 'account', 'person', 'business',
-        'order', 'sales', 'product', 'item', 'service',
-        'payment', 'invoice', 'transaction', 'financial',
-        'address', 'contact', 'phone', 'email',
-        'company', 'organization', 'vendor', 'supplier',
-        'campaign', 'marketing', 'advertisement',
-        'task', 'assignment', 'project', 'comment',
-        'log', 'audit', 'history'  # Even these can be valuable
-    ]
-    
-    # If it matches business patterns, definitely keep it
-    for pattern in keep_patterns:
-        if pattern in name_lower:
-            return False  # Force keep business objects
-    
-    # Schema-based filtering (only exclude clearly system schemas)
-    system_schemas = ['sys', 'information_schema', 'guest', 'INFORMATION_SCHEMA']
-    if schema_name in system_schemas:
-        return True
-    
-    # DEFAULT: Keep the object (analyze it)
-    # This is a major change from the previous aggressive filtering
+    # Don't exclude common business objects
     return False
-
-def should_exclude_table_original_aggressive(table_name: str, schema_name: str) -> bool:
-    """
-    ORIGINAL AGGRESSIVE exclusion logic - REPLACED by minimal version above
-    This version excluded too many potentially useful objects
-    Kept here for reference only - DO NOT USE
-    """
-    exclude_patterns = [
-        # System and timing tables
-        'YPSTimingView', '*Timing*', '*Log*', '*Audit*', 'sys*',
-        # Backup and temporary tables  
-        '*_backup', '*_temp', '*_staging', '*Renamed', '*History',
-        '*_BCKP_*', '*Bck_*', '*_BCK_*', '*backup*', '*bckp*',
-        # Archive and snapshot tables
-        '*_archive*', '*_snapshot*', '*_copy*', '*_old*',
-        # ETL and staging tables
-        '*_staging*', '*_load*', '*_import*', '*_export*',
-        # Test and development tables
-        '*_test*', '*_dev*', '*_tmp*', '*temp*',
-        'BusinessPointIdentificationWithThirdPartyData'
-    ]
-    
-    full_name = f"{schema_name}.{table_name}"
-    table_lower = table_name.lower()
-    
-    # Check exclusion patterns
-    for pattern in exclude_patterns:
-        if '*' in pattern:
-            pattern_clean = pattern.replace('*', '').lower()
-            if pattern_clean in table_lower:
-                return True
-        elif pattern.lower() == table_lower:
-            return True
-    
-    # Additional backup table detection by date patterns
-    backup_date_patterns = [
-        r'_\d{8}$',      # _20250120
-        r'_\d{6}$',      # _202501
-        r'Bck_\d{8}$',   # Bck_20190523
-        r'BCKP_\d{8}$'   # BCKP_20250129
-    ]
-    
-    for pattern in backup_date_patterns:
-        if re.search(pattern, table_name):
-            return True
-    
-    return False
-
-def classify_object_priority(table_name: str, schema_name: str, object_type: str, estimated_rows: int) -> int:
-    """
-    Classify object priority for processing order (higher = more important)
-    Helps ensure business-critical objects are processed first in large datasets
-    """
-    name_lower = table_name.lower()
-    priority = 0
-    
-    # Base priority by object type
-    if object_type in ['BASE TABLE', 'TABLE']:
-        priority += 1000  # Tables get highest base priority
-    elif object_type == 'VIEW':
-        priority += 800   # Views get high priority (many contain business logic)
-    
-    # Business domain priority (VERY HIGH - these are the most valuable)
-    high_value_business = [
-        'customer', 'client', 'businesspoint', 'account', 'user',
-        'order', 'sales', 'purchase', 'transaction', 'payment',
-        'product', 'item', 'service', 'inventory',
-        'invoice', 'billing', 'financial', 'revenue',
-        'person', 'employee', 'staff', 'contact'
-    ]
-    
-    for term in high_value_business:
-        if term in name_lower:
-            priority += 500  # Major business priority boost
-            break
-    
-    # Medium value business objects
-    medium_value_business = [
-        'address', 'phone', 'email', 'communication',
-        'company', 'organization', 'vendor', 'supplier',
-        'campaign', 'marketing', 'advertisement', 'promotion',
-        'task', 'assignment', 'project', 'workflow',
-        'category', 'type', 'status', 'configuration'
-    ]
-    
-    for term in medium_value_business:
-        if term in name_lower:
-            priority += 200
-            break
-    
-    # Data volume consideration (objects with data are more valuable)
-    if estimated_rows > 10000:
-        priority += 100
-    elif estimated_rows > 1000:
-        priority += 50
-    elif estimated_rows > 100:
-        priority += 20
-    elif estimated_rows > 0:
-        priority += 10
-    
-    # Schema priority (business schemas first)
-    if schema_name.lower() == 'dbo':
-        priority += 100
-    elif schema_name.lower() in ['business', 'sales', 'finance', 'hr', 'crm']:
-        priority += 150
-    
-    # Penalize only clearly problematic objects
-    problematic_patterns = [
-        'temp', 'tmp', 'test', 'debug', 'error',
-        'backup_20', 'bck_20', '_old_', '_archive'
-    ]
-    
-    for pattern in problematic_patterns:
-        if pattern in name_lower:
-            priority -= 200
-            break
-    
-    return max(priority, 0)  # Never go below 0
-
-def clean_sql_response(response: str) -> Optional[str]:
-    """Clean SQL response from LLM"""
-    sql_query = response.strip()
-    
-    # Remove code block markers
-    sql_query = re.sub(r'```sql\s*', '', sql_query)
-    sql_query = re.sub(r'```\s*', '', sql_query)
-    
-    # Remove any explanatory text before or after SQL
-    lines = sql_query.split('\n')
-    sql_lines = []
-    in_sql = False
-    
-    for line in lines:
-        line = line.strip()
-        if line.upper().startswith('SELECT') or line.upper().startswith('WITH'):
-            in_sql = True
-        
-        if in_sql and line:
-            sql_lines.append(line)
-        
-        # Stop at end of SQL statement
-        if in_sql and line.endswith(';'):
-            break
-    
-    if sql_lines:
-        cleaned_sql = '\n'.join(sql_lines)
-        # Remove trailing semicolon if present
-        cleaned_sql = cleaned_sql.rstrip(';')
-        return cleaned_sql
-    
-    # Fallback: if no clear SQL structure found, return original
-    if sql_query.upper().strip().startswith('SELECT'):
-        return sql_query.rstrip(';')
-    
-    return None
-
-def extract_sample_greek_text(tables: List['TableInfo']) -> List[str]:
-    """Extract sample Greek text for domain analysis context"""
-    greek_samples = []
-    
-    for table in tables[:15]:  # Check more tables for better Greek text detection
-        if table.sample_data:
-            for row in table.sample_data[:3]:  # Check more samples
-                for key, value in row.items():
-                    if isinstance(value, str) and any(ord(char) > 127 for char in value):
-                        greek_samples.append(f"{table.name}.{key}: {value[:50]}")
-                        if len(greek_samples) >= 10:  # Collect more samples
-                            return greek_samples
-    
-    return greek_samples
-
-def format_duration(seconds: float) -> str:
-    """Format duration in human-readable format"""
-    if seconds < 1:
-        return f"{seconds:.2f}s"
-    elif seconds < 60:
-        return f"{seconds:.1f}s"
-    elif seconds < 3600:
-        minutes = int(seconds // 60)
-        secs = int(seconds % 60)
-        return f"{minutes}m {secs}s"
-    else:
-        hours = int(seconds // 3600)
-        minutes = int((seconds % 3600) // 60)
-        return f"{hours}h {minutes}m"
-
-def estimate_processing_time(object_count: int, workers: int, timeout_per_object: int = 20) -> str:
-    """Estimate total processing time for large datasets"""
-    # Conservative estimate: each object takes average of timeout/2 seconds
-    avg_time_per_object = timeout_per_object / 2
-    
-    # With parallel processing
-    total_time_seconds = (object_count * avg_time_per_object) / workers
-    
-    # Add overhead for batching and setup
-    overhead = object_count * 0.1  # 0.1 seconds overhead per object
-    total_time_seconds += overhead
-    
-    return format_duration(total_time_seconds)
-
-def get_performance_recommendations(object_count: int) -> List[str]:
-    """Get performance recommendations based on dataset size"""
-    recommendations = []
-    
-    if object_count > 500:
-        recommendations.extend([
-            f"🚀 Large dataset detected ({object_count} objects)",
-            "💡 Consider running discovery during off-peak hours",
-            "⚡ Enable aggressive parallelism for faster processing",
-            "📊 Monitor progress - large datasets take 15-30 minutes",
-            "💾 Results will be cached for faster subsequent runs"
-        ])
-    elif object_count > 200:
-        recommendations.extend([
-            f"📊 Medium dataset ({object_count} objects)",
-            "⚡ Default parallelism should work well",
-            "⏱️ Expected completion: 5-15 minutes"
-        ])
-    else:
-        recommendations.extend([
-            f"✅ Small dataset ({object_count} objects)",
-            "🏃 Quick processing expected: 2-5 minutes"
-        ])
-    
-    return recommendations
-
-def log_filtering_statistics(total_found: int, excluded_count: int, processed_count: int):
-    """Log statistics about object filtering for transparency"""
-    kept_count = total_found - excluded_count
-    exclusion_rate = (excluded_count / total_found) * 100 if total_found > 0 else 0
-    
-    print(f"\n📊 Object Filtering Statistics:")
-    print(f"   • Total objects found: {total_found}")
-    print(f"   • Objects excluded: {excluded_count} ({exclusion_rate:.1f}%)")
-    print(f"   • Objects kept for analysis: {kept_count}")
-    print(f"   • Objects successfully processed: {processed_count}")
-    
-    if exclusion_rate > 30:
-        print(f"   ⚠️ High exclusion rate - consider reviewing filtering rules")
-    elif exclusion_rate < 5:
-        print(f"   ✅ Minimal exclusion - analyzing most business objects")
-    else:
-        print(f"   👍 Balanced filtering - keeping business-relevant objects")

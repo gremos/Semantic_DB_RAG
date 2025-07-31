@@ -1,22 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-ENHANCED SEMANTIC DATABASE RAG SYSTEM - Main Entry Point
-Fixed method calls and integrated intelligent metadata analysis
+Simplified Semantic Database RAG System - Main Entry Point
+Simple, readable, and maintainable implementation
 """
 
 import asyncio
 import os
 from pathlib import Path
 
-# Import modules
+# Import simplified modules
 from db.discovery import DatabaseDiscovery
-from semantic.analysis import EnhancedSemanticAnalyzer as SemanticAnalyzer
-
-from interactive.query_interface import EnhancedQueryInterface as QueryInterface
+from semantic.analysis import SimpleSemanticAnalyzer
+from interactive.query_interface import SimpleQueryInterface
 from shared.config import Config
-from shared.models import SystemStatus
-from shared.utils import get_performance_recommendations, estimate_processing_time, log_filtering_statistics
 
 def load_environment():
     """Load environment variables from .env file"""
@@ -28,426 +25,201 @@ def load_environment():
                     key, value = line.strip().split('=', 1)
                     os.environ[key] = value.strip('"\'')
 
-class EnhancedSemanticRAGSystem:
-    """Enhanced system orchestrator with intelligent metadata analysis"""
+class SimpleSemanticRAGSystem:
+    """Simplified system orchestrator focusing on core functionality"""
     
     def __init__(self):
         self.config = Config()
         self.discovery = DatabaseDiscovery(self.config)
-        self.analyzer = SemanticAnalyzer(self.config)
-        self.query_interface = QueryInterface(self.config)
-        self.status = SystemStatus()
+        self.analyzer = SimpleSemanticAnalyzer(self.config)
+        self.query_interface = SimpleQueryInterface(self.config)
         
-        # Show performance configuration
-        print(self.config.get_performance_summary())
+        print("✅ Simple Semantic RAG System initialized")
     
-    async def run_step1_discovery_all_objects(self, limit: int = None):
-        """Run Step 1: Database Discovery for Enhanced Analysis"""
-        print("🚀 Step 1: Enhanced Database Discovery")
-        print("=" * 70)
+    async def run_database_discovery(self, limit: int = None):
+        """Step 1: Database Discovery"""
+        print("🔍 Step 1: Database Discovery")
+        print("=" * 50)
         
-        if limit is None:
-            print("📊 Mode: UNLIMITED - Analyzing ALL database objects for best results")
+        if limit:
+            print(f"📊 Analyzing top {limit} priority objects")
         else:
-            print(f"📊 Mode: LIMITED - Analyzing top {limit} priority objects")
+            print("📊 Analyzing ALL database objects")
         
-        print("📝 Enhanced sampling: 5 rows per object with business focus")
-        print("⚡ Optimized for business entity recognition")
-        
-        # Get initial count estimate
-        print("\n🔍 Estimating database size...")
-        await self._show_database_size_estimate()
-        
-        # Run discovery
         success = await self.discovery.discover_database(limit)
         
         if success:
-            self.status.discovery_completed = True
-            self.status.tables_discovered = len(self.discovery.get_tables())
-            
-            # Show detailed results
             tables = self.discovery.get_tables()
-            stats = self.discovery.get_stats()
+            table_count = sum(1 for t in tables if t.object_type in ['BASE TABLE', 'TABLE'])
+            view_count = sum(1 for t in tables if t.object_type == 'VIEW')
             
-            tables_count = sum(1 for t in tables if t.object_type == 'BASE TABLE')
-            views_count = sum(1 for t in tables if t.object_type == 'VIEW')
-            total_samples = sum(len(t.sample_data) for t in tables)
-            
-            print(f"\n✅ Enhanced discovery completed!")
-            print(f"   📊 Objects analyzed: {len(tables)} (Tables: {tables_count}, Views: {views_count})")
-            print(f"   📝 Total samples collected: {total_samples} rows")
-            print(f"   📈 Success rate: {(stats.successful_analyses/max(stats.objects_processed,1)*100):.1f}%")
-            print(f"   ⚡ Average samples per object: {total_samples/len(tables):.1f}")
-            
-            # Log filtering statistics
-            log_filtering_statistics(
-                stats.total_objects_found, 
-                stats.objects_excluded, 
-                stats.successful_analyses
-            )
+            print(f"✅ Discovery completed!")
+            print(f"   📊 Found {len(tables)} objects ({table_count} tables, {view_count} views)")
             
             return True
         else:
             print("❌ Discovery failed")
             return False
     
-    async def _show_database_size_estimate(self):
-        """Show database size estimate for planning"""
-        try:
-            with self.discovery.get_database_connection() as conn:
-                cursor = conn.cursor()
-                
-                # Quick count query
-                count_query = """
-                SELECT 
-                    (SELECT COUNT(*) FROM sys.tables WHERE is_ms_shipped = 0) as table_count,
-                    (SELECT COUNT(*) FROM sys.views WHERE is_ms_shipped = 0) as view_count
-                """
-                cursor.execute(count_query)
-                row = cursor.fetchone()
-                
-                if row:
-                    table_count, view_count = row
-                    total_objects = table_count + view_count
-                    
-                    print(f"   📊 Database size: {total_objects} objects ({table_count} tables, {view_count} views)")
-                    
-                    # Show performance recommendations
-                    recommendations = get_performance_recommendations(total_objects)
-                    for rec in recommendations:
-                        print(f"   {rec}")
-                    
-                    # Show time estimate
-                    estimated_time = estimate_processing_time(
-                        total_objects, 
-                        self.config.max_parallel_workers,
-                        self.config.query_timeout_seconds
-                    )
-                    print(f"   ⏱️ Estimated processing time: {estimated_time}")
-                    
-                    return total_objects
-                    
-        except Exception as e:
-            print(f"   ⚠️ Could not estimate database size: {e}")
-            return None
-    
-    async def run_step2_comprehensive_semantic_analysis(self):
-        """Run Step 2: COMPREHENSIVE Semantic Analysis using all discovery methods"""
-        print("\n🧠 Step 2: COMPREHENSIVE Semantic Analysis - Multi-Source Discovery")
-        print("=" * 70)
+    async def run_semantic_analysis(self):
+        """Step 2: Semantic Analysis"""
+        print("\n🧠 Step 2: Semantic Analysis")
+        print("=" * 50)
         
-        if not self.status.discovery_completed:
+        # Get tables from discovery
+        tables = self.discovery.get_tables()
+        if not tables:
             # Try to load from cache
             if not self.discovery.load_from_cache():
-                print("❌ No discovery data found. Run Step 1 first.")
+                print("❌ No tables found. Run discovery first.")
                 return False
+            tables = self.discovery.get_tables()
         
-        # Get discovered tables
-        tables = self.discovery.get_tables()
+        print(f"🧠 Analyzing {len(tables)} tables for business entities and relationships")
         
-        print(f"🚀 COMPREHENSIVE MODE: Analyzing {len(tables)} objects with all methods")
-        print("   🔍 Enhanced view JOIN analysis")
-        print("   📊 Comprehensive foreign key analysis") 
-        print("   🧠 LLM entity scanning and classification")
-        print("   🕸️ Multi-source relationship graph construction")
-        print("   ⚡ Expected completion: 5-10 minutes (thorough analysis)")
-        
-        # Use the new comprehensive method
-        success = await self.analyzer.analyze_semantics_comprehensive(tables)
+        success = await self.analyzer.analyze_tables(tables)
         
         if success:
-            self.status.analysis_completed = True
-            self.status.relationships_found = len(self.analyzer.get_relationships())
-            domain = self.analyzer.get_domain()
-            business_analysis = self.analyzer.get_business_analysis()
+            # Update tables with semantic information
+            analyzed_tables = self.analyzer.get_tables()
+            self.discovery.tables = analyzed_tables  # Update discovery tables
             
-            # Show comprehensive analysis results
-            classified_count = sum(1 for t in tables if t.semantic_profile)
-            views_classified = sum(1 for t in tables if t.object_type == 'VIEW' and t.semantic_profile)
-            
-            print(f"✅ COMPREHENSIVE semantic analysis completed!")
-            print(f"   🧠 Objects classified: {classified_count}/{len(tables)}")
-            print(f"   📊 Views analyzed: {views_classified}")
-            print(f"   🔗 Relationships found: {len(self.analyzer.get_relationships())}")
-            print(f"   🏢 Domain identified: {domain.domain_type if domain else 'Unknown'}")
-            
-            if domain and domain.industry:
-                print(f"   🏭 Industry: {domain.industry}")
-            
-            # Show comprehensive business validation summary
-            business_intelligence = business_analysis.get('business_intelligence', {})
-            if business_intelligence:
-                readiness = business_intelligence.get('business_readiness', {})
-                rel_summary = business_intelligence.get('relationship_summary', {})
-                
-                print(f"   ✅ Business readiness: {readiness.get('rating', 'Unknown')} ({readiness.get('score', 0)}/100)")
-                print(f"   🔗 Total relationships discovered: {rel_summary.get('total_discovered_relationships', 0)}")
-                print(f"      • Foreign key constraints: {rel_summary.get('foreign_key_relationships', 0)}")
-                print(f"      • View-based relationships: {rel_summary.get('view_relationships', 0)}")
-                print(f"      • LLM suggested relationships: {rel_summary.get('llm_suggested_relationships', 0)}")
-            
+            print("✅ Semantic analysis completed!")
             return True
         else:
-            print("❌ Comprehensive analysis failed")
-            return False
-
-
-    async def run_step2_intelligent_semantic_analysis(self):
-        """Run Step 2: INTELLIGENT Semantic Analysis using Metadata + Selective LLM"""
-        print("\n🧠 Step 2: INTELLIGENT Semantic Analysis - Metadata First Approach")
-        print("=" * 70)
-        
-        if not self.status.discovery_completed:
-            # Try to load from cache
-            if not self.discovery.load_from_cache():
-                print("❌ No discovery data found. Run Step 1 first.")
-                return False
-        
-        # Get discovered tables
-        tables = self.discovery.get_tables()
-        
-        print(f"🚀 INTELLIGENT MODE: Analyzing {len(tables)} objects with metadata-first approach")
-        print("   🔍 Using SQL Server system views for fast relationship discovery")
-        print("   🧠 Selective LLM usage only for unclear cases")
-        print("   ⚡ Expected completion: 2-5 minutes (vs 3 hours with old method)")
-        
-        success = await self.analyzer.analyze_semantics_intelligent(tables)
-        
-        if success:
-            self.status.analysis_completed = True
-            self.status.relationships_found = len(self.analyzer.get_relationships())
-            domain = self.analyzer.get_domain()
-            business_analysis = self.analyzer.get_business_analysis()
-            
-            # Show intelligent analysis results
-            classified_count = sum(1 for t in tables if t.semantic_profile)
-            views_classified = sum(1 for t in tables if t.object_type == 'VIEW' and t.semantic_profile)
-            
-            print(f"✅ INTELLIGENT semantic analysis completed!")
-            print(f"   🧠 Objects classified: {classified_count}/{len(tables)}")
-            print(f"   📊 Views classified: {views_classified}")
-            print(f"   🔗 Relationships found: {len(self.analyzer.get_relationships())}")
-            print(f"   🏢 Domain identified: {domain.domain_type if domain else 'Unknown'}")
-            
-            if domain and domain.industry:
-                print(f"   🏭 Industry: {domain.industry}")
-            
-            # Show business validation summary
-            validation = business_analysis.get('validation_results', {})
-            status = validation.get('overall_status', 'Unknown')
-            customer_payment_links = validation.get('customer_payment_links', 0)
-            
-            print(f"   ✅ Business validation: {status}")
-            if customer_payment_links > 0:
-                print(f"   🔗 Customer-payment links: {customer_payment_links}")
-                print(f"   🎯 READY for 'paid customer' queries!")
-            else:
-                print(f"   ⚠️ No customer-payment links found")
-            
-            return True
-        else:
-            print("❌ Intelligent analysis failed")
+            print("❌ Semantic analysis failed")
             return False
     
-    async def run_step3_smart_queries(self):
-        """Run Step 3: Smart Interactive Queries with Business Intelligence"""
-        print("\n💬 Step 3: Smart Interactive Queries with Business Intelligence")
-        print("=" * 70)
+    async def run_interactive_queries(self):
+        """Step 3: Interactive Queries"""
+        print("\n💬 Step 3: Interactive Queries")
+        print("=" * 50)
         
-        if not self.status.analysis_completed:
-            # Try to load from cache
-            if not (self.discovery.load_from_cache() and self.analyzer.load_from_cache()):
-                print("❌ System not ready. Run Steps 1 and 2 first.")
-                return False
-        
-        # Pass enhanced analysis results to query interface
-        tables = self.discovery.get_tables()
+        # Get analysis results
+        tables = self.analyzer.get_tables() or self.discovery.get_tables()
         domain = self.analyzer.get_domain()
         relationships = self.analyzer.get_relationships()
-        business_analysis = self.analyzer.get_business_analysis()
         
-        if len(tables) > 100:
-            print(f"🚀 LARGE DATASET MODE: {len(tables)} objects available for smart queries")
-            print("   🧠 Smart business query understanding")
-            print("   🎯 Intelligent table selection")
-            print("   ⚡ Enhanced SQL generation")
+        if not tables:
+            print("❌ No tables available. Run discovery and analysis first.")
+            return False
         
-        # FIXED: Use correct method name
-        await self.query_interface.start_intelligent_session(
-            tables, domain, relationships, business_analysis
+        print(f"🚀 Starting interactive session with {len(tables)} tables")
+        
+        # Start interactive session
+        await self.query_interface.start_interactive_session(
+            tables, domain, relationships
         )
-    
-    async def run_full_intelligent_demo(self):
-        """Run complete intelligent demonstration with metadata-first analysis"""
-        print("🚀 INTELLIGENT Full Demo - Metadata-First Analysis")
-        print("=" * 70)
-        print("Uses SQL Server system views for 10x faster analysis")
-        print("Focus: Fast relationship discovery using database metadata")
         
-        # Confirm for large datasets
-        confirm = input("\nProceed with intelligent full analysis? (y/N): ").strip().lower()
+        return True
+    
+    async def run_full_demo(self):
+        """Run complete demonstration"""
+        print("🚀 Full Demo - Complete Analysis Pipeline")
+        print("=" * 60)
+        
+        confirm = input("Run full analysis (discovery + semantic + queries)? (y/N): ").strip().lower()
         if confirm != 'y':
             print("Demo cancelled")
             return
         
-        print("\n🚀 Starting INTELLIGENT full analysis...")
+        print("\n🚀 Starting full analysis pipeline...")
         
-        # Step 1: Discovery (all objects)
-        success1 = await self.run_step1_discovery_all_objects()
+        # Step 1: Discovery
+        success1 = await self.run_database_discovery()
         if not success1:
-            print("❌ Discovery failed - stopping demo")
+            print("❌ Pipeline stopped at discovery")
             return
         
-        # Step 2: Intelligent Semantic Analysis (metadata-first)
-        success2 = await self.run_step2_intelligent_semantic_analysis()
+        # Step 2: Semantic Analysis
+        success2 = await self.run_semantic_analysis()
         if not success2:
-            print("❌ Intelligent analysis failed - stopping demo")
+            print("❌ Pipeline stopped at semantic analysis")
             return
         
-        # Show comprehensive status
-        self.show_enhanced_status()
+        # Show status
+        self.show_system_status()
         
-        print("\n✅ INTELLIGENT system ready with metadata-first analysis!")
-        print("🎯 All database objects analyzed with business focus")
-        print("🧠 Smart entity classification completed in minutes")
-        print("🔗 Business relationships discovered using database metadata")
-        print("💡 Ready for accurate business queries!")
+        print("\n✅ Analysis pipeline completed!")
+        print("🎯 System ready for intelligent queries")
         
-        # Start smart interactive mode
-        print("\n💬 Starting smart interactive mode...")
-        await self.run_step3_smart_queries()
+        # Step 3: Interactive Queries
+        await self.run_interactive_queries()
     
-    def show_enhanced_status(self):
-        """Show comprehensive system status with business analysis"""
-        print("\n📊 INTELLIGENT SYSTEM STATUS with Metadata-First Analysis")
-        print("=" * 70)
+    def show_system_status(self):
+        """Show current system status"""
+        print("\n📊 SYSTEM STATUS")
+        print("=" * 40)
         
-        # Try to load data from cache if not in memory
-        if not self.status.discovery_completed:
-            self.discovery.load_from_cache()
-        if not self.status.analysis_completed:
-            self.analyzer.load_from_cache()
-        
-        # Show discovery status
+        # Discovery status
         tables = self.discovery.get_tables()
         if tables:
-            table_count = sum(1 for t in tables if t.object_type == 'BASE TABLE')
+            table_count = sum(1 for t in tables if t.object_type in ['BASE TABLE', 'TABLE'])
             view_count = sum(1 for t in tables if t.object_type == 'VIEW')
-            
-            print(f"📋 Database Objects Analyzed: {len(tables)}")
-            print(f"   • Tables: {table_count}")
-            print(f"   • Views: {view_count}")
-            
-            # Data quality metrics
-            objects_with_data = sum(1 for t in tables if t.sample_data)
-            total_samples = sum(len(t.sample_data) for t in tables)
-            avg_samples = total_samples / len(tables) if tables else 0
-            
-            print(f"   • Objects with sample data: {objects_with_data} ({(objects_with_data/len(tables)*100):.1f}%)")
-            print(f"   • Total samples collected: {total_samples} rows")
-            print(f"   • Average samples per object: {avg_samples:.1f}")
-            
-            # Enhanced semantic analysis status
-            classified_count = sum(1 for t in tables if t.semantic_profile)
-            if classified_count > 0:
-                print(f"   • 🧠 Semantically classified: {classified_count} ({(classified_count/len(tables)*100):.1f}%)")
-                
-                # Business entity breakdown
-                business_analysis = self.analyzer.get_business_analysis()
-                if business_analysis:
-                    validation = business_analysis.get('validation_results', {})
-                    entity_counts = validation.get('entity_counts', {})
-                    
-                    core_entities = ['Customer', 'Payment', 'Order', 'Product']
-                    for entity in core_entities:
-                        count = entity_counts.get(entity, 0)
-                        if count > 0:
-                            print(f"     ✅ {entity}: {count} tables")
-                    
-                    # Business validation status
-                    status = validation.get('overall_status', 'Unknown')
-                    customer_payment_links = validation.get('customer_payment_links', 0)
-                    
-                    print(f"   • 🏢 Business validation: {status}")
-                    if customer_payment_links > 0:
-                        print(f"   • 🔗 Customer-payment links: {customer_payment_links}")
-                        print(f"   • 🎯 READY for 'paid customer' queries!")
-                    else:
-                        print(f"   • ❌ No customer-payment links found!")
+            print(f"📋 Discovery: {len(tables)} objects ({table_count} tables, {view_count} views)")
+        else:
+            print("📋 Discovery: Not completed")
         
-        # Show semantic analysis status
+        # Semantic analysis status
         domain = self.analyzer.get_domain()
         relationships = self.analyzer.get_relationships()
+        
         if domain:
-            print(f"\n🏢 Intelligent Business Domain Analysis:")
-            print(f"   • Domain Type: {domain.domain_type}")
-            print(f"   • Industry: {domain.industry}")
-            print(f"   • Confidence: {domain.confidence:.2f}")
+            classified_count = sum(1 for t in tables if t.entity_type != 'Unknown')
+            print(f"🧠 Semantic Analysis: {classified_count} entities classified")
+            print(f"🔗 Relationships: {len(relationships)} discovered")
+            print(f"🏢 Domain: {domain.domain_type} (confidence: {domain.confidence:.2f})")
             
-            if domain.sample_questions:
-                print(f"   • Sample Questions Available: {len(domain.sample_questions)}")
-        
-        if relationships:
-            print(f"   • 🔗 Smart Relationships Discovered: {len(relationships)}")
+            # Show entity distribution
+            entity_counts = {}
+            for table in tables:
+                if table.entity_type != 'Unknown':
+                    entity_counts[table.entity_type] = entity_counts.get(table.entity_type, 0) + 1
             
-            # Show relationship types
-            rel_types = {}
-            for rel in relationships:
-                rel_type = rel.relationship_type
-                rel_types[rel_type] = rel_types.get(rel_type, 0) + 1
+            if entity_counts:
+                print(f"📊 Business Entities:")
+                for entity_type, count in sorted(entity_counts.items()):
+                    print(f"   • {entity_type}: {count}")
             
-            for rel_type, count in rel_types.items():
-                print(f"     • {rel_type}: {count}")
-        
-        # Performance metrics
-        print(f"\n⚡ Intelligent Performance Configuration:")
-        print(f"   • Analysis Method: Metadata-First (10x faster)")
-        print(f"   • Parallel Workers: {self.config.max_parallel_workers}")
-        print(f"   • Batch Size: {self.config.max_batch_size}")
-        print(f"   • Samples per Object: {self.config.samples_per_object}")
-        print(f"   • Business Focus: Enabled")
-        print(f"   • Smart Query Processing: Enabled")
+            # Show capabilities
+            if domain.capabilities:
+                enabled_caps = [cap for cap, enabled in domain.capabilities.items() if enabled]
+                if enabled_caps:
+                    print(f"🎯 Query Capabilities:")
+                    for cap in enabled_caps:
+                        print(f"   ✅ {cap.replace('_', ' ').title()}")
+        else:
+            print("🧠 Semantic Analysis: Not completed")
         
         # Cache status
-        self._show_cache_status()
-    
-    def _show_cache_status(self):
-        """Show cache file status"""
         cache_files = [
-            ('data/database_structure.json', 'Discovery Cache'),
-            ('data/semantic_analysis.json', 'Intelligent Semantic Cache')
+            ('data/database_structure.json', 'Discovery'),
+            ('data/semantic_analysis.json', 'Semantic Analysis')
         ]
         
-        print(f"\n💾 Cache Status:")
+        print(f"💾 Cache Status:")
         for cache_file, description in cache_files:
             cache_path = Path(cache_file)
             if cache_path.exists():
-                try:
-                    size_mb = cache_path.stat().st_size / (1024 * 1024)
-                    from datetime import datetime
-                    modified = datetime.fromtimestamp(cache_path.stat().st_mtime)
-                    age = datetime.now() - modified
-                    print(f"   ✅ {description}: {size_mb:.1f}MB, {age.days} days old")
-                except:
-                    print(f"   ✅ {description}: Available")
+                size_mb = cache_path.stat().st_size / (1024 * 1024)
+                print(f"   ✅ {description}: {size_mb:.1f}MB")
             else:
-                print(f"   ⚠️  {description}: Not found")
-
+                print(f"   ❌ {description}: Not cached")
 
 def main():
-    """Enhanced main application entry point"""
-    print("🚀 INTELLIGENT SEMANTIC DATABASE RAG SYSTEM")
-    print("Metadata-First Analysis for 10x Faster Processing")
-    print("=" * 80)
+    """Main application entry point"""
+    print("🚀 SIMPLIFIED SEMANTIC DATABASE RAG SYSTEM")
+    print("Simple, Readable, and Maintainable")
+    print("=" * 60)
     
     # Load environment
     load_environment()
     
-    # Initialize enhanced system
+    # Initialize system
     try:
-        system = EnhancedSemanticRAGSystem()
+        system = SimpleSemanticRAGSystem()
     except Exception as e:
-        print(f"❌ Failed to initialize intelligent system: {e}")
+        print(f"❌ Failed to initialize system: {e}")
         print("💡 Check your .env configuration:")
         print("   - AZURE_OPENAI_API_KEY")
         print("   - DATABASE_CONNECTION_STRING")
@@ -455,117 +227,60 @@ def main():
         print("   - DEPLOYMENT_NAME")
         return
     
-    print("✅ INTELLIGENT system initialized with metadata-first analysis")
-    
     while True:
-        print("\n" + "="*80)
-        print("COMPREHENSIVE SEMANTIC DATABASE RAG SYSTEM:")
-        print("1. 🚀 Discover Database Objects - Enhanced for business entities")
-        print("2. 🎯 Discover Limited Objects - specify count for testing")
-        print("3. 🧠 COMPREHENSIVE Semantic Analysis - Views + Foreign Keys + LLM")
-        print("4. 💬 Smart Interactive Queries - Relationship-aware query processing")
-        print("5. 🌟 FULL COMPREHENSIVE DEMO - Complete multi-source analysis")
-        print("6. 📊 Show Comprehensive System Status - Detailed analysis breakdown")
-        print("7. ⚡ Comprehensive Features Information")
-        print("8. 🧪 Database Size Estimate")
+        print("\n" + "="*60)
+        print("SIMPLIFIED SEMANTIC DATABASE RAG SYSTEM:")
+        print("1. 🔍 Database Discovery - Find and analyze database objects")
+        print("2. 🎯 Limited Discovery - Analyze specific number of objects")
+        print("3. 🧠 Semantic Analysis - Classify entities and find relationships")
+        print("4. 💬 Interactive Queries - Natural language querying")
+        print("5. 🚀 Full Demo - Complete analysis pipeline")
+        print("6. 📊 System Status - Show current analysis state")
         print("0. Exit")
-        print("="*80)
+        print("="*60)
         
         try:
-            choice = input("Enter your choice (0-8): ").strip()
+            choice = input("Enter your choice (0-6): ").strip()
             
             if choice == '0':
-                print("👋 Thanks for using the INTELLIGENT Semantic Database RAG System!")
+                print("👋 Thanks for using the Simplified Semantic Database RAG System!")
                 break
             
             elif choice == '1':
-                print("\n🚀 INTELLIGENT DISCOVERY MODE")
-                print("This will analyze ALL database objects with metadata-first approach")
-                print("⚡ Expected time: 10-15 minutes (vs hours with old method)")
-                confirm = input("Continue with intelligent discovery? (y/N): ").strip().lower()
+                print("\n🔍 FULL DISCOVERY MODE")
+                print("This will analyze ALL database objects")
+                confirm = input("Continue with full discovery? (y/N): ").strip().lower()
                 if confirm == 'y':
-                    asyncio.run(system.run_step1_discovery_all_objects())
+                    asyncio.run(system.run_database_discovery())
             
             elif choice == '2':
                 try:
-                    limit = int(input("Enter maximum objects to analyze: ").strip())
+                    limit = int(input("Enter number of objects to analyze: ").strip())
                     if limit > 0:
-                        asyncio.run(system.run_step1_discovery_all_objects(limit))
+                        asyncio.run(system.run_database_discovery(limit))
                     else:
                         print("❌ Please enter a positive number")
                 except ValueError:
                     print("❌ Please enter a valid number")
             
             elif choice == '3':
-                asyncio.run(system.run_step2_comprehensive_semantic_analysis())
+                asyncio.run(system.run_semantic_analysis())
             
             elif choice == '4':
-                asyncio.run(system.run_step3_smart_queries())
+                asyncio.run(system.run_interactive_queries())
             
             elif choice == '5':
-                asyncio.run(system.run_full_intelligent_demo())
+                asyncio.run(system.run_full_demo())
             
             elif choice == '6':
-                system.show_enhanced_status()
-            
-            elif choice == '7':
-                print("\n⚡ COMPREHENSIVE FEATURES - Multi-Source Analysis")
-                print("=" * 60)
-                print("✅ Enhanced View Analysis:")
-                print("   • Comprehensive JOIN pattern detection (INNER, LEFT, RIGHT, FULL, CROSS)")
-                print("   • Business logic complexity assessment")
-                print("   • Relationship strength calculation")
-                print("   • WHERE clause and aggregation analysis")
-                print("   • Calculated field and CASE statement detection")
-                
-                print("\n✅ Advanced Foreign Key Analysis:")
-                print("   • Business context classification")
-                print("   • Cascade rule analysis (ON DELETE/UPDATE)")
-                print("   • Cardinality estimation")
-                print("   • Constraint enforcement status")
-                print("   • Relationship pattern recognition")
-                
-                print("\n✅ LLM Entity Intelligence:")
-                print("   • Business entity classification with confidence scoring")
-                print("   • Implicit business rule discovery")
-                print("   • Cross-entity relationship suggestions") 
-                print("   • Data pattern analysis")
-                print("   • Domain-specific entity recognition")
-                
-                print("\n✅ Comprehensive Integration:")
-                print("   • Multi-source relationship validation")
-                print("   • Confidence-weighted analysis")
-                print("   • Business intelligence scoring")
-                print("   • Entity-relationship matrix generation")
-                print("   • NetworkX graph construction for visualization")
-                
-                print("\n💡 Key Improvements for Business Queries:")
-                print("   • 'Paid customer' queries now use FK + view + LLM analysis")
-                print("   • Revenue analysis leverages comprehensive relationship discovery")
-                print("   • Order-customer relationships validated across all sources")
-                print("   • Business entity confidence scoring guides query generation")
-                
-                print(f"\n📊 Current Configuration:")
-                print(f"   • Multi-source analysis: Enabled")
-                print(f"   • View JOIN analysis: Enhanced regex patterns")
-                print(f"   • Foreign key discovery: Business context aware")
-                print(f"   • LLM entity scanning: Structured prompts")
-                print(f"   • Relationship validation: Cross-source verification")
-                print(f"   • Expected analysis depth: 5-10x more comprehensive")
-            
-            elif choice == '8':
-                print("\n🧪 Database Size Estimation")
-                print("=" * 40)
-                asyncio.run(system._show_database_size_estimate())
+                system.show_system_status()
             
             else:
-                print(f"❌ Invalid choice: '{choice}'. Please enter 0-8.")
+                print(f"❌ Invalid choice: '{choice}'. Please enter 0-6.")
         
         except KeyboardInterrupt:
             print("\n⏸️ Interrupted by user")
             break
-        except ValueError:
-            print("❌ Please enter a valid number")
         except Exception as e:
             print(f"❌ Unexpected error: {e}")
 
