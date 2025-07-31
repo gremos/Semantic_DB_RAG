@@ -638,6 +638,164 @@ class IntelligentQueryInterface:
             if result.relevant_tables:
                 print(f"📋 Tables: {', '.join(result.relevant_tables)}")
 
+    def _select_tables_comprehensive(self, question: str, tables: List[TableInfo], 
+                                   comprehensive_analysis: Dict[str, Any]) -> List[TableInfo]:
+        """Enhanced table selection using comprehensive analysis results"""
+        
+        question_lower = question.lower()
+        selected_tables = []
+        
+        # Get comprehensive entity analysis
+        business_intelligence = comprehensive_analysis.get('business_intelligence', {})
+        entity_distribution = business_intelligence.get('entity_distribution', {})
+        
+        # Use comprehensive relationship graph for better selection
+        comprehensive_graph = comprehensive_analysis.get('comprehensive_graph', {})
+        nodes = {node['id']: node for node in comprehensive_graph.get('nodes', [])}
+        edges = comprehensive_graph.get('edges', [])
+        
+        # Question pattern analysis with comprehensive entity types
+        if any(word in question_lower for word in ['paid', 'customer', 'payment']):
+            # Find high-confidence customer and payment entities
+            customer_tables = [t for t in tables 
+                             if nodes.get(t.full_name, {}).get('entity_type') == 'Customer'
+                             and nodes.get(t.full_name, {}).get('confidence', 0) > 0.6]
+            
+            payment_tables = [t for t in tables 
+                            if nodes.get(t.full_name, {}).get('entity_type') == 'Payment'
+                            and nodes.get(t.full_name, {}).get('confidence', 0) > 0.6]
+            
+            # Add tables with validated relationships
+            for customer_table in customer_tables[:2]:  # Top 2 customer tables
+                selected_tables.append(customer_table)
+                
+                # Find connected payment tables via relationships
+                for edge in edges:
+                    if (edge['source'] == customer_table.full_name and 
+                        edge['target'] in [pt.full_name for pt in payment_tables]):
+                        target_table = next(t for t in tables if t.full_name == edge['target'])
+                        if target_table not in selected_tables:
+                            selected_tables.append(target_table)
+        
+        # Enhanced selection logic using comprehensive relationship graph
+        if not selected_tables:
+            # Fallback to highest confidence entities
+            high_confidence_tables = [
+                t for t in tables 
+                if nodes.get(t.full_name, {}).get('confidence', 0) > 0.7
+                and nodes.get(t.full_name, {}).get('entity_type') != 'Unknown'
+            ]
+            selected_tables.extend(high_confidence_tables[:5])
+        
+        return selected_tables
+
+    async def _generate_comprehensive_sql(self, question: str, selected_tables: List[TableInfo], 
+                                        relationships: List[Relationship],
+                                        comprehensive_analysis: Dict[str, Any]) -> Optional[str]:
+        """Generate SQL using comprehensive relationship analysis"""
+        
+        # Get comprehensive relationship information
+        comprehensive_graph = comprehensive_analysis.get('comprehensive_graph', {})
+        fk_relationships = comprehensive_analysis.get('foreign_key_relationships', [])
+        
+        # Build enhanced table context with relationship metadata
+        table_context = []
+        for table in selected_tables:
+            # Get comprehensive entity information
+            node_info = next((node for node in comprehensive_graph.get('nodes', []) 
+                            if node['id'] == table.full_name), {})
+            
+            # Find all relationships for this table
+            table_relationships = []
+            for edge in comprehensive_graph.get('edges', []):
+                if edge['source'] == table.full_name or edge['target'] == table.full_name:
+                    table_relationships.append({
+                        'type': edge.get('relationship_type', 'unknown'),
+                        'confidence': edge.get('confidence', 0.0),
+                        'business_context': edge.get('business_type', 'unknown')
+                    })
+            
+            context = {
+                'table_name': table.name,
+                'full_name': table.full_name,
+                'entity_type': node_info.get('entity_type', 'Unknown'),
+                'business_role': node_info.get('business_role', 'Unknown'),
+                'confidence': node_info.get('confidence', 0.0),
+                'row_count': table.row_count,
+                'relationships': table_relationships,
+                'columns': [
+                    {
+                        'name': col['name'],
+                        'type': col['data_type'],
+                        'is_key': any('id' in col['name'].lower() for rel in fk_relationships
+                                    if rel['parent_table'] == table.full_name 
+                                    and rel['parent_column'] == col['name']),
+                        'is_business_significant': any(word in col['name'].lower() 
+                                                     for word in ['amount', 'total', 'name', 'date'])
+                    } for col in table.columns[:15]
+                ],
+                'sample_data': table.sample_data[:2] if table.sample_data else []
+            }
+            table_context.append(context)
+        
+        # Create comprehensive SQL generation prompt
+        prompt = self._create_comprehensive_sql_prompt(question, table_context, 
+                                                     fk_relationships, comprehensive_analysis)
+        
+        try:
+            system_message = """You are an expert SQL architect with deep understanding of business relationships and entity modeling.
+
+Generate accurate SQL Server T-SQL that leverages comprehensive relationship analysis including:
+- Foreign key constraints (highest reliability)
+- View-based relationships (business logic insights)  
+- LLM-discovered entity patterns (business context)
+
+Focus on business-meaningful JOINs and proper relationship utilization. 
+Respond with ONLY the SQL query - no explanations or markdown."""
+            
+            response = await self.llm.ask(prompt, system_message)
+            cleaned_sql = clean_sql_response(response)
+            return cleaned_sql
+            
+        except Exception as e:
+            print(f"⚠️ Comprehensive SQL generation failed: {e}")
+            return None
+    
+    def _create_comprehensive_sql_prompt(self, question: str, table_context: List[Dict],
+                                       fk_relationships: List[Dict],
+                                       comprehensive_analysis: Dict[str, Any]) -> str:
+        """Create comprehensive SQL generation prompt with full relationship context"""
+        
+        business_intelligence = comprehensive_analysis.get('business_intelligence', {})
+        
+        prompt = f"""
+BUSINESS QUESTION: "{question}"
+
+COMPREHENSIVE TABLE ANALYSIS:
+{json.dumps(table_context, indent=2)}
+
+VALIDATED FOREIGN KEY RELATIONSHIPS (Highest Confidence):
+{json.dumps([fk for fk in fk_relationships 
+            if any(fk['parent_table'] == tc['full_name'] or fk['referenced_table'] == tc['full_name'] 
+                  for tc in table_context)], indent=2)}
+
+BUSINESS INTELLIGENCE CONTEXT:
+{json.dumps(business_intelligence, indent=2)}
+
+COMPREHENSIVE SQL GENERATION RULES:
+1. Use validated foreign key relationships first (confidence = 1.0)
+2. Consider view-based relationships for complex business logic
+3. Leverage entity type information for appropriate JOINs
+4. Use business role context to determine JOIN necessity
+5. For customer-payment queries, prioritize validated FK relationships
+6. Add meaningful column aliases based on business context
+7. Include appropriate WHERE clauses based on entity patterns
+8. Use INNER JOINs for validated relationships, LEFT JOINs for optional ones
+
+Generate optimal SQL leveraging comprehensive relationship analysis:
+"""
+        return prompt
+
 
 # Export classes with consistent naming for backward compatibility
 EnhancedQueryInterface = IntelligentQueryInterface

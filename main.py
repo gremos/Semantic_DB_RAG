@@ -12,6 +12,7 @@ from pathlib import Path
 # Import modules
 from db.discovery import DatabaseDiscovery
 from semantic.analysis import EnhancedSemanticAnalyzer as SemanticAnalyzer
+
 from interactive.query_interface import EnhancedQueryInterface as QueryInterface
 from shared.config import Config
 from shared.models import SystemStatus
@@ -130,6 +131,67 @@ class EnhancedSemanticRAGSystem:
             print(f"   ⚠️ Could not estimate database size: {e}")
             return None
     
+    async def run_step2_comprehensive_semantic_analysis(self):
+        """Run Step 2: COMPREHENSIVE Semantic Analysis using all discovery methods"""
+        print("\n🧠 Step 2: COMPREHENSIVE Semantic Analysis - Multi-Source Discovery")
+        print("=" * 70)
+        
+        if not self.status.discovery_completed:
+            # Try to load from cache
+            if not self.discovery.load_from_cache():
+                print("❌ No discovery data found. Run Step 1 first.")
+                return False
+        
+        # Get discovered tables
+        tables = self.discovery.get_tables()
+        
+        print(f"🚀 COMPREHENSIVE MODE: Analyzing {len(tables)} objects with all methods")
+        print("   🔍 Enhanced view JOIN analysis")
+        print("   📊 Comprehensive foreign key analysis") 
+        print("   🧠 LLM entity scanning and classification")
+        print("   🕸️ Multi-source relationship graph construction")
+        print("   ⚡ Expected completion: 5-10 minutes (thorough analysis)")
+        
+        # Use the new comprehensive method
+        success = await self.analyzer.analyze_semantics_comprehensive(tables)
+        
+        if success:
+            self.status.analysis_completed = True
+            self.status.relationships_found = len(self.analyzer.get_relationships())
+            domain = self.analyzer.get_domain()
+            business_analysis = self.analyzer.get_business_analysis()
+            
+            # Show comprehensive analysis results
+            classified_count = sum(1 for t in tables if t.semantic_profile)
+            views_classified = sum(1 for t in tables if t.object_type == 'VIEW' and t.semantic_profile)
+            
+            print(f"✅ COMPREHENSIVE semantic analysis completed!")
+            print(f"   🧠 Objects classified: {classified_count}/{len(tables)}")
+            print(f"   📊 Views analyzed: {views_classified}")
+            print(f"   🔗 Relationships found: {len(self.analyzer.get_relationships())}")
+            print(f"   🏢 Domain identified: {domain.domain_type if domain else 'Unknown'}")
+            
+            if domain and domain.industry:
+                print(f"   🏭 Industry: {domain.industry}")
+            
+            # Show comprehensive business validation summary
+            business_intelligence = business_analysis.get('business_intelligence', {})
+            if business_intelligence:
+                readiness = business_intelligence.get('business_readiness', {})
+                rel_summary = business_intelligence.get('relationship_summary', {})
+                
+                print(f"   ✅ Business readiness: {readiness.get('rating', 'Unknown')} ({readiness.get('score', 0)}/100)")
+                print(f"   🔗 Total relationships discovered: {rel_summary.get('total_discovered_relationships', 0)}")
+                print(f"      • Foreign key constraints: {rel_summary.get('foreign_key_relationships', 0)}")
+                print(f"      • View-based relationships: {rel_summary.get('view_relationships', 0)}")
+                print(f"      • LLM suggested relationships: {rel_summary.get('llm_suggested_relationships', 0)}")
+            
+            return True
+        else:
+            print("❌ Comprehensive analysis failed")
+            return False
+
+
     async def run_step2_intelligent_semantic_analysis(self):
         """Run Step 2: INTELLIGENT Semantic Analysis using Metadata + Selective LLM"""
         print("\n🧠 Step 2: INTELLIGENT Semantic Analysis - Metadata First Approach")
@@ -397,14 +459,14 @@ def main():
     
     while True:
         print("\n" + "="*80)
-        print("INTELLIGENT MENU OPTIONS - Metadata-First Analysis:")
+        print("COMPREHENSIVE SEMANTIC DATABASE RAG SYSTEM:")
         print("1. 🚀 Discover Database Objects - Enhanced for business entities")
         print("2. 🎯 Discover Limited Objects - specify count for testing")
-        print("3. 🧠 INTELLIGENT Semantic Analysis - Metadata-first approach (10x faster)")
-        print("4. 💬 Smart Interactive Queries - Intelligent business query processing")
-        print("5. 🌟 FULL INTELLIGENT DEMO - Complete metadata-first analysis")
-        print("6. 📊 Show Intelligent System Status - Business entity breakdown")
-        print("7. ⚡ Intelligent Features Information")
+        print("3. 🧠 COMPREHENSIVE Semantic Analysis - Views + Foreign Keys + LLM")
+        print("4. 💬 Smart Interactive Queries - Relationship-aware query processing")
+        print("5. 🌟 FULL COMPREHENSIVE DEMO - Complete multi-source analysis")
+        print("6. 📊 Show Comprehensive System Status - Detailed analysis breakdown")
+        print("7. ⚡ Comprehensive Features Information")
         print("8. 🧪 Database Size Estimate")
         print("0. Exit")
         print("="*80)
@@ -435,7 +497,7 @@ def main():
                     print("❌ Please enter a valid number")
             
             elif choice == '3':
-                asyncio.run(system.run_step2_intelligent_semantic_analysis())
+                asyncio.run(system.run_step2_comprehensive_semantic_analysis())
             
             elif choice == '4':
                 asyncio.run(system.run_step3_smart_queries())
@@ -447,43 +509,49 @@ def main():
                 system.show_enhanced_status()
             
             elif choice == '7':
-                print("\n⚡ INTELLIGENT FEATURES - Metadata-First Analysis")
+                print("\n⚡ COMPREHENSIVE FEATURES - Multi-Source Analysis")
                 print("=" * 60)
-                print("✅ Intelligent Database Metadata Analysis:")
-                print("   • SQL Server foreign key constraint discovery")
-                print("   • View definition parsing for implicit relationships")
-                print("   • Pattern-based entity classification using table/column names")
-                print("   • Selective data sampling for relationship validation")
+                print("✅ Enhanced View Analysis:")
+                print("   • Comprehensive JOIN pattern detection (INNER, LEFT, RIGHT, FULL, CROSS)")
+                print("   • Business logic complexity assessment")
+                print("   • Relationship strength calculation")
+                print("   • WHERE clause and aggregation analysis")
+                print("   • Calculated field and CASE statement detection")
                 
-                print("\n✅ 10x Faster Processing:")
-                print("   • Metadata analysis: seconds instead of minutes")
-                print("   • Selective LLM usage: only for unclear cases")
-                print("   • No expensive API calls for obvious classifications")
-                print("   • Smart relationship discovery using database constraints")
+                print("\n✅ Advanced Foreign Key Analysis:")
+                print("   • Business context classification")
+                print("   • Cascade rule analysis (ON DELETE/UPDATE)")
+                print("   • Cardinality estimation")
+                print("   • Constraint enforcement status")
+                print("   • Relationship pattern recognition")
                 
-                print("\n✅ Better Relationship Discovery:")
-                print("   • Foreign key constraints (100% reliable)")
-                print("   • View JOIN analysis (high confidence)")
-                print("   • Data pattern matching (validated)")
-                print("   • Business logic inference (selective LLM)")
+                print("\n✅ LLM Entity Intelligence:")
+                print("   • Business entity classification with confidence scoring")
+                print("   • Implicit business rule discovery")
+                print("   • Cross-entity relationship suggestions") 
+                print("   • Data pattern analysis")
+                print("   • Domain-specific entity recognition")
                 
-                print("\n💡 Key Improvements for 'Paid Customer' Queries:")
-                print("   • Direct foreign key relationship discovery")
-                print("   • View-based relationship inference")
-                print("   • Customer-Payment link validation")
-                print("   • Business readiness scoring")
+                print("\n✅ Comprehensive Integration:")
+                print("   • Multi-source relationship validation")
+                print("   • Confidence-weighted analysis")
+                print("   • Business intelligence scoring")
+                print("   • Entity-relationship matrix generation")
+                print("   • NetworkX graph construction for visualization")
                 
-                print("\n🎯 Business Query Examples That Now Work Better:")
-                print("   • 'How many customers have paid?' - Uses FK relationships")
-                print("   • 'What is our total revenue?' - Smart payment table discovery")
-                print("   • 'Show paid customers' - Leverages metadata relationships")
+                print("\n💡 Key Improvements for Business Queries:")
+                print("   • 'Paid customer' queries now use FK + view + LLM analysis")
+                print("   • Revenue analysis leverages comprehensive relationship discovery")
+                print("   • Order-customer relationships validated across all sources")
+                print("   • Business entity confidence scoring guides query generation")
                 
                 print(f"\n📊 Current Configuration:")
-                print(f"   • Metadata-first analysis: Enabled")
-                print(f"   • Foreign key discovery: Enabled")
-                print(f"   • View relationship analysis: Enabled")
-                print(f"   • Selective LLM validation: Enabled")
-                print(f"   • Expected speedup: 10x faster")
+                print(f"   • Multi-source analysis: Enabled")
+                print(f"   • View JOIN analysis: Enhanced regex patterns")
+                print(f"   • Foreign key discovery: Business context aware")
+                print(f"   • LLM entity scanning: Structured prompts")
+                print(f"   • Relationship validation: Cross-source verification")
+                print(f"   • Expected analysis depth: 5-10x more comprehensive")
             
             elif choice == '8':
                 print("\n🧪 Database Size Estimation")

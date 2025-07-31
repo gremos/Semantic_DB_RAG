@@ -29,6 +29,14 @@ class TableInfo:
     business_significance: str = "Supporting"  # Core, Supporting, Reference
     constraint_info: List[Dict[str, Any]] = field(default_factory=list)
 
+    # Enhanced comprehensive analysis fields
+    comprehensive_entity_type: Optional[str] = None
+    entity_confidence_breakdown: Dict[str, float] = field(default_factory=dict)
+    discovered_relationships: List[str] = field(default_factory=list)
+    view_dependencies: List[str] = field(default_factory=list)
+    foreign_key_references: List[str] = field(default_factory=list)
+    llm_insights: Dict[str, Any] = field(default_factory=dict)
+
 @dataclass
 class SemanticProfile:
     """Enhanced semantic profile for database entities with relationship awareness"""
@@ -119,6 +127,31 @@ class DataRelationship:
     data_quality_score: float = 0.0
     sample_overlap_ratio: float = 0.0
     business_relevance: str = "Unknown"  # High, Medium, Low
+
+@dataclass
+class ComprehensiveAnalysisResult:
+    """Results from comprehensive multi-source analysis"""
+    view_analyses: List[Dict[str, Any]]
+    foreign_key_relationships: List[Dict[str, Any]]
+    entity_discoveries: List[Dict[str, Any]]
+    comprehensive_graph: Dict[str, Any]
+    business_intelligence: Dict[str, Any]
+    entity_relationship_matrix: Dict[str, Any]
+    
+    analysis_timestamp: datetime = field(default_factory=datetime.now)
+    analysis_version: str = "6.0-comprehensive"
+    total_processing_time: float = 0.0
+
+@dataclass 
+class RelationshipValidation:
+    """Validation result for discovered relationships"""
+    relationship_id: str
+    source_methods: List[str]  # ['foreign_key', 'view_analysis', 'llm_suggested']
+    confidence_scores: Dict[str, float]
+    overall_confidence: float
+    validation_status: str  # 'validated', 'conflicting', 'single_source'
+    business_significance: float
+    recommended_for_queries: bool
 
 class DatabaseObject:
     """Enhanced database object information for discovery with relationship context"""

@@ -1,12 +1,32 @@
 """
-Enhanced semantic analysis module for AI-powered classification and relationship discovery
-Updated for intelligent metadata-first approach
+Enhanced semantic analysis module for comprehensive structure discovery
+Updated for comprehensive multi-source analysis approach
 """
 
-from .analysis import IntelligentSemanticAnalyzer, IntelligentMetadataAnalyzer
+from .analysis import (
+    EnhancedSemanticAnalyzer, 
+    ComprehensiveStructureAnalyzer,
+    EnhancedViewAnalyzer,
+    EnhancedForeignKeyAnalyzer,
+    LLMEntityScanner,
+    ViewJoinAnalysis,
+    ForeignKeyRelationship,
+    EntityDiscovery
+)
 
 # Maintain backward compatibility
-EnhancedSemanticAnalyzer = IntelligentSemanticAnalyzer
-SemanticAnalyzer = IntelligentSemanticAnalyzer
+IntelligentSemanticAnalyzer = EnhancedSemanticAnalyzer
+SemanticAnalyzer = EnhancedSemanticAnalyzer
 
-__all__ = ["IntelligentSemanticAnalyzer", "EnhancedSemanticAnalyzer", "SemanticAnalyzer", "IntelligentMetadataAnalyzer"]
+__all__ = [
+    "EnhancedSemanticAnalyzer", 
+    "IntelligentSemanticAnalyzer", 
+    "SemanticAnalyzer",
+    "ComprehensiveStructureAnalyzer",
+    "EnhancedViewAnalyzer",
+    "EnhancedForeignKeyAnalyzer", 
+    "LLMEntityScanner",
+    "ViewJoinAnalysis",
+    "ForeignKeyRelationship",
+    "EntityDiscovery"
+]

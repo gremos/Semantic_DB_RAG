@@ -78,6 +78,12 @@ Iterative Interaction: After showing results, allow the user to ask another ques
 Menu Integration: Since this is option 3 in the menu, the program’s main loop should handle switching to this interactive mode. For example, when the user selects "3. Interactive Queries", the code can enter a sub-loop that keeps asking for questions until the user types some exit command or an empty line. Provide instructions like “Type 'exit' or press Ctrl+C to return to main menu.”
 By separating this interactive logic, we ensure the main program isn’t cluttered with prompt-building and SQL-handling code. A function like run_interactive_queries() could encapsulate this behavior. Internally it might call helper functions like find_relevant_tables(question) and generate_sql(query, tables_context) to keep things modular. This way, each part can be tested or updated independently (for example, swapping out the method for finding relevant tables to a more sophisticated one later). Progress and Feedback: While each individual query will be relatively fast (just an API call and a DB query), providing some feedback is still helpful. If an LLM call is taking a few seconds, you might show a spinner or message “Generating SQL…”. If the query execution is slow, a progress bar or at least a note “Executing query, please wait…” is good. The user should feel the system is responsive and know that something is happening, even if the operation takes, say, 10 seconds.
 
+we need views analysis for join, 
+
+we need foreign key analysis 
+
+we also need llm to scan database structure to export all available entities 
+
 
 **Version 2.0** - Simple, Readable, and Maintainable with Enhanced View Handling
 
