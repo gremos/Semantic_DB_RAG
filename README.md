@@ -87,89 +87,79 @@ we also need llm to scan database structure to export all available entities
 
 **Version 2.0** - Simple, Readable, and Maintainable with Enhanced View Handling
 
-A powerful AI-driven system that provides intelligent database analysis and natural language querying capabilities with improved performance and modular architecture.
+# 🧠 Semantic Database RAG System
 
-## 🎯 Key Features
+**Simple, Readable, and Maintainable Python Implementation**
 
-### ✅ **Enhanced Performance**
-- **FAST Option Integration**: `OPTION (FAST n)` queries for 2-5x speed improvement
-- **Optimized View Handling**: Fixed views showing 0 rows issue
-- **Intelligent Caching**: JSON-based cache system with configurable expiration
-- **Progress Tracking**: Real-time progress bars and detailed metrics
+A powerful AI-driven system that provides intelligent database analysis and natural language querying capabilities. Built with Azure OpenAI (MODEL_VERSION=2024-12-01-preview) and designed for real-world business databases with proper Greek text and international character support.
 
-### ✅ **Advanced AI Capabilities**
-- **Semantic Entity Classification**: Automatically classifies database objects by business role
-- **Relationship Discovery**: Finds explicit and implicit relationships between entities
-- **Business Domain Analysis**: Identifies industry context and business patterns
-- **Natural Language Querying**: Converts questions to optimized SQL queries
+## 🎯 Core Features
 
-### ✅ **International Support**
-- **Unicode Handling**: Proper Greek text and international character support
-- **UTF-8 Encoding**: Throughout the entire system
-- **Localized Analysis**: Context-aware business domain identification
+### ✅ **Complete Database Discovery**
+- **Full Structure Analysis**: Tables, views, columns, data types, primary keys, foreign keys
+- **Sample Data Collection**: 5 sample rows per table/view for context understanding
+- **View Query Analysis**: Extracts view definitions to understand relationships and business logic
+- **Performance Optimized**: Uses `OPTION (FAST 5)` for 2-5x faster data sampling
+- **Unicode Support**: Proper handling of Greek text and international characters
 
-### ✅ **Modular Architecture**
-- **Clean Separation**: Maintainable, testable, and scalable code structure
-- **Easy Integration**: Plugin-style architecture for easy extensions
-- **Component Isolation**: Independent modules with clear interfaces
+### ✅ **Intelligent Entity Classification**  
+- **LLM-Powered Analysis**: Uses Azure OpenAI to identify all business entities
+- **Pattern Recognition**: Combines rule-based classification with AI enhancement
+- **Relationship Discovery**: Finds explicit (foreign keys) and implicit relationships
+- **Business Domain Identification**: Automatically detects industry context
 
-## 🏗️ Architecture Overview
+### ✅ **Natural Language Querying**
+- **Smart Table Selection**: Fuzzy matching to find relevant tables for questions
+- **SQL Generation**: Converts natural language to optimized T-SQL queries
+- **Query Execution**: Safe execution with proper error handling and result limits
+- **Real-time Results**: Interactive session with immediate feedback
+
+## 🏗️ Simple Architecture
 
 ```
 semantic-db-rag/
-├── main.py                      # 🚀 Entry point with menu options
-├── shared/                      # 🔄 Shared components
-│   ├── config.py               # ⚙️ Configuration management
-│   ├── models.py               # 📊 Data models and structures
-│   ├── utils.py                # 🛠️ Utility functions
-│   └── logger.py               # 📝 Logging configuration
-├── db/                         # 🗄️ Database operations
-│   └── discovery.py            # 🔍 Enhanced table/view scanner
-├── semantic/                   # 🧠 AI-powered analysis
-│   └── analysis.py             # 🧠 LLM-based classification
-├── interactive/                # 💬 User interface
-│   └── query_interface.py      # 💬 Natural language interface
-└── data/                       # 💾 Cache and output
-    ├── database_structure.json # 🏗️ Discovery cache
-    └── semantic_analysis.json  # 🧠 Semantic cache
+├── main.py                     # 🚀 Main entry point with 3 core options
+├── shared/                     # 🔄 Shared components
+│   ├── config.py              # ⚙️ Configuration with Azure OpenAI settings
+│   ├── models.py              # 📊 Data models (TableInfo, BusinessDomain, etc.)
+│   └── utils.py               # 🛠️ Utility functions
+├── db/
+│   └── discovery.py           # 🔍 Database structure discovery
+├── semantic/
+│   └── analysis.py            # 🧠 LLM-powered entity classification
+├── interactive/
+│   └── query_interface.py     # 💬 Natural language query interface
+└── data/                      # 💾 Cache files
+    ├── database_structure.json # Complete DB structure + samples
+    └── semantic_analysis.json  # Entity classifications + relationships
 ```
 
 ## 🚀 Quick Start
 
-### 1. **Installation**
+### 1. **Environment Setup**
 
-```bash
-# Clone or download the project
-git clone <repository-url>
-cd semantic-db-rag
+Create `.env` file with your configuration:
 
-# Install dependencies
-pip install -r requirements.txt
-
-# Optional: Install in development mode
-pip install -e .
-```
-
-### 2. **Configuration**
-
-```bash
-# Copy environment template
-cp .env.example .env
-
-# Edit .env with your settings
-nano .env
-```
-
-**Required Configuration:**
 ```env
-# Azure OpenAI
+# Azure OpenAI (Required)
 AZURE_OPENAI_API_KEY=your_key_here
 AZURE_ENDPOINT=https://gyp-weu-02-res01-prdenv-cog01.openai.azure.com/
 DEPLOYMENT_NAME=gpt-4.1-mini
 MODEL_VERSION=2024-12-01-preview
 
-# Database Connection
+# Database Connection (Required)
 DATABASE_CONNECTION_STRING=Driver={ODBC Driver 17 for SQL Server};Server=localhost;Database=YourDB;Trusted_Connection=yes;
+
+# Optional Performance Settings
+DISCOVERY_CACHE_HOURS=24
+USE_FAST_QUERIES=true
+MAX_RESULTS=100
+```
+
+### 2. **Install Dependencies**
+
+```bash
+pip install pyodbc python-dotenv tqdm langchain-openai
 ```
 
 ### 3. **Run the System**
@@ -178,96 +168,185 @@ DATABASE_CONNECTION_STRING=Driver={ODBC Driver 17 for SQL Server};Server=localho
 python main.py
 ```
 
-## 📋 Usage Guide
+## 📋 Three Core Options
 
 ### **Option 1: Database Discovery 🔍**
-- Scans database tables and views with enhanced performance
-- Uses `OPTION (FAST n)` for quick sampling
-- Handles Unicode text properly
-- Saves results to `database_structure.json`
+
+Discovers and analyzes your complete database structure:
+
+**What it does:**
+- Scans ALL tables and views in your database
+- Extracts complete column information (names, types, nullability, defaults)
+- Identifies primary keys and foreign key relationships  
+- Collects 5 sample rows from each table/view for context
+- Analyzes view definitions to understand business logic
+- Saves everything to `database_structure.json`
+
+**Output Structure:**
+```json
+{
+  "tables": {
+    "dbo.Customers": {
+      "columns": {
+        "CustomerID": "int PRIMARY KEY",
+        "CustomerName": "varchar(100)",
+        "Email": "varchar(255)",
+        "CreatedDate": "datetime"
+      },
+      "sample_data": [
+        {"CustomerID": 1, "CustomerName": "John Doe", "Email": "john@example.com"},
+        {"CustomerID": 2, "CustomerName": "Jane Smith", "Email": "jane@example.com"}
+      ],
+      "foreign_keys": [
+        {"column": "CountryID", "references": "dbo.Countries(CountryID)"}
+      ],
+      "view_definition": "SELECT ... FROM ... WHERE ..." // For views
+    }
+  }
+}
+```
+
+**Performance Features:**
+- Uses `OPTION (FAST 5)` for quick sampling
+- Parallel processing with adaptive batching
+- Intelligent caching system
+- Progress bars with real-time updates
 
 ### **Option 2: Semantic Analysis 🧠**
-- Classifies entities using AI
-- Discovers relationships between tables
-- Identifies business domain and industry
-- Saves results to `semantic_analysis.json`
+
+Uses LLM to classify all entities and discover relationships:
+
+**What it does:**
+- Loads database structure from Step 1
+- **LLM Entity Classification**: Uses Azure OpenAI to identify business entities
+  - Customers, Orders, Products, Payments, Users, etc.
+  - Confidence scores for each classification
+  - Business role identification (Core, Supporting, Reference)
+- **Relationship Discovery**: Finds connections between entities
+  - Foreign key relationships from database schema
+  - Implicit relationships through naming patterns and data analysis
+  - View-based relationships from JOIN patterns
+- **Business Domain Analysis**: Identifies industry context
+  - E-Commerce, CRM, Healthcare, Financial Services, etc.
+  - Generates relevant sample questions
+  - Enables domain-specific query capabilities
+
+**LLM Analysis Process:**
+```python
+# Example LLM prompt for entity classification
+"""
+Analyze this table: dbo.CustomerPayments
+Columns: CustomerID (int), PaymentAmount (decimal), PaymentDate (datetime), PaymentMethodID (int)
+Sample: {"CustomerID": 123, "PaymentAmount": 299.99, "PaymentDate": "2024-01-15", "PaymentMethodID": 1}
+
+Classify as business entity with confidence score.
+"""
+
+# LLM Response
+{
+  "entity_type": "Payment",
+  "confidence": 0.95,
+  "business_role": "Core",
+  "reasoning": "Contains payment amounts and customer references"
+}
+```
+
+**Output:**
+- Entity classifications for all tables/views
+- Relationship map between entities
+- Business domain identification
+- Sample questions for interactive querying
 
 ### **Option 3: Interactive Queries 💬**
-- Natural language to SQL conversion
-- Enhanced table relevance scoring
-- Optimized query execution
-- Real-time result display
 
-### **Option 4: Full Demo 🚀**
-- Runs all steps in sequence
-- Shows system status and capabilities
-- Comprehensive demonstration
+Natural language to SQL conversion and execution:
+
+**What it does:**
+- Loads analyzed database structure and entity classifications
+- **Smart Table Selection**: Uses fuzzy matching to find relevant tables
+- **LLM SQL Generation**: Converts questions to optimized T-SQL
+- **Safe Execution**: Runs queries with proper limits and error handling
+- **Result Display**: Shows results in readable format
+
+**Example Session:**
+```
+❓ Query #1: How many customers have made payments?
+
+🔍 Finding relevant tables...
+   📋 Found 2 relevant tables
+      • dbo.Customers (Customer entity, confidence: 0.92)
+      • dbo.CustomerPayments (Payment entity, confidence: 0.95)
+
+⚡ Generating SQL query...
+   💾 Generated: SELECT COUNT(DISTINCT c.CustomerID) FROM [dbo].[Customers] c...
+
+🚀 Executing query...
+   📊 Results: 1 rows
+   1. {'paying_customers': 1247}
+
+⚡ Execution time: 0.234s
+```
+
+**Query Capabilities:**
+- Customer analysis: "How many customers do we have?"
+- Payment analysis: "What's our total revenue this year?"
+- Relationship queries: "Show customers with their recent payments"
+- Trend analysis: "Monthly sales growth"
+- Complex joins across multiple entities
 
 ## 🔧 Configuration Options
 
-### **Performance Settings**
+### **Database Discovery Settings**
 ```env
-# Cache expiration (hours)
-DISCOVERY_CACHE_HOURS=24
-SEMANTIC_CACHE_HOURS=48
+# Performance
+USE_FAST_QUERIES=true           # Enable OPTION (FAST 5) optimization
+MAX_PARALLEL_WORKERS=12         # Parallel processing threads
+QUERY_TIMEOUT_SECONDS=30        # Timeout per table/view
 
-# Database timeouts (seconds)
-CONNECTION_TIMEOUT=15
-COMMAND_TIMEOUT=10
+# Data Collection
+SAMPLES_PER_OBJECT=5            # Sample rows per table/view
+EXCLUDE_BACKUP_TABLES=true      # Skip backup/temp tables
 
-# Query limits
-MAX_RESULTS=100
-MAX_BATCH_SIZE=5
+# Caching
+DISCOVERY_CACHE_HOURS=24        # Cache database structure
 ```
 
-### **Advanced Features**
+### **Semantic Analysis Settings**
 ```env
-# Enable FAST queries (recommended)
-USE_FAST_QUERIES=true
+# LLM Configuration
+SEMANTIC_CACHE_HOURS=48         # Cache entity classifications
+AZURE_OPENAI_API_KEY=your_key   # Required for entity classification
+DEPLOYMENT_NAME=gpt-4.1-mini    # Azure OpenAI model
 
-# Exclude backup tables (recommended)
-EXCLUDE_BACKUP_TABLES=true
-
-# Enhanced logging
-LOG_LEVEL=INFO
-USE_COLORED_LOGS=true
+# Analysis Options
+ENTITY_CONFIDENCE_THRESHOLD=0.7 # Minimum confidence for classification
+RELATIONSHIP_DISCOVERY=true     # Enable relationship finding
 ```
 
-## 💡 Key Improvements in Version 2.0
+### **Query Interface Settings**
+```env
+# Query Execution
+MAX_RESULTS=100                 # Limit query results
+COMMAND_TIMEOUT=10              # SQL execution timeout
 
-### **Fixed View Handling**
-- **Problem**: Views previously showed 0 rows
-- **Solution**: Enhanced estimation using `sys.views` metadata
-- **Result**: Views now participate fully in semantic analysis
-
-### **FAST Query Optimization**
-- **Implementation**: `OPTION (FAST n)` for quick data sampling
-- **Performance**: 2-5x speed improvement for complex views
-- **Fallback**: Graceful degradation to standard queries
-
-### **Enhanced Unicode Support**
-- **Encoding**: UTF-8 throughout the system
-- **Greek Text**: Proper handling and display
-- **International**: Supports all Unicode characters
-
-### **Modular Architecture**
-- **Maintainability**: Clear separation of concerns
-- **Testing**: Component-level testing capability
-- **Scalability**: Easy to add new features
+# Display Options
+SHOW_SQL_QUERIES=true          # Display generated SQL
+USE_COLORED_OUTPUT=true        # Colored console output
+```
 
 ## 🗄️ Database Compatibility
 
-### **Supported Databases**
+**Supported Databases:**
 - SQL Server (all versions)
-- Azure SQL Database
+- Azure SQL Database  
 - SQL Server Express
 - SQL Server LocalDB
 
-### **Required Drivers**
+**Required Drivers:**
 - ODBC Driver 17 for SQL Server (recommended)
 - ODBC Driver 13 for SQL Server (supported)
 
-### **Connection Examples**
+**Connection Examples:**
 ```env
 # Local SQL Server with Windows Authentication
 DATABASE_CONNECTION_STRING=Driver={ODBC Driver 17 for SQL Server};Server=localhost;Database=YourDB;Trusted_Connection=yes;
@@ -275,149 +354,281 @@ DATABASE_CONNECTION_STRING=Driver={ODBC Driver 17 for SQL Server};Server=localho
 # Azure SQL Database
 DATABASE_CONNECTION_STRING=Driver={ODBC Driver 17 for SQL Server};Server=yourserver.database.windows.net;Database=YourDB;UID=username;PWD=password;Encrypt=yes;
 
-# SQL Server with custom port
+# Custom instance with specific port
 DATABASE_CONNECTION_STRING=Driver={ODBC Driver 17 for SQL Server};Server=localhost,1433;Database=YourDB;UID=username;PWD=password;
 ```
 
-## 🧪 Testing
+## 💡 Key Technical Features
 
-### **Run Tests**
-```bash
-# Install test dependencies
-pip install -e .[dev]
+### **Complete Database Structure Analysis**
+- **Metadata Extraction**: Uses SQL Server system views (`sys.tables`, `sys.columns`, `sys.foreign_keys`)
+- **View Definition Analysis**: Extracts `sys.sql_modules` to understand view logic and relationships
+- **Constraint Discovery**: Identifies primary keys, foreign keys, unique constraints
+- **Data Type Mapping**: Complete column information with nullability and defaults
 
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=.
-
-# Run specific test modules
-pytest tests/test_discovery.py
-pytest tests/test_semantic.py
-pytest tests/test_queries.py
+### **Advanced View Analysis**
+```sql
+-- Example: Discovering relationships through view definitions
+SELECT 
+    v.name as view_name,
+    m.definition as view_definition
+FROM sys.views v
+JOIN sys.sql_modules m ON v.object_id = m.object_id
+WHERE m.definition LIKE '%JOIN%'
 ```
 
-### **Manual Testing**
-```bash
-# Test database connection
-python -c "from db.discovery import DatabaseDiscovery; from shared.config import Config; d = DatabaseDiscovery(Config()); print('✅ Connection OK')"
+### **LLM Entity Classification**
+- **Structured Prompts**: Uses JSON-formatted prompts for consistent entity classification
+- **Context-Aware**: Combines table names, column names, and sample data for accurate classification
+- **Confidence Scoring**: Each classification includes confidence level (0.0-1.0)
+- **Business Role Identification**: Classifies entities as Core, Supporting, or Reference
 
-# Test Azure OpenAI
-python -c "from semantic.analysis import SimpleLLMClient; from shared.config import Config; import asyncio; asyncio.run(SimpleLLMClient(Config()).ask('Hello')); print('✅ AI OK')"
+### **Relationship Discovery Methods**
+1. **Foreign Key Analysis**: Direct schema relationships
+2. **Naming Pattern Matching**: `customer_id` → `customers.id`
+3. **View Join Analysis**: Extracts relationships from view definitions
+4. **LLM Inference**: AI-powered relationship discovery from data patterns
+
+## 🧪 Sample Usage Scenarios
+
+### **Scenario 1: New Database Exploration**
+```bash
+# Discover a new database completely
+python main.py
+> 1  # Database Discovery
+> 2  # Semantic Analysis  
+> 3  # Interactive Queries
+
+# Ask questions like:
+"What tables contain customer information?"
+"How are customers connected to orders?"
+"Show me the database structure"
 ```
 
-## 🐛 Troubleshooting
+### **Scenario 2: Business Intelligence**
+```bash
+# Generate business insights
+python main.py
+> 3  # Interactive Queries
+
+# Ask business questions:
+"What's our total revenue this month?"
+"How many active customers do we have?"
+"Show top 10 customers by revenue"
+"Which products sell the most?"
+```
+
+### **Scenario 3: Data Migration Planning**
+```bash
+# Understand data relationships for migration
+python main.py
+> 1  # Discover source database
+> 2  # Classify all entities
+> Check data/database_structure.json for complete schema
+> Check data/semantic_analysis.json for relationships
+```
+
+## 🔍 Troubleshooting
 
 ### **Common Issues**
 
-**1. Connection Errors**
+**1. Database Connection Errors**
 ```bash
+# Test connection
+python -c "import pyodbc; pyodbc.connect('your_connection_string')"
+
 # Check ODBC drivers
 odbcinst -j
-
-# Test connection string
-sqlcmd -S "your_server" -d "your_database"
 ```
 
-**2. Unicode Issues**
+**2. Azure OpenAI Issues**  
+```bash
+# Verify API key and endpoint
+curl -H "api-key: YOUR_KEY" "https://your-endpoint.openai.azure.com/openai/deployments?api-version=2024-12-01-preview"
+```
+
+**3. Unicode/Greek Text Issues**
 - Ensure UTF-8 encoding in connection string
-- Check database collation settings
-- Verify console encoding
+- Check database collation supports Unicode
+- Verify console encoding for display
 
-**3. Performance Issues**
-- Enable FAST queries in configuration
-- Check cache settings
-- Review excluded table patterns
-
-**4. Memory Issues**
-- Reduce MAX_BATCH_SIZE
-- Lower MAX_RESULTS
-- Enable result pagination
+**4. Performance Issues**
+- Enable `USE_FAST_QUERIES=true`
+- Reduce `MAX_PARALLEL_WORKERS` if system overloaded  
+- Check `DISCOVERY_CACHE_HOURS` to avoid re-scanning
 
 ### **Debug Mode**
 ```env
+# Enable detailed logging
 LOG_LEVEL=DEBUG
 USE_COLORED_LOGS=true
 ```
 
-## 📚 API Reference
+## 📚 Example Outputs
 
-### **Main Classes**
+### **Database Structure (database_structure.json)**
+```json
+{
+  "tables": {
+    "dbo.Customers": {
+      "columns": {
+        "CustomerID": {"type": "int", "primary_key": true},
+        "CustomerName": {"type": "varchar(100)", "nullable": false},
+        "Email": {"type": "varchar(255)", "nullable": true}
+      },
+      "sample_data": [
+        {"CustomerID": 1, "CustomerName": "ACME Corp", "Email": "info@acme.com"},
+        {"CustomerID": 2, "CustomerName": "Tech Solutions", "Email": "hello@tech.com"}
+      ],
+      "relationships": [
+        {"column": "CountryID", "references": "dbo.Countries(CountryID)"}
+      ]
+    }
+  }
+}
+```
 
-#### `DatabaseDiscovery`
+### **Semantic Analysis (semantic_analysis.json)**
+```json
+{
+  "entity_classifications": {
+    "dbo.Customers": {
+      "entity_type": "Customer",
+      "confidence": 0.95,
+      "business_role": "Core"
+    },
+    "dbo.CustomerPayments": {
+      "entity_type": "Payment", 
+      "confidence": 0.92,
+      "business_role": "Core"
+    }
+  },
+  "relationships": [
+    {
+      "from": "dbo.CustomerPayments",
+      "to": "dbo.Customers", 
+      "type": "foreign_key",
+      "confidence": 1.0
+    }
+  ],
+  "business_domain": {
+    "type": "CRM/Financial",
+    "confidence": 0.88,
+    "sample_questions": [
+      "How many customers have made payments?",
+      "What's our total revenue?",
+      "Show customer payment history"
+    ]
+  }
+}
+```
+
+## 🚀 Getting Started Checklist
+
+- [ ] **Install Requirements**: `pip install pyodbc python-dotenv tqdm langchain-openai`
+- [ ] **Configure .env**: Set up Azure OpenAI and database connection
+- [ ] **Test Connection**: Verify database access and Azure OpenAI API
+- [ ] **Run Discovery**: Execute Option 1 to scan database structure
+- [ ] **Run Analysis**: Execute Option 2 to classify entities with LLM
+- [ ] **Start Querying**: Execute Option 3 to ask natural language questions
+
+## 🎯 Advanced Features
+
+### **Robust Discovery Engine**
+- **Adaptive Performance**: Automatically adjusts parallelism based on dataset size
+- **Error Recovery**: Retry logic for failed table analysis
+- **Progress Tracking**: Real-time progress bars and detailed metrics
+- **Resource Management**: Conservative memory and connection usage
+
+### **Intelligent Caching**
+- **Smart Cache Invalidation**: Configurable cache expiration times
+- **Incremental Updates**: Only re-analyze changed objects
+- **Cache Validation**: Automatic cache health checks
+
+### **International Support**
+- **Unicode Handling**: Full UTF-8 support throughout the system
+- **Greek Text Processing**: Proper handling of Greek characters and text
+- **International Characters**: Support for all Unicode character sets
+
+## 🔬 Technical Implementation
+
+### **Database Discovery Process**
+1. **Schema Enumeration**: Query `sys.tables` and `sys.views` for object discovery
+2. **Metadata Collection**: Extract column information from `INFORMATION_SCHEMA.COLUMNS`
+3. **Relationship Mapping**: Analyze `sys.foreign_keys` for explicit relationships
+4. **Sample Collection**: Use `OPTION (FAST 5)` for efficient data sampling
+5. **View Analysis**: Parse view definitions from `sys.sql_modules`
+
+### **LLM Integration Architecture**
 ```python
-from db.discovery import DatabaseDiscovery
-from shared.config import Config
-
-discovery = DatabaseDiscovery(Config())
-success = await discovery.discover_database(limit=50)
-tables = discovery.get_tables()
+# Example LLM client usage
+llm_client = SimpleLLMClient(config)
+response = await llm_client.generate_sql(
+    "Generate SQL to find customers with payments > $1000"
+)
 ```
 
-#### `SemanticAnalyzer`
-```python
-from semantic.analysis import SemanticAnalyzer
-from shared.config import Config
+### **Query Processing Pipeline**
+1. **Question Analysis**: Parse natural language query
+2. **Table Selection**: Use fuzzy matching to find relevant tables
+3. **Context Building**: Create structured prompt with table schemas
+4. **SQL Generation**: Use LLM to generate T-SQL query
+5. **Query Execution**: Safe execution with timeout and result limits
+6. **Result Formatting**: Display results in user-friendly format
 
-analyzer = SemanticAnalyzer(Config())
-success = await analyzer.analyze_semantics(tables)
-domain = analyzer.get_domain()
-```
+## 📈 Performance Optimization
 
-#### `QueryInterface`
-```python
-from interactive.query_interface import QueryInterface
-from shared.config import Config
+### **Database Query Optimization**
+- **FAST Queries**: Uses `OPTION (FAST n)` for quick sampling
+- **Parallel Processing**: Configurable worker threads for large datasets
+- **Connection Pooling**: Efficient database connection management
+- **Timeout Management**: Prevents hanging on problematic queries
 
-interface = QueryInterface(Config())
-await interface.start_interactive_session(tables, domain, relationships)
-```
+### **Memory Management**
+- **Streaming Results**: Process large datasets without memory overflow
+- **Adaptive Batching**: Adjusts batch sizes based on system performance
+- **Cache Optimization**: Intelligent caching to reduce redundant operations
 
-## 🤝 Contributing
+## 🛡️ Security Features
 
-### **Development Setup**
-```bash
-# Clone repository
-git clone <repository-url>
-cd semantic-db-rag
+### **Safe Query Execution**
+- **Read-Only Operations**: No UPDATE/DELETE/DROP operations allowed
+- **Result Limits**: Automatic row limits to prevent resource exhaustion
+- **SQL Injection Prevention**: Parameterized queries where applicable
+- **Timeout Protection**: Query timeouts to prevent runaway operations
 
-# Install in development mode
-pip install -e .[dev,logging,performance]
+### **Data Privacy**
+- **Sample Data Limits**: Only collects minimal sample data needed
+- **No Data Storage**: LLM prompts don't store sensitive data permanently
+- **Local Processing**: All analysis happens on your infrastructure
 
-# Set up pre-commit hooks
-pre-commit install
-```
+## 🎯 Ready to Get Started?
 
-### **Code Style**
-```bash
-# Format code
-black .
+1. **Setup**: Configure `.env` with your Azure OpenAI and database settings
+2. **Discovery**: Run Option 1 to analyze your complete database structure  
+3. **Classification**: Run Option 2 to classify entities and find relationships
+4. **Query**: Run Option 3 to start asking natural language questions
 
-# Check style
-flake8 .
-
-# Type checking
-mypy .
-```
-
-### **Adding Features**
-1. Create feature branch
-2. Add tests for new functionality
-3. Update documentation
-4. Submit pull request
-
-## 📄 License
-
-MIT License - see LICENSE file for details.
-
-## 🙏 Acknowledgments
-
-- Built with Azure OpenAI and LangChain
-- Enhanced with FAST query optimization
-- Supports international Unicode text
-- Designed for real-world business databases
+**Transform your database into an intelligent, queryable knowledge base!** 🚀
 
 ---
 
-**🎯 Ready to transform your database into an intelligent, queryable knowledge base with enhanced performance and international support!**
+**Built with Azure OpenAI GPT-4, LangChain, and optimized for real-world business databases with international character support.**
+
+## 📝 License
+
+MIT License - Feel free to use this project for your own database analysis needs.
+
+## 🤝 Contributing
+
+Contributions welcome! Please read the contributing guidelines and submit pull requests for any improvements.
+
+## 📞 Support
+
+For issues and questions:
+- Check the troubleshooting section above
+- Review configuration examples
+- Ensure all dependencies are installed correctly
+- Verify Azure OpenAI and database connectivity
+
+**Happy querying!** 🎉
