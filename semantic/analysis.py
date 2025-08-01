@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Simplified Semantic Analysis - Readable and Maintainable
-Focus on core functionality: entity classification and relationship discovery
+Fixed Semantic Analysis - Proper Cache Loading and Table Management
 """
 
 import asyncio
@@ -60,7 +59,7 @@ class SimpleLLMClient:
             return ""
 
 class SimpleSemanticAnalyzer:
-    """Simplified semantic analyzer focusing on core functionality"""
+    """Fixed semantic analyzer with proper cache handling"""
     
     def __init__(self, config: Config):
         self.config = config
@@ -69,16 +68,22 @@ class SimpleSemanticAnalyzer:
         self.relationships: List[Relationship] = []
         self.domain: Optional[BusinessDomain] = None
     
-    async def analyze_tables(self, tables: List[TableInfo]) -> bool:
-        """Main analysis method - simplified and focused"""
-        
-        # Check cache first
+    def load_from_cache(self) -> bool:
+        """Load from cache and return success status"""
         cache_file = self.config.get_cache_path("semantic_analysis.json")
         cached_data = load_cache(cache_file, self.config.semantic_cache_hours)
         
         if cached_data:
             print("✅ Loading from semantic cache...")
             self._load_from_cache(cached_data)
+            return True
+        return False
+    
+    async def analyze_tables(self, tables: List[TableInfo]) -> bool:
+        """Main analysis method - fixed cache loading"""
+        
+        # Check cache first
+        if self.load_from_cache():
             return True
         
         if not tables:
@@ -87,7 +92,7 @@ class SimpleSemanticAnalyzer:
         
         print(f"🧠 Starting semantic analysis of {len(tables)} tables...")
         
-        # IMPORTANT: Store the tables we're analyzing
+        # FIXED: Store the tables we're analyzing
         self.tables = tables.copy()
         
         try:
@@ -109,6 +114,7 @@ class SimpleSemanticAnalyzer:
             
             # Step 5: Save to cache
             print("   💾 Step 5: Saving analysis to cache...")
+            cache_file = self.config.get_cache_path("semantic_analysis.json")
             self._save_to_cache(cache_file)
             
             # Show results
@@ -339,20 +345,24 @@ class SimpleSemanticAnalyzer:
                 'capabilities': self.domain.capabilities
             } if self.domain else None,
             'created': datetime.now().isoformat(),
-            'version': 'simplified-v1.0'
+            'version': 'simplified-v1.0-fixed'
         }
         
         save_cache(cache_file, data, "semantic analysis")
     
     def _load_from_cache(self, data: Dict):
-        """Load analysis results from cache"""
+        """FIXED: Load analysis results from cache properly"""
         
         # Load tables
-        if 'tables' in data:
+        if 'tables' in data and data['tables']:
             self.tables = [dict_to_table(table_data) for table_data in data['tables']]
+            print(f"   📊 Loaded {len(self.tables)} tables from cache")
+        else:
+            self.tables = []
+            print("   ⚠️ No tables found in semantic cache")
         
         # Load relationships
-        if 'relationships' in data:
+        if 'relationships' in data and data['relationships']:
             self.relationships = []
             for rel_data in data['relationships']:
                 self.relationships.append(Relationship(
@@ -362,6 +372,9 @@ class SimpleSemanticAnalyzer:
                     confidence=rel_data.get('confidence', 0.0),
                     description=rel_data.get('description', '')
                 ))
+            print(f"   🔗 Loaded {len(self.relationships)} relationships from cache")
+        else:
+            self.relationships = []
         
         # Load domain
         if 'domain' in data and data['domain']:
@@ -373,8 +386,9 @@ class SimpleSemanticAnalyzer:
                 sample_questions=domain_data.get('sample_questions', []),
                 capabilities=domain_data.get('capabilities', {})
             )
-        
-        print(f"   📊 Loaded: {len(self.tables)} tables, {len(self.relationships)} relationships")
+            print(f"   🏢 Loaded domain: {self.domain.domain_type}")
+        else:
+            self.domain = None
     
     # Getter methods
     def get_tables(self) -> List[TableInfo]:

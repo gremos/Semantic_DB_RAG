@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Simplified Semantic Database RAG System - Main Entry Point
-Simple, readable, and maintainable implementation
+Fixed Semantic Database RAG System - Main Entry Point
+Fixes table loading issue between discovery and semantic analysis
 """
 
 import asyncio
@@ -26,7 +26,7 @@ def load_environment():
                     os.environ[key] = value.strip('"\'')
 
 class SimpleSemanticRAGSystem:
-    """Simplified system orchestrator focusing on core functionality"""
+    """Fixed system orchestrator with proper table management"""
     
     def __init__(self):
         self.config = Config()
@@ -62,49 +62,93 @@ class SimpleSemanticRAGSystem:
             return False
     
     async def run_semantic_analysis(self):
-        """Step 2: Semantic Analysis"""
+        """Step 2: Semantic Analysis with proper table loading"""
         print("\n🧠 Step 2: Semantic Analysis")
         print("=" * 50)
         
-        # Get tables from discovery
+        # FIXED: Ensure we have tables first
         tables = self.discovery.get_tables()
+        
         if not tables:
-            # Try to load from cache
-            if not self.discovery.load_from_cache():
+            # Try to load from discovery cache
+            print("   📁 No tables in memory, loading from discovery cache...")
+            if self.discovery.load_from_cache():
+                tables = self.discovery.get_tables()
+                print(f"   📊 Loaded {len(tables)} tables from discovery cache")
+            else:
                 print("❌ No tables found. Run discovery first.")
                 return False
-            tables = self.discovery.get_tables()
         
         print(f"🧠 Analyzing {len(tables)} tables for business entities and relationships")
         
         success = await self.analyzer.analyze_tables(tables)
         
         if success:
-            # Update tables with semantic information
-            analyzed_tables = self.analyzer.get_tables()
-            self.discovery.tables = analyzed_tables  # Update discovery tables
-            
             print("✅ Semantic analysis completed!")
+            
+            # FIXED: Verify tables are properly stored
+            analyzed_tables = self.analyzer.get_tables()
+            print(f"   📊 Analysis result: {len(analyzed_tables)} tables classified")
+            
+            if len(analyzed_tables) == 0:
+                print("   ⚠️ Warning: No tables in analyzer, keeping original tables")
+                # Keep original tables if analysis didn't store them properly
+                self.analyzer.tables = tables
+            
             return True
         else:
             print("❌ Semantic analysis failed")
             return False
     
     async def run_interactive_queries(self):
-        """Step 3: Interactive Queries"""
+        """Step 3: Interactive Queries with improved table loading"""
         print("\n💬 Step 3: Interactive Queries")
         print("=" * 50)
         
+        # FIXED: Better table loading logic
+        tables = None
+        
+        # Try to get tables from analyzer first
+        if hasattr(self.analyzer, 'tables') and self.analyzer.get_tables():
+            tables = self.analyzer.get_tables()
+            print(f"   📊 Using {len(tables)} tables from semantic analysis")
+        
+        # Fallback to discovery tables
+        elif self.discovery.get_tables():
+            tables = self.discovery.get_tables()
+            print(f"   📊 Using {len(tables)} tables from discovery")
+        
+        # Try to load from caches
+        else:
+            print("   📁 No tables in memory, trying to load from cache...")
+            
+            # Try semantic cache first
+            if self.analyzer.load_from_cache():
+                tables = self.analyzer.get_tables()
+                if tables:
+                    print(f"   📊 Loaded {len(tables)} tables from semantic cache")
+            
+            # Try discovery cache as fallback
+            if not tables and self.discovery.load_from_cache():
+                tables = self.discovery.get_tables()
+                if tables:
+                    print(f"   📊 Loaded {len(tables)} tables from discovery cache")
+        
+        if not tables:
+            print("❌ No tables available. Please run:")
+            print("   1. Database Discovery (option 1)")
+            print("   2. Semantic Analysis (option 2)")
+            return False
+        
         # Get analysis results
-        tables = self.analyzer.get_tables() or self.discovery.get_tables()
         domain = self.analyzer.get_domain()
         relationships = self.analyzer.get_relationships()
         
-        if not tables:
-            print("❌ No tables available. Run discovery and analysis first.")
-            return False
-        
         print(f"🚀 Starting interactive session with {len(tables)} tables")
+        if domain:
+            print(f"   🏢 Domain: {domain.domain_type}")
+        if relationships:
+            print(f"   🔗 Relationships: {len(relationships)}")
         
         # Start interactive session
         await self.query_interface.start_interactive_session(
@@ -147,39 +191,50 @@ class SimpleSemanticRAGSystem:
         await self.run_interactive_queries()
     
     def show_system_status(self):
-        """Show current system status"""
+        """Show current system status with better diagnostics"""
         print("\n📊 SYSTEM STATUS")
         print("=" * 40)
         
         # Discovery status
-        tables = self.discovery.get_tables()
-        if tables:
-            table_count = sum(1 for t in tables if t.object_type in ['BASE TABLE', 'TABLE'])
-            view_count = sum(1 for t in tables if t.object_type == 'VIEW')
-            print(f"📋 Discovery: {len(tables)} objects ({table_count} tables, {view_count} views)")
+        discovery_tables = self.discovery.get_tables()
+        if discovery_tables:
+            table_count = sum(1 for t in discovery_tables if t.object_type in ['BASE TABLE', 'TABLE'])
+            view_count = sum(1 for t in discovery_tables if t.object_type == 'VIEW')
+            print(f"📋 Discovery: {len(discovery_tables)} objects ({table_count} tables, {view_count} views)")
         else:
             print("📋 Discovery: Not completed")
         
         # Semantic analysis status
+        analyzer_tables = self.analyzer.get_tables()
         domain = self.analyzer.get_domain()
         relationships = self.analyzer.get_relationships()
         
-        if domain:
-            classified_count = sum(1 for t in tables if t.entity_type != 'Unknown')
-            print(f"🧠 Semantic Analysis: {classified_count} entities classified")
+        if analyzer_tables:
+            classified_count = sum(1 for t in analyzer_tables if t.entity_type != 'Unknown')
+            print(f"🧠 Semantic Analysis: {len(analyzer_tables)} tables, {classified_count} classified")
+        else:
+            print("🧠 Semantic Analysis: No tables loaded")
+        
+        if relationships:
             print(f"🔗 Relationships: {len(relationships)} discovered")
+        else:
+            print("🔗 Relationships: None found")
+        
+        if domain:
             print(f"🏢 Domain: {domain.domain_type} (confidence: {domain.confidence:.2f})")
             
-            # Show entity distribution
-            entity_counts = {}
-            for table in tables:
-                if table.entity_type != 'Unknown':
-                    entity_counts[table.entity_type] = entity_counts.get(table.entity_type, 0) + 1
-            
-            if entity_counts:
-                print(f"📊 Business Entities:")
-                for entity_type, count in sorted(entity_counts.items()):
-                    print(f"   • {entity_type}: {count}")
+            # Show entity distribution if we have tables
+            tables_for_analysis = analyzer_tables or discovery_tables
+            if tables_for_analysis:
+                entity_counts = {}
+                for table in tables_for_analysis:
+                    if hasattr(table, 'entity_type') and table.entity_type != 'Unknown':
+                        entity_counts[table.entity_type] = entity_counts.get(table.entity_type, 0) + 1
+                
+                if entity_counts:
+                    print(f"📊 Business Entities:")
+                    for entity_type, count in sorted(entity_counts.items()):
+                        print(f"   • {entity_type}: {count}")
             
             # Show capabilities
             if domain.capabilities:
