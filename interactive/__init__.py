@@ -1,14 +1,15 @@
 """
-Enhanced interactive query interface module for natural language processing
-Fixed method names and improved performance
+Simplified interactive query interface module - matching actual implementation
 """
 
-from .query_interface import IntelligentQueryInterface, IntelligentLLMClient
+from .query_interface import SimpleQueryInterface, SimpleLLMClient
 
-# Maintain backward compatibility
-EnhancedQueryInterface = IntelligentQueryInterface
-QueryInterface = IntelligentQueryInterface
-InteractiveLLMClient = IntelligentLLMClient
+# Maintain backward compatibility with aliases
+IntelligentQueryInterface = SimpleQueryInterface
+EnhancedQueryInterface = SimpleQueryInterface
+QueryInterface = SimpleQueryInterface
+IntelligentLLMClient = SimpleLLMClient
+InteractiveLLMClient = SimpleLLMClient
 
-__all__ = ["IntelligentQueryInterface", "EnhancedQueryInterface", "QueryInterface", 
-           "IntelligentLLMClient", "InteractiveLLMClient"]
+__all__ = ["SimpleQueryInterface", "SimpleLLMClient", "IntelligentQueryInterface", 
+           "EnhancedQueryInterface", "QueryInterface", "IntelligentLLMClient", "InteractiveLLMClient"]

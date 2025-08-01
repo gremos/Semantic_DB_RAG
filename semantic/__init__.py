@@ -1,32 +1,21 @@
 """
-Enhanced semantic analysis module for comprehensive structure discovery
-Updated for comprehensive multi-source analysis approach
+Simplified semantic analysis module - matching actual implementation
 """
 
 from .analysis import (
-    EnhancedSemanticAnalyzer, 
-    ComprehensiveStructureAnalyzer,
-    EnhancedViewAnalyzer,
-    EnhancedForeignKeyAnalyzer,
-    LLMEntityScanner,
-    ViewJoinAnalysis,
-    ForeignKeyRelationship,
-    EntityDiscovery
+    SimpleSemanticAnalyzer,
+    SimpleLLMClient
 )
 
-# Maintain backward compatibility
-IntelligentSemanticAnalyzer = EnhancedSemanticAnalyzer
-SemanticAnalyzer = EnhancedSemanticAnalyzer
+# Maintain backward compatibility with aliases
+EnhancedSemanticAnalyzer = SimpleSemanticAnalyzer
+IntelligentSemanticAnalyzer = SimpleSemanticAnalyzer  
+SemanticAnalyzer = SimpleSemanticAnalyzer
 
 __all__ = [
-    "EnhancedSemanticAnalyzer", 
-    "IntelligentSemanticAnalyzer", 
-    "SemanticAnalyzer",
-    "ComprehensiveStructureAnalyzer",
-    "EnhancedViewAnalyzer",
-    "EnhancedForeignKeyAnalyzer", 
-    "LLMEntityScanner",
-    "ViewJoinAnalysis",
-    "ForeignKeyRelationship",
-    "EntityDiscovery"
+    "SimpleSemanticAnalyzer",
+    "SimpleLLMClient", 
+    "EnhancedSemanticAnalyzer",
+    "IntelligentSemanticAnalyzer",
+    "SemanticAnalyzer"
 ]

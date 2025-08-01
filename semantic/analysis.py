@@ -87,22 +87,25 @@ class SimpleSemanticAnalyzer:
         
         print(f"🧠 Starting semantic analysis of {len(tables)} tables...")
         
+        # IMPORTANT: Store the tables we're analyzing
+        self.tables = tables.copy()
+        
         try:
             # Step 1: Simple pattern-based classification
             print("   📊 Step 1: Pattern-based entity classification...")
-            self._classify_entities_simple(tables)
+            self._classify_entities_simple(self.tables)
             
             # Step 2: LLM-enhanced classification for unclear cases
             print("   🤖 Step 2: LLM enhancement for unclear entities...")
-            await self._enhance_with_llm(tables)
+            await self._enhance_with_llm(self.tables)
             
             # Step 3: Find relationships
             print("   🔗 Step 3: Discovering relationships...")
-            self._find_relationships(tables)
+            self._find_relationships(self.tables)
             
             # Step 4: Analyze business domain
             print("   🏢 Step 4: Analyzing business domain...")
-            self._analyze_domain(tables)
+            self._analyze_domain(self.tables)
             
             # Step 5: Save to cache
             print("   💾 Step 5: Saving analysis to cache...")
