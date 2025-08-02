@@ -1,85 +1,44 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-ROBUST Database Discovery Module - Adaptive Performance for Large Datasets
-Handles 678+ objects with intelligent resource management and retry logic
+Enhanced Database Discovery - Simple and Maintainable
+Implements view definition mining and relationship discovery
 """
 
 import pyodbc
 import asyncio
-import concurrent.futures
-import time
 import json
+import time
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from pathlib import Path
-import os
-from dotenv import load_dotenv
-
-# Import from shared modules
-from shared.config import Config
-from shared.models import TableInfo, DatabaseObject, AnalysisStats
-from shared.utils import safe_database_value, should_exclude_table
-
-# Load environment variables
-load_dotenv()
 
 # Progress bar
 try:
     from tqdm import tqdm
 except ImportError:
-    print("Installing tqdm for progress bars...")
     import subprocess
     subprocess.check_call(["pip", "install", "tqdm"])
     from tqdm import tqdm
 
-class RobustDatabaseDiscovery:
-    """ROBUST database discovery with adaptive performance and error recovery"""
+from shared.config import Config
+from shared.models import TableInfo, Relationship, DatabaseObject
+
+class DatabaseDiscovery:
+    """Enhanced database discovery with view analysis and relationship discovery"""
     
     def __init__(self, config: Config):
         self.config = config
         self.tables: List[TableInfo] = []
-        self.stats = AnalysisStats()
-        self.failed_objects: List[DatabaseObject] = []
-        
-        # Adaptive performance settings
-        self.adaptive_workers = self._calculate_optimal_workers()
-        self.adaptive_batch_size = self._calculate_optimal_batch_size()
-        self.adaptive_timeout = self._calculate_optimal_timeout()
-        
-        print(f"🔧 Adaptive Performance Settings:")
-        print(f"   • Workers: {self.adaptive_workers} (reduced from {config.max_parallel_workers})")
-        print(f"   • Batch size: {self.adaptive_batch_size}")
-        print(f"   • Timeout: {self.adaptive_timeout}s per object")
-    
-    def _calculate_optimal_workers(self) -> int:
-        """Calculate optimal worker count to prevent resource exhaustion"""
-        base_workers = self.config.max_parallel_workers
-        
-        # More conservative approach for stability
-        if base_workers > 16:
-            return 12  # Cap at 12 for very large datasets
-        elif base_workers > 8:
-            return 8   # Cap at 8 for medium datasets
-        else:
-            return max(4, base_workers)  # Minimum 4 workers
-    
-    def _calculate_optimal_batch_size(self) -> int:
-        """Calculate optimal batch size for steady processing"""
-        return max(self.adaptive_workers * 2, 16)  # At least 16 objects per batch
-    
-    def _calculate_optimal_timeout(self) -> int:
-        """Calculate adaptive timeout based on system performance"""
-        base_timeout = self.config.query_timeout_seconds
-        # Slightly longer timeout for large datasets to reduce failures
-        return min(base_timeout + 10, 45)  # Max 45 seconds
+        self.relationships: List[Relationship] = []
+        self.view_definitions: Dict[str, str] = {}
     
     def get_database_connection(self):
-        """Get optimized database connection with proper Greek text support"""
+        """Get database connection with Greek text support"""
         connection_string = self.config.get_database_connection_string()
         conn = pyodbc.connect(connection_string)
         
-        # Critical: Proper Unicode handling for Greek text
+        # UTF-8 encoding for international characters
         conn.setdecoding(pyodbc.SQL_CHAR, encoding='utf-8')
         conn.setdecoding(pyodbc.SQL_WCHAR, encoding='utf-8')
         conn.setencoding(encoding='utf-8')
@@ -87,104 +46,85 @@ class RobustDatabaseDiscovery:
         return conn
     
     async def discover_database(self, limit: Optional[int] = None) -> bool:
-        """
-        ROBUST discovery method with adaptive performance and error recovery
-        
-        Args:
-            limit: Maximum number of objects to process (None = ALL objects)
-        
-        Returns:
-            bool: True if discovery was successful
-        """
-        print("🚀 Starting ROBUST database discovery with adaptive performance...")
+        """Main discovery method with view analysis"""
+        print("🚀 Starting enhanced database discovery...")
         
         # Check cache first
-        if self.load_from_cache():
+        if self._load_from_cache():
             print(f"✅ Loaded {len(self.tables)} objects from cache")
             return True
         
-        self.stats.reset()
-        
         try:
-            # Step 1: Discover ALL objects
-            print("📊 Discovering ALL database objects...")
-            objects = await self._get_all_objects_unlimited()
+            # Step 1: Get all database objects
+            print("📊 Discovering database objects...")
+            objects = self._get_all_objects()
             
             if not objects:
                 print("❌ No database objects found")
                 return False
             
-            # Step 2: Apply minimal filtering
-            filtered_objects = self._apply_minimal_filtering(objects, limit)
+            # Apply limit if specified
+            if limit and limit < len(objects):
+                objects = objects[:limit]
+                print(f"   🎯 Limited to top {limit} objects")
             
-            # Step 3: Log discovery plan
-            self._log_robust_discovery_plan(objects, filtered_objects)
+            print(f"   ✅ Found {len(objects)} objects to analyze")
             
-            # Step 4: Process with ROBUST batch processing and retry logic
-            await self._process_objects_robust_batching(filtered_objects)
+            # Step 2: Analyze objects with progress bar
+            print("🔄 Analyzing objects and collecting samples...")
+            await self._analyze_objects(objects)
             
-            # Step 5: Retry failed objects with single-threaded approach
-            if self.failed_objects:
-                await self._retry_failed_objects()
+            # Step 3: Get view definitions
+            print("👁️ Extracting view definitions...")
+            await self._extract_view_definitions()
             
-            # Step 6: Save results
-            await self._save_discovery_results()
+            # Step 4: Discover relationships
+            print("🔗 Discovering relationships...")
+            self._discover_relationships()
             
-            # Step 7: Log completion stats
-            self._log_completion_stats()
+            # Step 5: Save results
+            print("💾 Saving results...")
+            self._save_to_cache()
             
-            return len(self.tables) > 0
+            # Show summary
+            self._show_discovery_summary()
+            
+            return True
             
         except Exception as e:
-            print(f"❌ Discovery failed with error: {e}")
+            print(f"❌ Discovery failed: {e}")
             return False
     
-    async def _get_all_objects_unlimited(self) -> List[DatabaseObject]:
-        """Get ALL database objects with priority scoring"""
+    def _get_all_objects(self) -> List[DatabaseObject]:
+        """Get all database objects with priority scoring"""
         
         query = """
-        -- Get ALL tables with priority scoring
+        -- Get tables with metadata
         SELECT 
             SCHEMA_NAME(t.schema_id) as schema_name,
-            t.name as table_name,
+            t.name as object_name,
             'BASE TABLE' as object_type,
-            COALESCE(p.rows, 0) as estimated_rows,
-            -- Priority calculation
-            CASE 
-                WHEN t.name LIKE '%customer%' OR t.name LIKE '%client%' OR t.name LIKE '%business%' THEN 1000
-                WHEN t.name LIKE '%order%' OR t.name LIKE '%sales%' OR t.name LIKE '%product%' THEN 900
-                WHEN t.name LIKE '%user%' OR t.name LIKE '%account%' OR t.name LIKE '%person%' THEN 800
-                WHEN t.name LIKE '%payment%' OR t.name LIKE '%invoice%' OR t.name LIKE '%financial%' THEN 700
-                ELSE 500
-            END + COALESCE(p.rows, 0) / 1000 as priority_score
+            COALESCE(
+                (SELECT SUM(rows) FROM sys.partitions p WHERE p.object_id = t.object_id AND p.index_id < 2),
+                0
+            ) as estimated_rows
         FROM sys.tables t
-        LEFT JOIN sys.partitions p ON t.object_id = p.object_id AND p.index_id < 2
         WHERE t.is_ms_shipped = 0
           AND SCHEMA_NAME(t.schema_id) NOT IN ('sys', 'information_schema')
         
         UNION ALL
         
-        -- Get ALL views with priority scoring
+        -- Get views
         SELECT 
             SCHEMA_NAME(v.schema_id) as schema_name,
-            v.name as view_name,
+            v.name as object_name,
             'VIEW' as object_type,
-            CASE 
-                WHEN v.name LIKE '%report%' OR v.name LIKE '%summary%' THEN 200
-                ELSE 50 
-            END as estimated_rows,
-            -- Priority calculation for views
-            CASE 
-                WHEN v.name LIKE '%customer%' OR v.name LIKE '%client%' OR v.name LIKE '%business%' THEN 700
-                WHEN v.name LIKE '%report%' OR v.name LIKE '%summary%' THEN 600
-                WHEN v.name LIKE '%order%' OR v.name LIKE '%sales%' OR v.name LIKE '%product%' THEN 550
-                ELSE 400
-            END as priority_score
+            0 as estimated_rows
         FROM sys.views v
         WHERE v.is_ms_shipped = 0
           AND SCHEMA_NAME(v.schema_id) NOT IN ('sys', 'information_schema')
         
-        ORDER BY priority_score DESC, estimated_rows DESC
+        ORDER BY estimated_rows DESC, object_name
         """
         
         try:
@@ -200,220 +140,90 @@ class RobustDatabaseDiscovery:
                         object_type=row[2],
                         estimated_rows=row[3]
                     )
-                    obj.priority_score = row[4]  # Add priority score
                     objects.append(obj)
                 
-                self.stats.total_objects_found = len(objects)
-                print(f"   ✅ Found {len(objects)} objects (prioritized by business relevance)")
                 return objects
                 
         except Exception as e:
             print(f"❌ Failed to get database objects: {e}")
             return []
     
-    def _apply_minimal_filtering(self, objects: List[DatabaseObject], limit: Optional[int]) -> List[DatabaseObject]:
-        """Apply minimal filtering with business object prioritization"""
+    async def _analyze_objects(self, objects: List[DatabaseObject]):
+        """Analyze objects and collect sample data"""
         
-        filtered = []
-        excluded_count = 0
+        pbar = tqdm(objects, desc="Analyzing objects", unit="obj")
         
-        for obj in objects:
-            # Only exclude clearly problematic objects
-            if self._should_exclude_object_critical_only(obj):
-                excluded_count += 1
-                continue
-            
-            filtered.append(obj)
-        
-        # Sort by priority score (business relevance + size)
-        filtered.sort(key=lambda x: getattr(x, 'priority_score', 0), reverse=True)
-        
-        # Apply limit only if specified
-        if limit and limit < len(filtered):
-            filtered = filtered[:limit]
-            print(f"   🎯 Applied limit: processing top {limit} priority objects")
-        
-        self.stats.objects_excluded = excluded_count
-        return filtered
-    
-    def _should_exclude_object_critical_only(self, obj: DatabaseObject) -> bool:
-        """MINIMAL exclusion - only exclude truly broken objects"""
-        name_lower = obj.name.lower()
-        
-        # Only exclude clearly broken/system objects
-        critical_exclusions = [
-            'msreplication', 'trace_xe', 'syscommittab', 'sysdiagrams',
-            'dtproperties', '__msnpeer', '__msdbm', 'mspeer_',
-            'corrupted', 'broken', 'damaged', 'invalid',
-            'conflict_', 'reseed_', 'msmerge_', 
-            'businesspointidentificationwiththirdpartydata', 'timingview'
-        ]
-        
-        for exclusion in critical_exclusions:
-            if exclusion in name_lower:
-                return True
-        
-        return False
-    
-    def _log_robust_discovery_plan(self, all_objects: List[DatabaseObject], filtered_objects: List[DatabaseObject]):
-        """Log the robust discovery plan"""
-        tables = sum(1 for obj in filtered_objects if obj.object_type in ['BASE TABLE', 'TABLE'])
-        views = sum(1 for obj in filtered_objects if obj.object_type == 'VIEW')
-        
-        print(f"📊 ROBUST Discovery Plan:")
-        print(f"   • Total objects in database: {len(all_objects)}")
-        print(f"   • Objects to process: {len(filtered_objects)} (Tables: {tables}, Views: {views})")
-        print(f"   • Excluded objects: {self.stats.objects_excluded}")
-        print(f"   • ADAPTIVE parallel workers: {self.adaptive_workers}")
-        print(f"   • ADAPTIVE batch size: {self.adaptive_batch_size}")
-        print(f"   • Samples per object: 5 rows")
-        print(f"   • ADAPTIVE timeout: {self.adaptive_timeout}s per object")
-        
-        # More realistic time estimation
-        estimated_minutes = (len(filtered_objects) / self.adaptive_workers) * 0.75  # 45 seconds per worker batch
-        print(f"   • Estimated completion: ~{estimated_minutes:.1f} minutes")
-        print(f"   🛡️  ROBUST MODE: Includes retry logic and error recovery")
-    
-    async def _process_objects_robust_batching(self, objects: List[DatabaseObject]):
-        """ROBUST processing with adaptive batching and comprehensive error handling"""
-        print(f"\n🔄 ROBUST processing {len(objects)} objects with {self.adaptive_workers} workers...")
-        
-        # Progress bar
-        pbar = tqdm(total=len(objects), desc="Robust analysis", unit="obj")
-        
-        # Process in adaptive batches
-        batch_size = self.adaptive_batch_size
-        
-        for i in range(0, len(objects), batch_size):
-            batch = objects[i:i + batch_size]
-            batch_number = (i // batch_size) + 1
-            total_batches = (len(objects) + batch_size - 1) // batch_size
-            
-            print(f"\n   📦 Processing batch {batch_number}/{total_batches} ({len(batch)} objects)")
-            
-            # Process batch with robust error handling
-            await self._process_batch_with_retry(batch, pbar)
-            
-            # Brief pause between batches to prevent overwhelming the database
-            await asyncio.sleep(0.5)
+        for obj in pbar:
+            try:
+                table_info = await asyncio.to_thread(self._analyze_single_object, obj)
+                if table_info:
+                    self.tables.append(table_info)
+                    
+                pbar.set_description(f"Analyzed {len(self.tables)}/{len(objects)}")
+                
+            except Exception as e:
+                print(f"   ⚠️ Failed to analyze {obj.name}: {e}")
         
         pbar.close()
     
-    async def _process_batch_with_retry(self, batch: List[DatabaseObject], pbar: tqdm):
-        """Process a batch with comprehensive error handling and retry logic"""
+    def _analyze_single_object(self, obj: DatabaseObject) -> Optional[TableInfo]:
+        """Analyze a single database object"""
         
-        # Use ThreadPoolExecutor with adaptive workers
-        with concurrent.futures.ThreadPoolExecutor(max_workers=self.adaptive_workers) as executor:
-            # Submit all tasks in batch
-            future_to_object = {
-                executor.submit(self._analyze_object_robust, obj): obj 
-                for obj in batch
-            }
-            
-            # Process completed futures with extended timeout
-            batch_timeout = self.adaptive_timeout * 2  # Double timeout for batch
-            completed_count = 0
-            
-            try:
-                # Use as_completed with timeout
-                for future in concurrent.futures.as_completed(future_to_object, timeout=batch_timeout):
-                    obj = future_to_object[future]
-                    completed_count += 1
-                    
-                    try:
-                        result = future.result(timeout=self.adaptive_timeout)
-                        if result:
-                            self.tables.append(result)
-                            self.stats.successful_analyses += 1
-                        else:
-                            # Add to failed objects for retry
-                            self.failed_objects.append(obj)
-                            self.stats.analysis_errors += 1
-                            
-                    except (concurrent.futures.TimeoutError, Exception) as e:
-                        # Add to failed objects for retry
-                        self.failed_objects.append(obj)
-                        self.stats.analysis_errors += 1
-                    
-                    self.stats.objects_processed += 1
-                    pbar.update(1)
-                    
-                    # Update progress description
-                    success_rate = (self.stats.successful_analyses / max(self.stats.objects_processed, 1)) * 100
-                    pbar.set_description(f"Success: {self.stats.successful_analyses}/{self.stats.objects_processed} ({success_rate:.1f}%)")
-                    
-            except concurrent.futures.TimeoutError:
-                # Handle batch timeout - mark remaining as failed
-                print(f"   ⚠️ Batch timeout - {len(batch) - completed_count} objects will be retried")
-                for future, obj in future_to_object.items():
-                    if not future.done():
-                        self.failed_objects.append(obj)
-                        self.stats.analysis_errors += 1
-                        self.stats.objects_processed += 1
-                        pbar.update(1)
-    
-    def _analyze_object_robust(self, obj: DatabaseObject) -> Optional[TableInfo]:
-        """ROBUST object analysis with comprehensive error handling"""
         try:
-            # Use separate connection for thread safety
             with self.get_database_connection() as conn:
-                conn.timeout = self.adaptive_timeout
                 cursor = conn.cursor()
                 
-                return self._analyze_object_with_5_samples(cursor, obj)
+                # Get column information
+                columns = self._get_columns(cursor, obj.schema, obj.name)
+                if not columns:
+                    return None
+                
+                # Get sample data
+                sample_data = self._get_sample_data(cursor, obj)
+                
+                # Get foreign keys
+                foreign_keys = self._get_foreign_keys(cursor, obj.schema, obj.name)
+                
+                return TableInfo(
+                    name=obj.name,
+                    schema=obj.schema,
+                    full_name=f"[{obj.schema}].[{obj.name}]",
+                    object_type=obj.object_type,
+                    row_count=obj.estimated_rows,
+                    columns=columns,
+                    sample_data=sample_data,
+                    relationships=foreign_keys
+                )
                 
         except Exception:
-            # Silent fail - object will be added to retry list
             return None
     
-    def _analyze_object_with_5_samples(self, cursor, obj: DatabaseObject) -> Optional[TableInfo]:
-        """Analyze object with exactly 5 samples using multiple fallback strategies"""
-        full_name = f"[{obj.schema}].[{obj.name}]"
+    def _get_columns(self, cursor, schema: str, name: str) -> List[Dict[str, Any]]:
+        """Get column information"""
         
-        try:
-            # Get column info
-            columns = self._get_columns_fast(cursor, obj.schema, obj.name)
-            if not columns:
-                return None
-            
-            # Get 5 samples with multiple fallback strategies
-            sample_data = self._get_5_samples_robust(cursor, obj, full_name)
-            
-            return TableInfo(
-                name=obj.name,
-                schema=obj.schema,
-                full_name=full_name,
-                object_type=obj.object_type,
-                row_count=obj.estimated_rows,
-                columns=columns,
-                sample_data=sample_data,
-                relationships=[],
-                query_performance={
-                    'robust_analysis': True, 
-                    'samples_requested': 5, 
-                    'samples_retrieved': len(sample_data),
-                    'priority_score': getattr(obj, 'priority_score', 0)
-                }
-            )
-            
-        except Exception:
-            return None
-    
-    def _get_columns_fast(self, cursor, schema: str, name: str) -> List[Dict[str, Any]]:
-        """Get column info with fast query"""
         query = """
         SELECT 
-            COLUMN_NAME,
-            DATA_TYPE,
-            IS_NULLABLE,
-            COLUMN_DEFAULT
-        FROM INFORMATION_SCHEMA.COLUMNS
-        WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
-        ORDER BY ORDINAL_POSITION
+            c.COLUMN_NAME,
+            c.DATA_TYPE,
+            c.IS_NULLABLE,
+            c.COLUMN_DEFAULT,
+            CASE WHEN pk.COLUMN_NAME IS NOT NULL THEN 1 ELSE 0 END as is_primary_key
+        FROM INFORMATION_SCHEMA.COLUMNS c
+        LEFT JOIN (
+            SELECT ku.COLUMN_NAME
+            FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
+            JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE ku 
+                ON tc.CONSTRAINT_NAME = ku.CONSTRAINT_NAME
+            WHERE tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
+              AND tc.TABLE_SCHEMA = ?
+              AND tc.TABLE_NAME = ?
+        ) pk ON c.COLUMN_NAME = pk.COLUMN_NAME
+        WHERE c.TABLE_SCHEMA = ? AND c.TABLE_NAME = ?
+        ORDER BY c.ORDINAL_POSITION
         """
         
         try:
-            cursor.execute(query, schema, name)
+            cursor.execute(query, schema, name, schema, name)
             columns = []
             
             for row in cursor.fetchall():
@@ -422,32 +232,30 @@ class RobustDatabaseDiscovery:
                     'data_type': row[1],
                     'nullable': row[2] == 'YES',
                     'default': row[3],
-                    'is_primary_key': False,
-                    'is_foreign_key': False
+                    'is_primary_key': bool(row[4])
                 })
             
             return columns
         except:
             return []
     
-    def _get_5_samples_robust(self, cursor, obj: DatabaseObject, full_name: str) -> List[Dict[str, Any]]:
-        """Get exactly 5 samples with robust fallback strategies"""
+    def _get_sample_data(self, cursor, obj: DatabaseObject) -> List[Dict[str, Any]]:
+        """Get 5 sample rows with multiple fallback strategies"""
         
-        # Multiple strategies based on object type and priority
-        if obj.object_type in ['BASE TABLE', 'TABLE']:
+        full_name = f"[{obj.schema}].[{obj.name}]"
+        
+        # Different strategies based on object type
+        if obj.object_type == 'VIEW':
             strategies = [
-                f"SELECT TOP 5 * FROM {full_name} OPTION (FAST 5)",
-                f"SELECT TOP 5 * FROM {full_name} WITH (NOLOCK)",
                 f"SELECT TOP 5 * FROM {full_name}",
                 f"SELECT TOP 3 * FROM {full_name}",
                 f"SELECT TOP 1 * FROM {full_name}"
             ]
-        else:  # Views
+        else:
             strategies = [
                 f"SELECT TOP 5 * FROM {full_name} OPTION (FAST 5)",
+                f"SELECT TOP 5 * FROM {full_name} WITH (NOLOCK)",
                 f"SELECT TOP 5 * FROM {full_name}",
-                f"SELECT TOP 3 * FROM {full_name}",
-                f"SELECT TOP 2 * FROM {full_name}",
                 f"SELECT TOP 1 * FROM {full_name}"
             ]
         
@@ -461,114 +269,216 @@ class RobustDatabaseDiscovery:
                 col_names = [col[0] for col in cursor.description]
                 sample_data = []
                 
-                # Collect up to 5 rows
-                rows_collected = 0
-                for row in cursor.fetchall():
-                    if rows_collected >= 5:
-                        break
-                    
+                for row in cursor.fetchmany(5):
                     row_dict = {}
                     for i, value in enumerate(row):
                         if i < len(col_names):
-                            row_dict[col_names[i]] = safe_database_value(value)
+                            row_dict[col_names[i]] = self._safe_value(value)
                     sample_data.append(row_dict)
-                    rows_collected += 1
                 
                 if sample_data:
                     return sample_data
-                
+                    
             except:
-                continue  # Try next strategy
+                continue
         
-        return []  # Return empty if all strategies fail
+        return []
     
-    async def _retry_failed_objects(self):
-        """Retry failed objects with single-threaded, conservative approach"""
-        if not self.failed_objects:
+    def _get_foreign_keys(self, cursor, schema: str, name: str) -> List[str]:
+        """Get foreign key relationships"""
+        
+        query = """
+        SELECT 
+            OBJECT_SCHEMA_NAME(f.referenced_object_id) + '.' + OBJECT_NAME(f.referenced_object_id) as referenced_table,
+            COL_NAME(f.parent_object_id, f.parent_column_id) as column_name,
+            COL_NAME(f.referenced_object_id, f.referenced_column_id) as referenced_column
+        FROM sys.foreign_key_columns f
+        WHERE OBJECT_SCHEMA_NAME(f.parent_object_id) = ?
+          AND OBJECT_NAME(f.parent_object_id) = ?
+        """
+        
+        try:
+            cursor.execute(query, schema, name)
+            relationships = []
+            
+            for row in cursor.fetchall():
+                relationships.append(f"{row[1]} -> {row[0]}.{row[2]}")
+            
+            return relationships
+        except:
+            return []
+    
+    async def _extract_view_definitions(self):
+        """Extract view definitions for relationship mining"""
+        
+        view_tables = [t for t in self.tables if t.object_type == 'VIEW']
+        if not view_tables:
+            print("   📋 No views found")
             return
         
-        print(f"\n🔄 Retrying {len(self.failed_objects)} failed objects with conservative approach...")
+        print(f"   👁️ Extracting definitions for {len(view_tables)} views...")
         
-        retry_pbar = tqdm(self.failed_objects, desc="Retrying failed objects", unit="obj")
-        retry_successes = 0
+        query = """
+        SELECT 
+            SCHEMA_NAME(v.schema_id) + '.' + v.name as view_name,
+            m.definition
+        FROM sys.views v
+        JOIN sys.sql_modules m ON v.object_id = m.object_id
+        WHERE SCHEMA_NAME(v.schema_id) + '.' + v.name = ?
+        """
         
-        for obj in retry_pbar:
-            try:
-                # Single-threaded retry with longer timeout
-                result = await asyncio.to_thread(self._analyze_object_conservative, obj)
-                if result:
-                    self.tables.append(result)
-                    self.stats.successful_analyses += 1
-                    retry_successes += 1
-                
-                # Small delay between retries
-                await asyncio.sleep(0.1)
-                
-            except Exception:
-                pass  # Skip objects that fail even on retry
-        
-        retry_pbar.close()
-        print(f"   ✅ Retry recovered {retry_successes} additional objects")
-        
-        # Clear failed objects list
-        self.failed_objects.clear()
-    
-    def _analyze_object_conservative(self, obj: DatabaseObject) -> Optional[TableInfo]:
-        """Conservative single-threaded analysis for retry scenarios"""
         try:
             with self.get_database_connection() as conn:
-                conn.timeout = 60  # Longer timeout for retries
                 cursor = conn.cursor()
                 
-                # Use most conservative sampling strategy
-                full_name = f"[{obj.schema}].[{obj.name}]"
-                
-                # Get basic column info
-                columns = self._get_columns_fast(cursor, obj.schema, obj.name)
-                if not columns:
-                    return None
-                
-                # Use most conservative sample strategy
-                try:
-                    cursor.execute(f"SELECT TOP 1 * FROM {full_name}")
-                    if cursor.description:
-                        col_names = [col[0] for col in cursor.description]
-                        sample_data = []
-                        
-                        for row in cursor.fetchall():
-                            row_dict = {}
-                            for i, value in enumerate(row):
-                                if i < len(col_names):
-                                    row_dict[col_names[i]] = safe_database_value(value)
-                            sample_data.append(row_dict)
-                            break  # Only get 1 row for conservative retry
-                        
-                        return TableInfo(
-                            name=obj.name,
-                            schema=obj.schema,
-                            full_name=full_name,
-                            object_type=obj.object_type,
-                            row_count=obj.estimated_rows,
-                            columns=columns,
-                            sample_data=sample_data,
-                            relationships=[],
-                            query_performance={'conservative_retry': True, 'samples_retrieved': len(sample_data)}
-                        )
-                except:
-                    pass
-                
-                return None
-                
-        except Exception:
-            return None
+                for view_table in view_tables:
+                    view_name = f"{view_table.schema}.{view_table.name}"
+                    
+                    try:
+                        cursor.execute(query, view_name)
+                        row = cursor.fetchone()
+                        if row:
+                            self.view_definitions[view_name] = row[1]
+                    except:
+                        continue
+            
+            print(f"   ✅ Extracted {len(self.view_definitions)} view definitions")
+            
+        except Exception as e:
+            print(f"   ⚠️ View definition extraction failed: {e}")
     
-    async def _save_discovery_results(self):
-        """Save discovery results with comprehensive metadata"""
-        print(f"\n💾 Saving results for {len(self.tables)} objects...")
+    def _discover_relationships(self):
+        """Discover relationships using multiple methods"""
+        
+        # Method 1: Foreign key relationships
+        self._discover_foreign_key_relationships()
+        
+        # Method 2: Column name pattern relationships
+        self._discover_pattern_relationships()
+        
+        # Method 3: View-based relationships
+        self._discover_view_relationships()
+        
+        print(f"   ✅ Discovered {len(self.relationships)} relationships")
+    
+    def _discover_foreign_key_relationships(self):
+        """Discover explicit foreign key relationships"""
+        
+        for table in self.tables:
+            for fk_info in table.relationships:
+                if '->' in fk_info:
+                    parts = fk_info.split(' -> ')
+                    if len(parts) == 2:
+                        referenced_table = parts[1].split('.')[0]
+                        
+                        self.relationships.append(Relationship(
+                            from_table=table.full_name,
+                            to_table=referenced_table,
+                            relationship_type='foreign_key',
+                            confidence=0.95,
+                            description=f"Foreign key: {fk_info}"
+                        ))
+    
+    def _discover_pattern_relationships(self):
+        """Discover relationships based on column naming patterns"""
+        
+        # Create lookup for tables by name patterns
+        table_lookup = {}
+        for table in self.tables:
+            table_lookup[table.name.lower()] = table.full_name
+        
+        for table in self.tables:
+            column_names = [col['name'].lower() for col in table.columns]
+            
+            for col_name in column_names:
+                # Look for ID columns that reference other tables
+                if col_name.endswith('id') and col_name != 'id':
+                    entity_name = col_name[:-2]  # Remove 'id'
+                    
+                    # Find matching table
+                    for table_name, full_name in table_lookup.items():
+                        if (entity_name in table_name or table_name in entity_name) and full_name != table.full_name:
+                            self.relationships.append(Relationship(
+                                from_table=table.full_name,
+                                to_table=full_name,
+                                relationship_type='pattern_match',
+                                confidence=0.7,
+                                description=f"Column pattern: {col_name}"
+                            ))
+                            break
+    
+    def _discover_view_relationships(self):
+        """Discover relationships from view definitions"""
+        
+        for view_name, definition in self.view_definitions.items():
+            if not definition:
+                continue
+            
+            # Simple JOIN pattern extraction
+            definition_upper = definition.upper()
+            
+            # Look for JOIN patterns
+            if 'JOIN' in definition_upper:
+                # Extract table names from JOIN clauses (simplified)
+                words = definition_upper.split()
+                
+                for i, word in enumerate(words):
+                    if word == 'JOIN' and i + 1 < len(words):
+                        joined_table = words[i + 1].strip('[]')
+                        
+                        # Find matching table in our list
+                        for table in self.tables:
+                            if joined_table.lower() in table.full_name.lower():
+                                self.relationships.append(Relationship(
+                                    from_table=f"[{view_name.split('.')[0]}].[{view_name.split('.')[1]}]",
+                                    to_table=table.full_name,
+                                    relationship_type='view_join',
+                                    confidence=0.8,
+                                    description=f"View join pattern in {view_name}"
+                                ))
+                                break
+    
+    def _safe_value(self, value) -> Any:
+        """Convert database value to safe format"""
+        if value is None:
+            return None
+        elif isinstance(value, datetime):
+            return value.isoformat()
+        elif isinstance(value, (str, int, float, bool)):
+            return value
+        else:
+            return str(value)[:200]  # Truncate long values
+    
+    def _show_discovery_summary(self):
+        """Show discovery summary"""
+        
+        table_count = sum(1 for t in self.tables if t.object_type in ['BASE TABLE', 'TABLE'])
+        view_count = sum(1 for t in self.tables if t.object_type == 'VIEW')
+        
+        total_samples = sum(len(table.sample_data) for table in self.tables)
+        
+        print(f"\n📊 DISCOVERY SUMMARY:")
+        print(f"   📋 Objects analyzed: {len(self.tables)} (Tables: {table_count}, Views: {view_count})")
+        print(f"   📝 Sample rows collected: {total_samples}")
+        print(f"   👁️ View definitions: {len(self.view_definitions)}")
+        print(f"   🔗 Relationships discovered: {len(self.relationships)}")
+        
+        # Show relationship types
+        if self.relationships:
+            rel_types = {}
+            for rel in self.relationships:
+                rel_types[rel.relationship_type] = rel_types.get(rel.relationship_type, 0) + 1
+            
+            print(f"   🔗 Relationship types:")
+            for rel_type, count in rel_types.items():
+                print(f"      • {rel_type}: {count}")
+    
+    def _save_to_cache(self):
+        """Save discovery results to cache"""
         
         cache_file = self.config.get_cache_path("database_structure.json")
         
-        # Convert TableInfo objects to dictionaries
+        # Convert to dictionary format
         tables_data = []
         for table in self.tables:
             tables_data.append({
@@ -579,65 +489,36 @@ class RobustDatabaseDiscovery:
                 'row_count': table.row_count,
                 'columns': table.columns,
                 'sample_data': table.sample_data,
-                'relationships': table.relationships,
-                'query_performance': table.query_performance
+                'relationships': table.relationships
+            })
+        
+        relationships_data = []
+        for rel in self.relationships:
+            relationships_data.append({
+                'from_table': rel.from_table,
+                'to_table': rel.to_table,
+                'relationship_type': rel.relationship_type,
+                'confidence': rel.confidence,
+                'description': rel.description
             })
         
         data = {
             'tables': tables_data,
+            'relationships': relationships_data,
+            'view_definitions': self.view_definitions,
             'created': datetime.now().isoformat(),
-            'version': '5.0-robust-adaptive',
-            'total_objects_analyzed': len(self.tables),
-            'samples_per_object_target': 5,
-            'analysis_stats': self.stats.to_dict(),
-            'adaptive_config_used': {
-                'adaptive_workers': self.adaptive_workers,
-                'adaptive_batch_size': self.adaptive_batch_size,
-                'adaptive_timeout': self.adaptive_timeout,
-                'original_max_workers': self.config.max_parallel_workers,
-                'failed_objects_retried': len(self.failed_objects) == 0
-            }
+            'version': '2.0-enhanced'
         }
         
         try:
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False, default=str)
-            print(f"   ✅ Results saved to {cache_file}")
         except Exception as e:
-            print(f"   ❌ Failed to save cache: {e}")
+            print(f"   ⚠️ Failed to save cache: {e}")
     
-    def _log_completion_stats(self):
-        """Log detailed completion statistics"""
-        tables = sum(1 for t in self.tables if t.object_type in ['BASE TABLE', 'TABLE'])
-        views = sum(1 for t in self.tables if t.object_type == 'VIEW')
+    def _load_from_cache(self) -> bool:
+        """Load from cache if available"""
         
-        print(f"\n✅ ROBUST discovery completed!")
-        print(f"   📊 Total processed: {self.stats.objects_processed} objects")
-        print(f"   ✅ Successful: {self.stats.successful_analyses} (Tables: {tables}, Views: {views})")
-        print(f"   ❌ Failed (final): {self.stats.analysis_errors}")
-        print(f"   ⏭️ Excluded: {self.stats.objects_excluded}")
-        
-        if self.stats.objects_processed > 0:
-            success_rate = (self.stats.successful_analyses / self.stats.objects_processed) * 100
-            print(f"   📈 Final success rate: {success_rate:.1f}%")
-        
-        # Sample statistics
-        total_samples = sum(len(table.sample_data) for table in self.tables)
-        avg_samples = total_samples / len(self.tables) if self.tables else 0
-        print(f"   📝 Total samples collected: {total_samples} rows")
-        print(f"   📊 Average samples per object: {avg_samples:.1f}")
-        
-        # Show sample results
-        if self.tables:
-            print(f"\n📋 Sample discovered objects (prioritized):")
-            for i, table in enumerate(self.tables[:8]):
-                cols = len(table.columns)
-                samples = len(table.sample_data)
-                priority = table.query_performance.get('priority_score', 0)
-                print(f"   {i+1}. {table.full_name} ({table.object_type}) - {cols} cols, {samples} samples (priority: {priority})")
-    
-    def load_from_cache(self) -> bool:
-        """Load from cache if available and recent"""
         cache_file = self.config.get_cache_path("database_structure.json")
         
         if not cache_file.exists():
@@ -652,6 +533,7 @@ class RobustDatabaseDiscovery:
             with open(cache_file, 'r', encoding='utf-8') as f:
                 data = json.load(f)
             
+            # Load tables
             if 'tables' in data:
                 self.tables = []
                 for table_data in data['tables']:
@@ -663,26 +545,43 @@ class RobustDatabaseDiscovery:
                         row_count=table_data['row_count'],
                         columns=table_data['columns'],
                         sample_data=table_data['sample_data'],
-                        relationships=table_data.get('relationships', []),
-                        query_performance=table_data.get('query_performance', {})
+                        relationships=table_data.get('relationships', [])
                     )
                     self.tables.append(table)
-                
-                print(f"   📊 Cache contains {len(self.tables)} objects")
-                return True
-                
+            
+            # Load relationships
+            if 'relationships' in data:
+                self.relationships = []
+                for rel_data in data['relationships']:
+                    self.relationships.append(Relationship(
+                        from_table=rel_data['from_table'],
+                        to_table=rel_data['to_table'],
+                        relationship_type=rel_data['relationship_type'],
+                        confidence=rel_data['confidence'],
+                        description=rel_data.get('description', '')
+                    ))
+            
+            # Load view definitions
+            self.view_definitions = data.get('view_definitions', {})
+            
+            return True
+            
         except Exception as e:
             print(f"⚠️ Cache load failed: {e}")
-        
-        return False
+            return False
+    
+    def load_from_cache(self) -> bool:
+        """Public method to load from cache"""
+        return self._load_from_cache()
     
     def get_tables(self) -> List[TableInfo]:
         """Get discovered tables"""
         return self.tables
     
-    def get_stats(self) -> AnalysisStats:
-        """Get discovery statistics"""
-        return self.stats
-
-# Update the main discovery class to use the robust version
-DatabaseDiscovery = RobustDatabaseDiscovery
+    def get_relationships(self) -> List[Relationship]:
+        """Get discovered relationships"""
+        return self.relationships
+    
+    def get_view_definitions(self) -> Dict[str, str]:
+        """Get view definitions"""
+        return self.view_definitions

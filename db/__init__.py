@@ -1,5 +1,6 @@
 """
-Database operations module for discovery and connection management
+Enhanced Database Discovery Module
+Implements view definition mining and comprehensive relationship discovery
 """
 
 from .discovery import DatabaseDiscovery

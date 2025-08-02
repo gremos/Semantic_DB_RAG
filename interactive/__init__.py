@@ -1,15 +1,8 @@
 """
-Simplified interactive query interface module - matching actual implementation
+4-Stage Automated Query Pipeline Module
+Implements business intent analysis, smart table selection, relationship resolution, and validated SQL generation
 """
 
-from .query_interface import SimpleQueryInterface, SimpleLLMClient
+from .query_interface import QueryInterface, QueryLLMClient
 
-# Maintain backward compatibility with aliases
-IntelligentQueryInterface = SimpleQueryInterface
-EnhancedQueryInterface = SimpleQueryInterface
-QueryInterface = SimpleQueryInterface
-IntelligentLLMClient = SimpleLLMClient
-InteractiveLLMClient = SimpleLLMClient
-
-__all__ = ["SimpleQueryInterface", "SimpleLLMClient", "IntelligentQueryInterface", 
-           "EnhancedQueryInterface", "QueryInterface", "IntelligentLLMClient", "InteractiveLLMClient"]
+__all__ = ["QueryInterface", "QueryLLMClient"]

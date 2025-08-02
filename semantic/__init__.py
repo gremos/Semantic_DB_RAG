@@ -1,21 +1,8 @@
 """
-Simplified semantic analysis module - matching actual implementation
+Enhanced Semantic Analysis Module
+Implements business domain analysis and entity classification with LLM enhancement
 """
 
-from .analysis import (
-    SimpleSemanticAnalyzer,
-    SimpleLLMClient
-)
+from .analysis import SemanticAnalyzer, LLMClient
 
-# Maintain backward compatibility with aliases
-EnhancedSemanticAnalyzer = SimpleSemanticAnalyzer
-IntelligentSemanticAnalyzer = SimpleSemanticAnalyzer  
-SemanticAnalyzer = SimpleSemanticAnalyzer
-
-__all__ = [
-    "SimpleSemanticAnalyzer",
-    "SimpleLLMClient", 
-    "EnhancedSemanticAnalyzer",
-    "IntelligentSemanticAnalyzer",
-    "SemanticAnalyzer"
-]
+__all__ = ["SemanticAnalyzer", "LLMClient"]
