@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Enhanced 4-Stage Automated Query Pipeline - Fixed Schema Reading
-Reads actual table schemas from database_structure.json instead of guessing
+Data-Driven 4-Stage Query Pipeline - Generic and Sample-Data Based
+Uses actual table content instead of entity classifications
 """
 
 import json
 import pyodbc
 import time
 import asyncio
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Set
 from pathlib import Path
+from datetime import datetime
+import re
 
 # Azure OpenAI
 from langchain_openai import AzureChatOpenAI
@@ -19,8 +21,8 @@ from langchain.schema import HumanMessage, SystemMessage
 from shared.config import Config
 from shared.models import TableInfo, BusinessDomain, Relationship, QueryResult
 
-class EnhancedQueryLLMClient:
-    """Enhanced LLM client with accurate schema information"""
+class DataDrivenLLMClient:
+    """LLM client that uses actual data content instead of entity types"""
     
     def __init__(self, config: Config):
         self.llm = AzureChatOpenAI(
@@ -32,33 +34,37 @@ class EnhancedQueryLLMClient:
             request_timeout=60
         )
     
-    async def analyze_intent(self, question: str, domain_info: str) -> Dict[str, Any]:
-        """Stage 1: Analyze business intent"""
+    async def analyze_business_intent(self, question: str, domain_info: str) -> Dict[str, Any]:
+        """Stage 1: Extract business intent from natural language question"""
+        
         prompt = f"""
-Analyze this business question and extract the intent:
+Analyze this business question and extract the core intent:
 
 QUESTION: "{question}"
 BUSINESS DOMAIN: {domain_info}
 
-Determine:
-1. Primary entities needed (Customer, Payment, Order, Product, User, etc.)
-2. Operation type (count, sum, list, analyze, etc.)
-3. Filters or conditions (date ranges, specific criteria)
-4. Expected result type (number, list, summary, etc.)
+Extract:
+1. Main Action: What does the user want to do? (count, list, show, calculate, analyze, etc.)
+2. Target Subject: What are they asking about? (customers, payments, orders, people, transactions, etc.)
+3. Filters/Conditions: Any date ranges, status filters, amount thresholds, etc.
+4. Expected Result: Single number, list of records, summary, etc.
+
+Think about what KIND OF DATA would be needed to answer this question, not specific entity types.
 
 Respond with JSON only:
 {{
-  "primary_entities": ["Customer", "Payment"],
-  "operation_type": "count",
-  "filters": ["date_2025"],
-  "result_type": "number",
-  "business_intent": "Count customers who made payments in 2025"
+  "action": "count",
+  "subject": "people who made payments", 
+  "filters": ["year 2025", "paid transactions"],
+  "result_type": "single_number",
+  "data_requirements": ["person/customer identifiers", "payment/transaction records", "date fields"],
+  "business_question": "How many unique people made payments in 2025?"
 }}
 """
         
         try:
             messages = [
-                SystemMessage(content="You are a business analyst. Extract business intent from questions. Respond with JSON only."),
+                SystemMessage(content="You are a business analyst. Extract intent from questions. Think about DATA CONTENT, not entity types. Respond with JSON only."),
                 HumanMessage(content=prompt)
             ]
             response = await asyncio.to_thread(self.llm.invoke, messages)
@@ -67,43 +73,53 @@ Respond with JSON only:
             print(f"   ⚠️ Intent analysis failed: {e}")
             return {}
     
-    async def select_tables(self, intent: Dict[str, Any], available_tables: List[Dict]) -> List[str]:
-        """Stage 2: Select relevant tables using exact table information"""
+    async def select_tables_by_content(self, intent: Dict[str, Any], table_analysis: List[Dict]) -> List[str]:
+        """Stage 2: Select tables based on actual data content analysis"""
         
-        # Format tables with complete information
+        # Create rich table descriptions with sample data analysis
         table_descriptions = []
-        for table in available_tables:
+        for table in table_analysis:
+            
+            # Analyze what this table actually contains based on sample data
+            content_summary = table['content_analysis']
+            
             table_desc = f"""
 Table: {table['full_name']}
-Entity Type: {table['entity_type']} (confidence: {table['confidence']:.2f})
-Row Count: {table['row_count']}
+Rows: {table['row_count']}
+Data Content Analysis: {content_summary}
 Key Columns: {', '.join(table['key_columns'][:8])}
 Sample Data: {table['sample_preview']}
+Column Patterns: {table['column_patterns']}
+Data Types Present: {table['data_type_summary']}
 """
             table_descriptions.append(table_desc)
         
         prompt = f"""
-Based on this business intent, select the most relevant tables:
+Based on this business intent, select tables that contain the ACTUAL DATA needed:
 
-BUSINESS INTENT: {intent}
+BUSINESS INTENT: {json.dumps(intent, indent=2)}
 
-AVAILABLE TABLES:
+AVAILABLE TABLES WITH ACTUAL CONTENT ANALYSIS:
 {chr(10).join(table_descriptions)}
 
-Select 2-5 most relevant tables that can answer the question.
-Consider entity types, column names, and sample data.
-Return the EXACT table names as they appear above.
+Select 3-6 tables that actually contain the data needed to answer the question.
+Focus on:
+1. Tables that have data matching the subject (people, payments, transactions, etc.)
+2. Tables with relevant date fields for time-based filters
+3. Tables with identifiers that can be used for counting/linking
+
+Return EXACT table names as they appear above.
 
 Respond with JSON only:
 {{
   "selected_tables": ["[schema].[table1]", "[schema].[table2]"],
-  "reasoning": "brief explanation of selection"
+  "reasoning": "Table1 contains customer/people data with IDs. Table2 contains payment/transaction data with dates and amounts. These can be linked to count unique people who paid."
 }}
 """
         
         try:
             messages = [
-                SystemMessage(content="You are a database expert. Select relevant tables for queries. Use EXACT table names. Respond with JSON only."),
+                SystemMessage(content="You are a data analyst. Select tables based on ACTUAL DATA CONTENT, not table names or classifications. Use EXACT table names. Respond with JSON only."),
                 HumanMessage(content=prompt)
             ]
             response = await asyncio.to_thread(self.llm.invoke, messages)
@@ -113,25 +129,41 @@ Respond with JSON only:
             print(f"   ⚠️ Table selection failed: {e}")
             return []
     
-    async def resolve_relationships(self, selected_tables: List[str], table_schemas: Dict[str, Dict], relationships: List[Dict]) -> List[Dict]:
-        """Stage 3: Resolve table relationships using actual schemas"""
+    async def resolve_table_relationships(self, selected_tables: List[str], table_schemas: Dict[str, Dict], 
+                                         sample_data_analysis: Dict[str, Dict]) -> List[Dict]:
+        """Stage 3: Find relationships between tables using actual data analysis"""
         
-        # Prepare relationship information with actual column names
-        relevant_relationships = []
-        for rel in relationships:
-            if any(table_name in rel['from_table'] or table_name in rel['to_table'] for table_name in selected_tables):
-                relevant_relationships.append(rel)
+        # Prepare relationship analysis
+        relationship_info = []
+        
+        for i, table1 in enumerate(selected_tables):
+            for table2 in selected_tables[i+1:]:
+                if table1 in table_schemas and table2 in table_schemas:
+                    schema1 = table_schemas[table1]
+                    schema2 = table_schemas[table2]
+                    
+                    # Analyze potential relationships
+                    rel_analysis = self._analyze_table_relationship(
+                        table1, schema1, sample_data_analysis.get(table1, {}),
+                        table2, schema2, sample_data_analysis.get(table2, {})
+                    )
+                    
+                    if rel_analysis:
+                        relationship_info.append(rel_analysis)
         
         prompt = f"""
-Determine how to join these selected tables using their actual schemas:
+Analyze these tables and determine how to join them using ACTUAL COLUMN NAMES and DATA:
 
 SELECTED TABLES WITH SCHEMAS:
 {json.dumps({name: schema for name, schema in table_schemas.items() if name in selected_tables}, indent=2)}
 
-KNOWN RELATIONSHIPS:
-{json.dumps(relevant_relationships, indent=2)}
+POTENTIAL RELATIONSHIPS FOUND:
+{json.dumps(relationship_info, indent=2)}
 
-Determine the optimal JOIN strategy using the EXACT column names from the schemas above.
+Determine the optimal JOIN strategy using:
+1. EXACT column names from the schemas above
+2. Data patterns and common values found in sample data
+3. ID/identifier fields that appear to link tables
 
 Respond with JSON only:
 {{
@@ -139,8 +171,10 @@ Respond with JSON only:
     {{
       "from_table": "[schema].[table1]", 
       "to_table": "[schema].[table2]",
-      "join_condition": "t1.actual_column_id = t2.actual_id_column",
-      "join_type": "INNER JOIN"
+      "join_condition": "t1.ActualColumnName = t2.ActualColumnName",
+      "join_type": "INNER JOIN",
+      "confidence": 0.9,
+      "reasoning": "Found matching ID values in sample data"
     }}
   ],
   "join_order": ["table1", "table2", "table3"]
@@ -149,7 +183,7 @@ Respond with JSON only:
         
         try:
             messages = [
-                SystemMessage(content="You are a SQL expert. Design optimal table joins using EXACT column names from schemas. Respond with JSON only."),
+                SystemMessage(content="You are a database expert. Design JOINs using EXACT column names from schemas and data analysis. Respond with JSON only."),
                 HumanMessage(content=prompt)
             ]
             response = await asyncio.to_thread(self.llm.invoke, messages)
@@ -159,53 +193,40 @@ Respond with JSON only:
             print(f"   ⚠️ Relationship resolution failed: {e}")
             return []
     
-    async def generate_sql(self, intent: Dict[str, Any], table_schemas: Dict[str, Dict], joins: List[Dict]) -> str:
-        """Stage 4: Generate SQL using exact table schemas"""
+    async def generate_data_driven_sql(self, intent: Dict[str, Any], table_schemas: Dict[str, Dict], 
+                                      joins: List[Dict], sample_data_analysis: Dict[str, Dict]) -> str:
+        """Stage 4: Generate SQL using actual data understanding"""
         
-        # Format complete table schemas for SQL generation
-        schema_descriptions = []
-        for table_name, schema in table_schemas.items():
-            columns_list = []
-            for col in schema['columns']:
-                col_name = col['name']
-                col_type = col['data_type']
-                is_pk = " [PRIMARY KEY]" if col.get('is_primary_key', False) else ""
-                columns_list.append(f"  {col_name} ({col_type}){is_pk}")
-            
-            schema_desc = f"""
-TABLE: {table_name}
-COLUMNS:
-{chr(10).join(columns_list)}
-SAMPLE DATA: {schema.get('sample_preview', 'No sample data')}
-ROW COUNT: {schema.get('row_count', 0)}
-"""
-            schema_descriptions.append(schema_desc)
+        # Prepare complete context
+        sql_context = {
+            'intent': intent,
+            'table_schemas': table_schemas,
+            'joins': joins,
+            'sample_data_insights': sample_data_analysis
+        }
         
         prompt = f"""
-Generate SQL Server T-SQL query for this business question using the EXACT table and column names provided:
+Generate SQL Server T-SQL query based on actual data analysis:
 
-BUSINESS INTENT: {intent}
+COMPLETE CONTEXT:
+{json.dumps(sql_context, indent=2, default=str)}
 
-EXACT TABLE SCHEMAS:
-{chr(10).join(schema_descriptions)}
+REQUIREMENTS:
+1. Use EXACT table and column names from schemas
+2. Implement the business intent based on actual data content
+3. Use appropriate JOINs based on the relationship analysis
+4. Apply filters based on actual column names and data patterns
+5. Use proper SQL Server syntax with square brackets
+6. Return meaningful results based on what the data actually contains
 
-REQUIRED JOINS:
-{json.dumps(joins, indent=2)}
+For the business question: "{intent.get('business_question', 'Unknown question')}"
 
-IMPORTANT REQUIREMENTS:
-1. Use the EXACT table names and column names from the schemas above
-2. Use proper SQL Server syntax with square brackets for table/column names
-3. Implement the required joins correctly using the exact column names
-4. Include appropriate WHERE clauses for filters
-5. Use TOP 100 unless counting/summing
-6. Use meaningful column aliases
-
-Generate ONLY the complete, executable T-SQL query using the exact names provided above:
+Generate ONLY the complete, executable T-SQL query:
 """
         
         try:
             messages = [
-                SystemMessage(content="You are an expert SQL Server developer. Generate correct T-SQL queries using EXACT table and column names provided. Return only the SQL query."),
+                SystemMessage(content="You are an expert SQL developer. Generate queries based on ACTUAL DATA CONTENT and EXACT column names. Return only the SQL query."),
                 HumanMessage(content=prompt)
             ]
             response = await asyncio.to_thread(self.llm.invoke, messages)
@@ -213,6 +234,62 @@ Generate ONLY the complete, executable T-SQL query using the exact names provide
         except Exception as e:
             print(f"   ⚠️ SQL generation failed: {e}")
             return ""
+    
+    def _analyze_table_relationship(self, table1: str, schema1: Dict, sample1: Dict,
+                                   table2: str, schema2: Dict, sample2: Dict) -> Optional[Dict]:
+        """Analyze potential relationship between two tables using actual data"""
+        
+        cols1 = {col['name'].lower(): col for col in schema1.get('columns', [])}
+        cols2 = {col['name'].lower(): col for col in schema2.get('columns', [])}
+        
+        potential_links = []
+        
+        # Look for common column names
+        common_cols = set(cols1.keys()).intersection(set(cols2.keys()))
+        for col_name in common_cols:
+            if 'id' in col_name or col_name in ['code', 'key', 'number']:
+                potential_links.append({
+                    'type': 'common_column',
+                    'column': col_name,
+                    'table1_col': cols1[col_name]['name'],
+                    'table2_col': cols2[col_name]['name'],
+                    'confidence': 0.8
+                })
+        
+        # Look for ID reference patterns
+        for col1_name, col1_info in cols1.items():
+            if col1_name.endswith('_id') or col1_name.endswith('id'):
+                entity_name = col1_name.replace('_id', '').replace('id', '')
+                
+                # Check if table2 might be the referenced entity
+                if entity_name in table2.lower() or any(entity_name in col for col in cols2.keys()):
+                    # Look for ID column in table2
+                    if 'id' in cols2:
+                        potential_links.append({
+                            'type': 'foreign_key_pattern',
+                            'from_column': col1_info['name'],
+                            'to_column': cols2['id']['name'],
+                            'confidence': 0.7
+                        })
+        
+        # Analyze sample data for common values (simplified)
+        if sample1.get('id_values') and sample2.get('id_values'):
+            overlap = set(sample1['id_values']).intersection(set(sample2['id_values']))
+            if len(overlap) >= 2:
+                potential_links.append({
+                    'type': 'data_overlap',
+                    'common_values': len(overlap),
+                    'confidence': min(0.9, len(overlap) / 10)
+                })
+        
+        if potential_links:
+            return {
+                'table1': table1,
+                'table2': table2,
+                'potential_links': potential_links
+            }
+        
+        return None
     
     def _parse_json_response(self, response: str) -> Dict[str, Any]:
         """Parse JSON from LLM response"""
@@ -264,21 +341,22 @@ Generate ONLY the complete, executable T-SQL query using the exact names provide
         
         return ""
 
-class EnhancedQueryInterface:
-    """Enhanced 4-Stage Automated Query Pipeline with accurate schema reading"""
+class DataDrivenQueryInterface:
+    """Data-driven 4-Stage Query Pipeline using actual table content analysis"""
     
     def __init__(self, config: Config):
         self.config = config
-        self.llm_client = EnhancedQueryLLMClient(config)
+        self.llm_client = DataDrivenLLMClient(config)
         self.tables: List[TableInfo] = []
         self.domain: Optional[BusinessDomain] = None
         self.relationships: List[Relationship] = []
         self.database_schema: Dict[str, Dict] = {}  # Complete database schema
+        self.table_content_analysis: Dict[str, Dict] = {}  # Content analysis cache
     
     async def start_interactive_session(self, tables: List[TableInfo], 
                                       domain: Optional[BusinessDomain], 
                                       relationships: List[Relationship]):
-        """Start enhanced 4-stage automated query session"""
+        """Start data-driven 4-stage automated query session"""
         
         self.tables = tables
         self.domain = domain  
@@ -286,6 +364,10 @@ class EnhancedQueryInterface:
         
         # Load complete database schema from cache
         await self._load_database_schema()
+        
+        # Analyze table content using sample data
+        print("🔍 Analyzing table content using sample data...")
+        await self._analyze_table_content()
         
         # Show system capabilities
         self._show_system_capabilities()
@@ -306,14 +388,17 @@ class EnhancedQueryInterface:
                 elif question.lower() == 'debug':
                     self._show_debug_info()
                     continue
+                elif question.lower() == 'analyze':
+                    await self._show_content_analysis()
+                    continue
                 elif not question:
                     continue
                 
                 query_count += 1
-                print(f"🚀 Processing with enhanced 4-stage automated pipeline...")
+                print(f"🚀 Processing with data-driven 4-stage pipeline...")
                 
                 start_time = time.time()
-                result = await self._process_enhanced_4_stage_pipeline(question)
+                result = await self._process_data_driven_pipeline(question)
                 result.execution_time = time.time() - start_time
                 
                 print(f"⏱️ Completed in {result.execution_time:.1f}s")
@@ -328,7 +413,7 @@ class EnhancedQueryInterface:
                 print(f"❌ Error: {e}")
         
         print(f"\n📊 Session summary: {query_count} queries processed")
-        print("👋 Thanks for using the Enhanced 4-Stage Automated Query Pipeline!")
+        print("👋 Thanks for using the Data-Driven 4-Stage Query Pipeline!")
     
     async def _load_database_schema(self):
         """Load complete database schema from database_structure.json"""
@@ -363,14 +448,135 @@ class EnhancedQueryInterface:
         except Exception as e:
             print(f"⚠️ Failed to load database schema: {e}")
     
-    async def _process_enhanced_4_stage_pipeline(self, question: str) -> QueryResult:
-        """Execute the enhanced 4-stage automated pipeline with accurate schema reading"""
+    async def _analyze_table_content(self):
+        """Analyze what each table actually contains using sample data"""
+        
+        print(f"   🔍 Analyzing content of {len(self.database_schema)} tables...")
+        
+        for table_name, schema in self.database_schema.items():
+            self.table_content_analysis[table_name] = self._analyze_single_table_content(schema)
+        
+        print(f"   ✅ Content analysis completed")
+    
+    def _analyze_single_table_content(self, schema: Dict) -> Dict:
+        """Analyze what a single table contains based on its schema and sample data"""
+        
+        columns = schema.get('columns', [])
+        sample_data = schema.get('sample_data', [])
+        
+        analysis = {
+            'has_people_data': False,
+            'has_payment_data': False,
+            'has_date_fields': False,
+            'has_amount_fields': False,
+            'has_id_fields': False,
+            'has_name_fields': False,
+            'content_summary': '',
+            'key_columns': [],
+            'column_patterns': [],
+            'data_type_summary': {},
+            'sample_preview': '',
+            'id_values': []
+        }
+        
+        # Analyze columns
+        for col in columns:
+            col_name = col.get('name', '').lower()
+            data_type = col.get('data_type', '').lower()
+            
+            analysis['key_columns'].append(col.get('name', ''))
+            
+            # Data type summary
+            analysis['data_type_summary'][data_type] = analysis['data_type_summary'].get(data_type, 0) + 1
+            
+            # Pattern detection
+            if 'id' in col_name:
+                analysis['has_id_fields'] = True
+                analysis['column_patterns'].append('identifiers')
+            
+            if any(word in col_name for word in ['name', 'first', 'last', 'full', 'company']):
+                analysis['has_name_fields'] = True
+                analysis['column_patterns'].append('names')
+            
+            if any(word in col_name for word in ['date', 'time', 'created', 'modified', 'updated']):
+                analysis['has_date_fields'] = True
+                analysis['column_patterns'].append('dates')
+            
+            if any(word in col_name for word in ['amount', 'price', 'total', 'cost', 'value', 'sum']):
+                analysis['has_amount_fields'] = True
+                analysis['column_patterns'].append('amounts')
+            
+            if any(word in col_name for word in ['email', 'phone', 'address', 'contact']):
+                analysis['has_people_data'] = True
+                analysis['column_patterns'].append('contact_info')
+            
+            if any(word in col_name for word in ['payment', 'transaction', 'billing', 'charge']):
+                analysis['has_payment_data'] = True
+                analysis['column_patterns'].append('payment_info')
+        
+        # Analyze sample data
+        if sample_data:
+            first_row = sample_data[0]
+            
+            # Create sample preview
+            sample_items = []
+            id_values = []
+            
+            for key, value in list(first_row.items())[:4]:  # First 4 columns
+                if value is not None:
+                    value_str = str(value)[:30]
+                    sample_items.append(f"{key}: {value_str}")
+                    
+                    # Collect ID-like values
+                    if 'id' in key.lower() and str(value).isdigit():
+                        id_values.extend([str(row.get(key, '')) for row in sample_data[:3]])
+            
+            analysis['sample_preview'] = ", ".join(sample_items)
+            analysis['id_values'] = [v for v in id_values if v and v.isdigit()]
+            
+            # Enhanced content detection based on sample data
+            all_values = ' '.join(str(v) for row in sample_data for v in row.values() if v is not None).lower()
+            
+            if any(word in all_values for word in ['customer', 'client', '@', 'email']):
+                analysis['has_people_data'] = True
+            
+            if any(word in all_values for word in ['payment', 'transaction', '$', '€', 'amount']):
+                analysis['has_payment_data'] = True
+        
+        # Create content summary
+        content_parts = []
+        
+        if analysis['has_people_data']:
+            content_parts.append("people/customer data")
+        if analysis['has_payment_data']:
+            content_parts.append("payment/transaction data")
+        if analysis['has_id_fields']:
+            content_parts.append("identifier fields")
+        if analysis['has_date_fields']:
+            content_parts.append("date/time tracking")
+        if analysis['has_amount_fields']:
+            content_parts.append("amount/financial values")
+        if analysis['has_name_fields']:
+            content_parts.append("name/title fields")
+        
+        if content_parts:
+            analysis['content_summary'] = f"Contains {', '.join(content_parts)}"
+        else:
+            analysis['content_summary'] = "General data table"
+        
+        # Remove duplicates from patterns
+        analysis['column_patterns'] = list(set(analysis['column_patterns']))
+        
+        return analysis
+    
+    async def _process_data_driven_pipeline(self, question: str) -> QueryResult:
+        """Execute the data-driven 4-stage pipeline"""
         
         try:
             # Stage 1: Business Intent Analysis
             print("   🎯 Stage 1: Business Intent Analysis...")
-            domain_info = f"{self.domain.domain_type} - {self.domain.industry}" if self.domain else "Business Operations"
-            intent = await self.llm_client.analyze_intent(question, domain_info)
+            domain_info = f"{self.domain.domain_type}" if self.domain else "Business Operations"
+            intent = await self.llm_client.analyze_business_intent(question, domain_info)
             
             if not intent:
                 return QueryResult(
@@ -381,13 +587,32 @@ class EnhancedQueryInterface:
                     tables_used=[]
                 )
             
-            print(f"      📊 Intent: {intent.get('business_intent', 'Unknown')}")
-            print(f"      🎯 Entities: {', '.join(intent.get('primary_entities', []))}")
+            print(f"      📊 Intent: {intent.get('business_question', 'Unknown')}")
+            print(f"      🎯 Action: {intent.get('action', 'Unknown')}")
+            print(f"      📝 Subject: {intent.get('subject', 'Unknown')}")
             
-            # Stage 2: Smart Table Selection using complete schema
-            print("   📋 Stage 2: Smart Table Selection...")
-            available_tables = self._prepare_tables_with_complete_schema()
-            selected_table_names = await self.llm_client.select_tables(intent, available_tables)
+            # Stage 2: Content-Based Table Selection
+            print("   📋 Stage 2: Content-Based Table Selection...")
+            
+            # Prepare table analysis for selection
+            table_analysis = []
+            for table_name, content_analysis in self.table_content_analysis.items():
+                if table_name in self.database_schema:
+                    schema = self.database_schema[table_name]
+                    table_analysis.append({
+                        'full_name': table_name,
+                        'row_count': schema.get('row_count', 0),
+                        'content_analysis': content_analysis['content_summary'],
+                        'key_columns': content_analysis['key_columns'][:8],
+                        'sample_preview': content_analysis['sample_preview'],
+                        'column_patterns': content_analysis['column_patterns'],
+                        'data_type_summary': content_analysis['data_type_summary']
+                    })
+            
+            # Sort by relevance (tables with more data first)
+            table_analysis.sort(key=lambda x: x['row_count'], reverse=True)
+            
+            selected_table_names = await self.llm_client.select_tables_by_content(intent, table_analysis[:50])  # Top 50 tables
             
             if not selected_table_names:
                 return QueryResult(
@@ -399,22 +624,22 @@ class EnhancedQueryInterface:
                 )
             
             # Get actual table schemas for selected tables
-            selected_schemas = self._get_complete_table_schemas(selected_table_names)
+            selected_schemas = self._get_selected_table_schemas(selected_table_names)
             print(f"      ✅ Selected {len(selected_schemas)} tables:")
             for table_name in selected_schemas.keys():
-                entity_type = self._get_table_entity_type(table_name)
-                print(f"         • {table_name} ({entity_type})")
+                content = self.table_content_analysis.get(table_name, {}).get('content_summary', 'Unknown')
+                print(f"         • {table_name} ({content})")
             
-            # Stage 3: Relationship Resolution using actual schemas
-            print("   🔗 Stage 3: Relationship Resolution...")
-            available_relationships = self._prepare_relationships_for_resolution(selected_table_names)
-            joins = await self.llm_client.resolve_relationships(selected_table_names, selected_schemas, available_relationships)
+            # Stage 3: Data-Driven Relationship Resolution
+            print("   🔗 Stage 3: Data-Driven Relationship Resolution...")
+            sample_analysis = {name: self.table_content_analysis.get(name, {}) for name in selected_table_names}
+            joins = await self.llm_client.resolve_table_relationships(selected_table_names, selected_schemas, sample_analysis)
             
-            print(f"      ✅ Resolved {len(joins)} joins")
+            print(f"      ✅ Resolved {len(joins)} joins based on data analysis")
             
-            # Stage 4: Enhanced SQL Generation using exact schemas
-            print("   ⚡ Stage 4: Enhanced SQL Generation...")
-            sql_query = await self.llm_client.generate_sql(intent, selected_schemas, joins)
+            # Stage 4: Data-Driven SQL Generation
+            print("   ⚡ Stage 4: Data-Driven SQL Generation...")
+            sql_query = await self.llm_client.generate_data_driven_sql(intent, selected_schemas, joins, sample_analysis)
             
             if not sql_query:
                 return QueryResult(
@@ -444,49 +669,11 @@ class EnhancedQueryInterface:
                 question=question,
                 sql_query="",
                 results=[],
-                error=f"Enhanced 4-stage pipeline failed: {str(e)}",
+                error=f"Data-driven 4-stage pipeline failed: {str(e)}",
                 tables_used=[]
             )
     
-    def _prepare_tables_with_complete_schema(self) -> List[Dict]:
-        """Prepare table information with complete schema details"""
-        
-        available_tables = []
-        
-        for table in self.tables:
-            if table.full_name in self.database_schema:
-                schema_info = self.database_schema[table.full_name]
-                
-                # Get key columns (first 8 columns)
-                key_columns = [col['name'] for col in schema_info['columns'][:8]]
-                
-                # Create sample preview
-                sample_preview = "No sample data"
-                if schema_info['sample_data']:
-                    sample_row = schema_info['sample_data'][0]
-                    sample_items = []
-                    for key, value in list(sample_row.items())[:3]:
-                        if value is not None:
-                            sample_items.append(f"{key}: {str(value)[:30]}")
-                    sample_preview = ", ".join(sample_items)
-                
-                table_info = {
-                    'full_name': table.full_name,
-                    'entity_type': getattr(table, 'entity_type', 'Unknown'),
-                    'confidence': getattr(table, 'confidence', 0.0),
-                    'row_count': schema_info['row_count'],
-                    'key_columns': key_columns,
-                    'sample_preview': sample_preview,
-                    'object_type': schema_info['object_type']
-                }
-                available_tables.append(table_info)
-        
-        # Sort by entity type confidence and row count
-        available_tables.sort(key=lambda x: (x['confidence'], x['row_count']), reverse=True)
-        
-        return available_tables
-    
-    def _get_complete_table_schemas(self, selected_table_names: List[str]) -> Dict[str, Dict]:
+    def _get_selected_table_schemas(self, selected_table_names: List[str]) -> Dict[str, Dict]:
         """Get complete schema information for selected tables"""
         
         selected_schemas = {}
@@ -495,19 +682,10 @@ class EnhancedQueryInterface:
             if table_name in self.database_schema:
                 schema_info = self.database_schema[table_name]
                 
-                # Create sample preview
-                sample_preview = "No sample data"
-                if schema_info['sample_data']:
-                    sample_row = schema_info['sample_data'][0]
-                    sample_items = []
-                    for key, value in list(sample_row.items())[:3]:
-                        if value is not None:
-                            sample_items.append(f"{key}: {str(value)[:50]}")
-                    sample_preview = ", ".join(sample_items)
-                
+                # Create comprehensive schema info
                 selected_schemas[table_name] = {
                     'columns': schema_info['columns'],
-                    'sample_preview': sample_preview,
+                    'sample_data': schema_info['sample_data'],
                     'row_count': schema_info['row_count'],
                     'object_type': schema_info['object_type']
                 }
@@ -515,31 +693,6 @@ class EnhancedQueryInterface:
                 print(f"      ⚠️ Schema not found for table: {table_name}")
         
         return selected_schemas
-    
-    def _get_table_entity_type(self, table_name: str) -> str:
-        """Get entity type for a table"""
-        for table in self.tables:
-            if table.full_name == table_name:
-                return getattr(table, 'entity_type', 'Unknown')
-        return 'Unknown'
-    
-    def _prepare_relationships_for_resolution(self, selected_table_names: List[str]) -> List[Dict]:
-        """Prepare relationship information for resolution stage"""
-        
-        relevant_relationships = []
-        for rel in self.relationships:
-            # Check if relationship involves selected tables
-            if any(table_name in rel.from_table or table_name in rel.to_table for table_name in selected_table_names):
-                rel_info = {
-                    'from_table': rel.from_table,
-                    'to_table': rel.to_table,
-                    'relationship_type': rel.relationship_type,
-                    'confidence': rel.confidence,
-                    'description': rel.description
-                }
-                relevant_relationships.append(rel_info)
-        
-        return relevant_relationships
     
     def _execute_query_with_validation(self, sql_query: str, intent: Dict[str, Any]) -> Tuple[List[Dict], Optional[str]]:
         """Execute query with business validation"""
@@ -568,12 +721,10 @@ class EnhancedQueryInterface:
                                 row_dict[columns[i]] = self._safe_database_value(value)
                         results.append(row_dict)
                     
-                    # Business validation
-                    validation_error = self._validate_business_result(results, intent)
-                    if validation_error:
-                        return results, validation_error
+                    # Validate results make sense
+                    validation_warning = self._validate_results(results, intent, sql_query)
                     
-                    return results, None
+                    return results, validation_warning
                 else:
                     return [], None
                     
@@ -590,26 +741,26 @@ class EnhancedQueryInterface:
             
             return [], error_msg
     
-    def _validate_business_result(self, results: List[Dict], intent: Dict[str, Any]) -> Optional[str]:
+    def _validate_results(self, results: List[Dict], intent: Dict[str, Any], sql_query: str) -> Optional[str]:
         """Validate that results make business sense"""
         
         if not results:
-            return None
+            return "Query returned no results. This might indicate no matching data or incorrect logic."
         
+        action = intent.get('action', '').lower()
         result_type = intent.get('result_type', '')
-        operation_type = intent.get('operation_type', '')
-        entities = intent.get('primary_entities', [])
+        subject = intent.get('subject', '').lower()
         
         # Validate count operations
-        if operation_type == 'count' and result_type == 'number':
+        if action == 'count' and result_type == 'single_number':
             if len(results) == 1 and len(results[0]) == 1:
                 count_value = list(results[0].values())[0]
                 if isinstance(count_value, (int, float)):
-                    # Business validation rules
-                    if 'Customer' in entities and count_value == 0:
-                        return "Warning: Query returned 0 customers. This may indicate a data issue or incorrect query logic."
-                    elif 'Payment' in entities and count_value == 0:
-                        return "Warning: Query returned 0 payments. This may indicate a data issue or incorrect date filters."
+                    if count_value == 0:
+                        return f"Query returned 0 {subject}. This may indicate no matching data or incorrect table selection/joins."
+                    elif 'customer' in subject or 'people' in subject:
+                        if count_value > 1000000:  # Suspiciously high
+                            return f"Count of {count_value:,} seems very high for {subject}. Please verify the query logic."
         
         return None
     
@@ -626,61 +777,72 @@ class EnhancedQueryInterface:
         else:
             return str(value)[:200]
     
+    async def _show_content_analysis(self):
+        """Show content analysis for debugging"""
+        print(f"\n🔍 TABLE CONTENT ANALYSIS:")
+        print(f"   📊 Total tables analyzed: {len(self.table_content_analysis)}")
+        
+        # Show top tables by different criteria
+        people_tables = [(name, analysis) for name, analysis in self.table_content_analysis.items() 
+                        if analysis['has_people_data']]
+        payment_tables = [(name, analysis) for name, analysis in self.table_content_analysis.items() 
+                         if analysis['has_payment_data']]
+        
+        print(f"\n   👥 Tables with people/customer data ({len(people_tables)}):")
+        for name, analysis in people_tables[:5]:
+            row_count = self.database_schema.get(name, {}).get('row_count', 0)
+            print(f"      • {name}: {analysis['content_summary']} ({row_count:,} rows)")
+        
+        print(f"\n   💰 Tables with payment/financial data ({len(payment_tables)}):")
+        for name, analysis in payment_tables[:5]:
+            row_count = self.database_schema.get(name, {}).get('row_count', 0)
+            print(f"      • {name}: {analysis['content_summary']} ({row_count:,} rows)")
+    
     def _show_debug_info(self):
-        """Show debug information about loaded schemas"""
+        """Show debug information"""
         print(f"\n🔧 DEBUG INFORMATION:")
         print(f"   📊 Total tables loaded: {len(self.tables)}")
         print(f"   💾 Schema cache loaded: {len(self.database_schema)}")
+        print(f"   🔍 Content analysis completed: {len(self.table_content_analysis)}")
         print(f"   🔗 Relationships: {len(self.relationships)}")
         
-        if self.database_schema:
-            print(f"   📋 Sample tables in schema:")
-            for i, (table_name, schema) in enumerate(list(self.database_schema.items())[:5]):
-                columns = [col['name'] for col in schema['columns'][:5]]
-                print(f"      {i+1}. {table_name}: {', '.join(columns)}")
+        # Show content analysis summary
+        people_count = sum(1 for analysis in self.table_content_analysis.values() if analysis['has_people_data'])
+        payment_count = sum(1 for analysis in self.table_content_analysis.values() if analysis['has_payment_data'])
         
-        if self.tables:
-            print(f"   🧠 Sample classified tables:")
-            for i, table in enumerate(self.tables[:5]):
-                entity_type = getattr(table, 'entity_type', 'Unknown')
-                confidence = getattr(table, 'confidence', 0.0)
-                print(f"      {i+1}. {table.full_name}: {entity_type} ({confidence:.2f})")
+        print(f"\n   📋 Content Analysis Summary:")
+        print(f"      • Tables with people data: {people_count}")
+        print(f"      • Tables with payment data: {payment_count}")
+        print(f"      • Tables with dates: {sum(1 for a in self.table_content_analysis.values() if a['has_date_fields'])}")
+        print(f"      • Tables with amounts: {sum(1 for a in self.table_content_analysis.values() if a['has_amount_fields'])}")
     
     def _show_system_capabilities(self):
-        """Show enhanced system capabilities"""
+        """Show data-driven system capabilities"""
         
-        table_count = sum(1 for t in self.tables if t.object_type in ['BASE TABLE', 'TABLE'])
-        view_count = sum(1 for t in self.tables if t.object_type == 'VIEW')
-        classified_count = sum(1 for t in self.tables if hasattr(t, 'entity_type') and t.entity_type != 'Unknown')
+        people_tables = sum(1 for analysis in self.table_content_analysis.values() if analysis['has_people_data'])
+        payment_tables = sum(1 for analysis in self.table_content_analysis.values() if analysis['has_payment_data'])
+        date_tables = sum(1 for analysis in self.table_content_analysis.values() if analysis['has_date_fields'])
         
-        print(f"✅ ENHANCED 4-STAGE AUTOMATED PIPELINE READY:")
-        print(f"   📊 Database: {table_count} tables, {view_count} views")
-        print(f"   💾 Complete schemas loaded: {len(self.database_schema)} objects")
-        print(f"   🧠 Classified: {classified_count} business entities")
-        print(f"   🔗 Relationships: {len(self.relationships)} discovered")
+        print(f"✅ DATA-DRIVEN 4-STAGE PIPELINE READY:")
+        print(f"   📊 Database: {len(self.database_schema)} objects analyzed")
+        print(f"   🔍 Content Analysis: {len(self.table_content_analysis)} tables")
+        print(f"   👥 People/Customer Data: {people_tables} tables")
+        print(f"   💰 Payment/Financial Data: {payment_tables} tables")
+        print(f"   📅 Date/Time Tracking: {date_tables} tables")
         
         if self.domain:
             print(f"   🏢 Domain: {self.domain.domain_type}")
-            
-            # Show entity counts
-            entity_counts = {}
-            for table in self.tables:
-                if hasattr(table, 'entity_type') and table.entity_type != 'Unknown':
-                    entity_counts[table.entity_type] = entity_counts.get(table.entity_type, 0) + 1
-            
-            if entity_counts:
-                print(f"   🏢 Business Entities:")
-                for entity_type, count in sorted(entity_counts.items()):
-                    print(f"      • {entity_type}: {count}")
         
-        print("\n🚀 Enhanced 4-Stage Pipeline Process:")
-        print("   🎯 Stage 1: Business Intent Analysis (2-3s)")
-        print("   📋 Stage 2: Smart Table Selection with Complete Schemas (2-3s)")  
-        print("   🔗 Stage 3: Relationship Resolution using Actual Column Names (2s)")
-        print("   ⚡ Stage 4: SQL Generation with Exact Table/Column Names (2-3s)")
-        print("   💡 Total time: 10-15 seconds with accurate schema reading")
+        print(f"   🔗 Relationships: {len(self.relationships)} discovered")
         
-        print("\n💡 Type 'help' for commands, 'examples' for sample questions, 'debug' for schema info")
+        print("\n🚀 Data-Driven 4-Stage Process:")
+        print("   🎯 Stage 1: Business Intent Analysis (extracts what you're really asking)")
+        print("   📋 Stage 2: Content-Based Table Selection (uses actual data content)")  
+        print("   🔗 Stage 3: Data-Driven Relationship Resolution (analyzes sample data)")
+        print("   ⚡ Stage 4: Context-Aware SQL Generation (uses real column names)")
+        print("   💡 Total time: 10-15 seconds with data-driven accuracy")
+        
+        print("\n💡 Type 'help' for commands, 'examples' for questions, 'analyze' for content analysis")
     
     def _show_help(self):
         """Show help information"""
@@ -688,49 +850,57 @@ class EnhancedQueryInterface:
         print("\n🔧 COMMANDS:")
         print("   • 'help' - Show this help")
         print("   • 'examples' - Show sample questions")
-        print("   • 'debug' - Show schema debug information")
+        print("   • 'debug' - Show system debug information")
+        print("   • 'analyze' - Show table content analysis")
         print("   • 'quit' or 'exit' - Exit pipeline")
         
-        print("\n🚀 ENHANCED 4-STAGE PIPELINE FEATURES:")
-        print("   • Reads exact table schemas from database_structure.json")
-        print("   • Uses actual column names and data types in SQL generation")
-        print("   • AI-powered table selection with complete schema context")
-        print("   • Smart relationship resolution using real foreign keys")
-        print("   • Validated SQL generation with exact table/column references")
-        print("   • Business logic validation of results")
+        print("\n🚀 DATA-DRIVEN PIPELINE FEATURES:")
+        print("   • Analyzes actual table content using sample data")
+        print("   • No hardcoded entity types - discovers data dynamically")
+        print("   • Uses real column names and data patterns")
+        print("   • Finds relationships through data analysis")
+        print("   • Generates SQL based on actual table structure")
+        print("   • Validates results against business logic")
         
         print("\n💡 QUERY TIPS:")
-        print("   • Ask in natural language: 'How many customers made payments in 2025?'")
-        print("   • Be specific about time periods: 'total revenue this year'")
-        print("   • Ask for comparisons: 'monthly growth compared to last year'")
-        print("   • Complex analysis: 'top 10 customers by order value'")
+        print("   • Ask about actual data: 'count people who paid in 2025'")
+        print("   • Be specific about time: 'payments made this year'")
+        print("   • Ask for data that exists: system will find the right tables")
+        print("   • Complex questions work: 'customers with recent high-value orders'")
     
     def _show_examples(self):
-        """Show example questions"""
+        """Show example questions based on actual data content"""
         
-        print("\n💡 SAMPLE QUESTIONS:")
+        people_tables = sum(1 for analysis in self.table_content_analysis.values() if analysis['has_people_data'])
+        payment_tables = sum(1 for analysis in self.table_content_analysis.values() if analysis['has_payment_data'])
         
-        if self.domain and self.domain.sample_questions:
-            for i, question in enumerate(self.domain.sample_questions[:10], 1):
-                print(f"   {i}. {question}")
-        else:
-            # Default examples
-            print("   1. How many customers do we have?")
-            print("   2. What is our total revenue for 2025?")
-            print("   3. Count total paid customers")
-            print("   4. Show customer payment information")
-            print("   5. How many orders were placed this year?")
-            print("   6. List customers with recent payments")
-            print("   7. What's our average order value?")
-            print("   8. Show top 10 customers by revenue")
+        print("\n💡 SAMPLE QUESTIONS (based on your actual data):")
         
-        print("\n🔥 ADVANCED QUERIES:")
-        print("   • 'Monthly revenue growth compared to last year'")
-        print("   • 'Customers who haven't made payments in 6 months'")
-        print("   • 'Product performance by customer segment'")
-        print("   • 'Customer lifetime value analysis'")
+        if people_tables > 0:
+            print("   👥 People/Customer Questions:")
+            print("      • How many people/customers are in the system?")
+            print("      • Show me customer information")
+            print("      • List people with contact details")
         
-        print("\n⚡ The enhanced pipeline uses exact database schemas for accurate results!")
+        if payment_tables > 0:
+            print("   💰 Payment/Financial Questions:")
+            print("      • Count payments made in 2025")
+            print("      • What is the total amount of payments?")
+            print("      • Show payment transactions")
+        
+        if people_tables > 0 and payment_tables > 0:
+            print("   🔄 Combined Questions:")
+            print("      • How many people made payments in 2025?")
+            print("      • Show customers with their payments")
+            print("      • Count unique people who paid this year")
+        
+        print("\n🔥 ADVANCED QUESTIONS:")
+        print("   • 'Find people who made multiple payments'")
+        print("   • 'Show monthly payment trends'")
+        print("   • 'List high-value transactions'")
+        print("   • 'Customers who haven't paid recently'")
+        
+        print(f"\n⚡ The pipeline analyzes {len(self.table_content_analysis)} tables to find the right data!")
     
     def _display_result(self, result: QueryResult):
         """Display query result with enhanced formatting"""
@@ -738,7 +908,7 @@ class EnhancedQueryInterface:
         if result.error:
             print(f"❌ Error: {result.error}")
             if result.tables_used:
-                print(f"💡 Tables used: {', '.join(result.tables_used)}")
+                print(f"💡 Tables analyzed: {', '.join(result.tables_used)}")
         else:
             print(f"📋 Generated SQL:")
             print(f"   {result.sql_query}")
@@ -773,13 +943,13 @@ class EnhancedQueryInterface:
                 print(f"📋 Tables used: {', '.join(result.tables_used)}")
             
             if result.execution_time > 0:
-                pipeline_stages = "🎯📋🔗⚡"  # Icons for the 4 stages
-                print(f"⚡ Enhanced pipeline time: {result.execution_time:.1f}s {pipeline_stages}")
+                pipeline_stages = "🎯🔍🔗⚡"  # Icons for the 4 stages
+                print(f"⚡ Data-driven pipeline time: {result.execution_time:.1f}s {pipeline_stages}")
             
-            # Success indicator for business queries
+            # Success indicator
             if not result.error and result.results:
-                print("✅ Query completed successfully with schema-accurate SQL generation")
+                print("✅ Query completed successfully with data-driven table selection")
 
 # For backward compatibility
-QueryInterface = EnhancedQueryInterface
-QueryLLMClient = EnhancedQueryLLMClient
+QueryInterface = DataDrivenQueryInterface
+QueryLLMClient = DataDrivenLLMClient
