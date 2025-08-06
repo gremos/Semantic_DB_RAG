@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-4-Stage Automated Query Pipeline - Simple and Maintainable
-Implements business intent analysis, smart table selection, relationship resolution, and validated SQL generation
+Enhanced 4-Stage Automated Query Pipeline - Fixed Schema Reading
+Reads actual table schemas from database_structure.json instead of guessing
 """
 
+import json
 import pyodbc
 import time
 import asyncio
 from typing import List, Dict, Any, Optional, Tuple
+from pathlib import Path
 
 # Azure OpenAI
 from langchain_openai import AzureChatOpenAI
@@ -17,8 +19,8 @@ from langchain.schema import HumanMessage, SystemMessage
 from shared.config import Config
 from shared.models import TableInfo, BusinessDomain, Relationship, QueryResult
 
-class QueryLLMClient:
-    """LLM client optimized for the 4-stage query pipeline"""
+class EnhancedQueryLLMClient:
+    """Enhanced LLM client with accurate schema information"""
     
     def __init__(self, config: Config):
         self.llm = AzureChatOpenAI(
@@ -26,7 +28,7 @@ class QueryLLMClient:
             api_key=config.api_key,
             azure_deployment=config.deployment_name,
             api_version=config.api_version,
-            temperature=0.05,  # Low temperature for consistent results
+            temperature=0.05,
             request_timeout=60
         )
     
@@ -66,28 +68,42 @@ Respond with JSON only:
             return {}
     
     async def select_tables(self, intent: Dict[str, Any], available_tables: List[Dict]) -> List[str]:
-        """Stage 2: Select relevant tables"""
+        """Stage 2: Select relevant tables using exact table information"""
+        
+        # Format tables with complete information
+        table_descriptions = []
+        for table in available_tables:
+            table_desc = f"""
+Table: {table['full_name']}
+Entity Type: {table['entity_type']} (confidence: {table['confidence']:.2f})
+Row Count: {table['row_count']}
+Key Columns: {', '.join(table['key_columns'][:8])}
+Sample Data: {table['sample_preview']}
+"""
+            table_descriptions.append(table_desc)
+        
         prompt = f"""
 Based on this business intent, select the most relevant tables:
 
 BUSINESS INTENT: {intent}
 
 AVAILABLE TABLES:
-{self._format_tables_for_selection(available_tables)}
+{chr(10).join(table_descriptions)}
 
 Select 2-5 most relevant tables that can answer the question.
 Consider entity types, column names, and sample data.
+Return the EXACT table names as they appear above.
 
 Respond with JSON only:
 {{
-  "selected_tables": ["schema.table1", "schema.table2"],
+  "selected_tables": ["[schema].[table1]", "[schema].[table2]"],
   "reasoning": "brief explanation of selection"
 }}
 """
         
         try:
             messages = [
-                SystemMessage(content="You are a database expert. Select relevant tables for queries. Respond with JSON only."),
+                SystemMessage(content="You are a database expert. Select relevant tables for queries. Use EXACT table names. Respond with JSON only."),
                 HumanMessage(content=prompt)
             ]
             response = await asyncio.to_thread(self.llm.invoke, messages)
@@ -97,25 +113,33 @@ Respond with JSON only:
             print(f"   ⚠️ Table selection failed: {e}")
             return []
     
-    async def resolve_relationships(self, selected_tables: List[str], relationships: List[Dict]) -> List[Dict]:
-        """Stage 3: Resolve table relationships"""
+    async def resolve_relationships(self, selected_tables: List[str], table_schemas: Dict[str, Dict], relationships: List[Dict]) -> List[Dict]:
+        """Stage 3: Resolve table relationships using actual schemas"""
+        
+        # Prepare relationship information with actual column names
+        relevant_relationships = []
+        for rel in relationships:
+            if any(table_name in rel['from_table'] or table_name in rel['to_table'] for table_name in selected_tables):
+                relevant_relationships.append(rel)
+        
         prompt = f"""
-Determine how to join these selected tables:
+Determine how to join these selected tables using their actual schemas:
 
-SELECTED TABLES: {selected_tables}
+SELECTED TABLES WITH SCHEMAS:
+{json.dumps({name: schema for name, schema in table_schemas.items() if name in selected_tables}, indent=2)}
 
 KNOWN RELATIONSHIPS:
-{self._format_relationships(relationships)}
+{json.dumps(relevant_relationships, indent=2)}
 
-Determine the optimal JOIN strategy for these tables.
+Determine the optimal JOIN strategy using the EXACT column names from the schemas above.
 
 Respond with JSON only:
 {{
   "joins": [
     {{
-      "from_table": "schema.table1", 
-      "to_table": "schema.table2",
-      "join_condition": "t1.customer_id = t2.id",
+      "from_table": "[schema].[table1]", 
+      "to_table": "[schema].[table2]",
+      "join_condition": "t1.actual_column_id = t2.actual_id_column",
       "join_type": "INNER JOIN"
     }}
   ],
@@ -125,7 +149,7 @@ Respond with JSON only:
         
         try:
             messages = [
-                SystemMessage(content="You are a SQL expert. Design optimal table joins. Respond with JSON only."),
+                SystemMessage(content="You are a SQL expert. Design optimal table joins using EXACT column names from schemas. Respond with JSON only."),
                 HumanMessage(content=prompt)
             ]
             response = await asyncio.to_thread(self.llm.invoke, messages)
@@ -135,32 +159,53 @@ Respond with JSON only:
             print(f"   ⚠️ Relationship resolution failed: {e}")
             return []
     
-    async def generate_sql(self, intent: Dict[str, Any], tables_info: List[Dict], joins: List[Dict]) -> str:
-        """Stage 4: Generate validated SQL"""
+    async def generate_sql(self, intent: Dict[str, Any], table_schemas: Dict[str, Dict], joins: List[Dict]) -> str:
+        """Stage 4: Generate SQL using exact table schemas"""
+        
+        # Format complete table schemas for SQL generation
+        schema_descriptions = []
+        for table_name, schema in table_schemas.items():
+            columns_list = []
+            for col in schema['columns']:
+                col_name = col['name']
+                col_type = col['data_type']
+                is_pk = " [PRIMARY KEY]" if col.get('is_primary_key', False) else ""
+                columns_list.append(f"  {col_name} ({col_type}){is_pk}")
+            
+            schema_desc = f"""
+TABLE: {table_name}
+COLUMNS:
+{chr(10).join(columns_list)}
+SAMPLE DATA: {schema.get('sample_preview', 'No sample data')}
+ROW COUNT: {schema.get('row_count', 0)}
+"""
+            schema_descriptions.append(schema_desc)
+        
         prompt = f"""
-Generate SQL Server T-SQL query for this business question:
+Generate SQL Server T-SQL query for this business question using the EXACT table and column names provided:
 
 BUSINESS INTENT: {intent}
 
-TABLE SCHEMAS:
-{self._format_table_schemas(tables_info)}
+EXACT TABLE SCHEMAS:
+{chr(10).join(schema_descriptions)}
 
 REQUIRED JOINS:
-{joins}
+{json.dumps(joins, indent=2)}
 
-Generate a complete, executable T-SQL query that:
-1. Uses proper SQL Server syntax with square brackets
-2. Implements the required joins correctly
-3. Includes appropriate WHERE clauses for filters
-4. Limits results with TOP 100 unless counting/summing
-5. Uses meaningful column aliases
+IMPORTANT REQUIREMENTS:
+1. Use the EXACT table names and column names from the schemas above
+2. Use proper SQL Server syntax with square brackets for table/column names
+3. Implement the required joins correctly using the exact column names
+4. Include appropriate WHERE clauses for filters
+5. Use TOP 100 unless counting/summing
+6. Use meaningful column aliases
 
-Respond with the SQL query only, no explanations.
+Generate ONLY the complete, executable T-SQL query using the exact names provided above:
 """
         
         try:
             messages = [
-                SystemMessage(content="You are an expert SQL Server developer. Generate correct T-SQL queries only."),
+                SystemMessage(content="You are an expert SQL Server developer. Generate correct T-SQL queries using EXACT table and column names provided. Return only the SQL query."),
                 HumanMessage(content=prompt)
             ]
             response = await asyncio.to_thread(self.llm.invoke, messages)
@@ -172,10 +217,8 @@ Respond with the SQL query only, no explanations.
     def _parse_json_response(self, response: str) -> Dict[str, Any]:
         """Parse JSON from LLM response"""
         try:
-            import json
             import re
             
-            # Clean response
             cleaned = response.strip()
             
             # Remove markdown code blocks
@@ -192,38 +235,6 @@ Respond with the SQL query only, no explanations.
             
         except Exception:
             return {}
-    
-    def _format_tables_for_selection(self, tables: List[Dict]) -> str:
-        """Format tables for selection prompt"""
-        formatted = []
-        for table in tables:
-            columns = ', '.join(table.get('columns', [])[:8])  # Limit columns
-            formatted.append(f"- {table['name']} ({table['entity_type']}): {columns}")
-        return '\n'.join(formatted)
-    
-    def _format_relationships(self, relationships: List[Dict]) -> str:
-        """Format relationships for prompt"""
-        if not relationships:
-            return "No known relationships"
-        
-        formatted = []
-        for rel in relationships:
-            formatted.append(f"- {rel['from_table']} -> {rel['to_table']} ({rel['relationship_type']})")
-        return '\n'.join(formatted)
-    
-    def _format_table_schemas(self, tables_info: List[Dict]) -> str:
-        """Format table schemas for SQL generation"""
-        formatted = []
-        for table in tables_info:
-            columns = []
-            for col in table.get('columns', []):
-                col_name = col.get('name', '')
-                col_type = col.get('data_type', '')
-                columns.append(f"{col_name} ({col_type})")
-            
-            formatted.append(f"Table: {table['name']}\nColumns: {', '.join(columns[:10])}\n")
-        
-        return '\n'.join(formatted)
     
     def _clean_sql_response(self, response: str) -> str:
         """Clean SQL response"""
@@ -253,24 +264,28 @@ Respond with the SQL query only, no explanations.
         
         return ""
 
-class QueryInterface:
-    """4-Stage Automated Query Pipeline"""
+class EnhancedQueryInterface:
+    """Enhanced 4-Stage Automated Query Pipeline with accurate schema reading"""
     
     def __init__(self, config: Config):
         self.config = config
-        self.llm_client = QueryLLMClient(config)
+        self.llm_client = EnhancedQueryLLMClient(config)
         self.tables: List[TableInfo] = []
         self.domain: Optional[BusinessDomain] = None
         self.relationships: List[Relationship] = []
+        self.database_schema: Dict[str, Dict] = {}  # Complete database schema
     
     async def start_interactive_session(self, tables: List[TableInfo], 
                                       domain: Optional[BusinessDomain], 
                                       relationships: List[Relationship]):
-        """Start 4-stage automated query session"""
+        """Start enhanced 4-stage automated query session"""
         
         self.tables = tables
         self.domain = domain  
         self.relationships = relationships
+        
+        # Load complete database schema from cache
+        await self._load_database_schema()
         
         # Show system capabilities
         self._show_system_capabilities()
@@ -287,15 +302,18 @@ class QueryInterface:
                     continue
                 elif question.lower() == 'examples':
                     self._show_examples()
+                    continue  
+                elif question.lower() == 'debug':
+                    self._show_debug_info()
                     continue
                 elif not question:
                     continue
                 
                 query_count += 1
-                print(f"🚀 Processing with 4-stage automated pipeline...")
+                print(f"🚀 Processing with enhanced 4-stage automated pipeline...")
                 
                 start_time = time.time()
-                result = await self._process_4_stage_pipeline(question)
+                result = await self._process_enhanced_4_stage_pipeline(question)
                 result.execution_time = time.time() - start_time
                 
                 print(f"⏱️ Completed in {result.execution_time:.1f}s")
@@ -310,10 +328,43 @@ class QueryInterface:
                 print(f"❌ Error: {e}")
         
         print(f"\n📊 Session summary: {query_count} queries processed")
-        print("👋 Thanks for using the 4-Stage Automated Query Pipeline!")
+        print("👋 Thanks for using the Enhanced 4-Stage Automated Query Pipeline!")
     
-    async def _process_4_stage_pipeline(self, question: str) -> QueryResult:
-        """Execute the 4-stage automated pipeline"""
+    async def _load_database_schema(self):
+        """Load complete database schema from database_structure.json"""
+        
+        cache_file = self.config.get_cache_path("database_structure.json")
+        
+        if not cache_file.exists():
+            print("⚠️ database_structure.json not found. Please run discovery first.")
+            return
+        
+        try:
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            # Process tables from discovery data
+            if 'tables' in data:
+                for table_data in data['tables']:
+                    full_name = table_data['full_name']
+                    self.database_schema[full_name] = {
+                        'name': table_data['name'],
+                        'schema': table_data['schema'],
+                        'full_name': full_name,
+                        'object_type': table_data['object_type'],
+                        'columns': table_data['columns'],
+                        'sample_data': table_data['sample_data'],
+                        'row_count': table_data['row_count'],
+                        'relationships': table_data.get('relationships', [])
+                    }
+            
+            print(f"✅ Loaded complete schema for {len(self.database_schema)} database objects")
+            
+        except Exception as e:
+            print(f"⚠️ Failed to load database schema: {e}")
+    
+    async def _process_enhanced_4_stage_pipeline(self, question: str) -> QueryResult:
+        """Execute the enhanced 4-stage automated pipeline with accurate schema reading"""
         
         try:
             # Stage 1: Business Intent Analysis
@@ -333,9 +384,9 @@ class QueryInterface:
             print(f"      📊 Intent: {intent.get('business_intent', 'Unknown')}")
             print(f"      🎯 Entities: {', '.join(intent.get('primary_entities', []))}")
             
-            # Stage 2: Smart Table Selection
+            # Stage 2: Smart Table Selection using complete schema
             print("   📋 Stage 2: Smart Table Selection...")
-            available_tables = self._prepare_tables_for_selection()
+            available_tables = self._prepare_tables_with_complete_schema()
             selected_table_names = await self.llm_client.select_tables(intent, available_tables)
             
             if not selected_table_names:
@@ -347,24 +398,23 @@ class QueryInterface:
                     tables_used=[]
                 )
             
-            selected_tables = self._get_selected_table_info(selected_table_names)
-            print(f"      ✅ Selected {len(selected_tables)} tables:")
-            for table in selected_tables:
-                print(f"         • {table['name']} ({table['entity_type']})")
+            # Get actual table schemas for selected tables
+            selected_schemas = self._get_complete_table_schemas(selected_table_names)
+            print(f"      ✅ Selected {len(selected_schemas)} tables:")
+            for table_name in selected_schemas.keys():
+                entity_type = self._get_table_entity_type(table_name)
+                print(f"         • {table_name} ({entity_type})")
             
-            # Stage 3: Relationship Resolution
+            # Stage 3: Relationship Resolution using actual schemas
             print("   🔗 Stage 3: Relationship Resolution...")
             available_relationships = self._prepare_relationships_for_resolution(selected_table_names)
-            joins = await self.llm_client.resolve_relationships(selected_table_names, available_relationships)
-            
-            if len(selected_tables) > 1 and not joins:
-                print("      ⚠️ Warning: Multiple tables selected but no joins resolved")
+            joins = await self.llm_client.resolve_relationships(selected_table_names, selected_schemas, available_relationships)
             
             print(f"      ✅ Resolved {len(joins)} joins")
             
-            # Stage 4: Validated SQL Generation
-            print("   ⚡ Stage 4: Validated SQL Generation...")
-            sql_query = await self.llm_client.generate_sql(intent, selected_tables, joins)
+            # Stage 4: Enhanced SQL Generation using exact schemas
+            print("   ⚡ Stage 4: Enhanced SQL Generation...")
+            sql_query = await self.llm_client.generate_sql(intent, selected_schemas, joins)
             
             if not sql_query:
                 return QueryResult(
@@ -372,7 +422,7 @@ class QueryInterface:
                     sql_query="",
                     results=[],
                     error="Failed to generate SQL query",
-                    tables_used=selected_table_names
+                    tables_used=list(selected_schemas.keys())
                 )
             
             print(f"      💾 Generated SQL: {sql_query[:100]}...")
@@ -386,7 +436,7 @@ class QueryInterface:
                 sql_query=sql_query,
                 results=results,
                 error=error,
-                tables_used=selected_table_names
+                tables_used=list(selected_schemas.keys())
             )
             
         except Exception as e:
@@ -394,48 +444,84 @@ class QueryInterface:
                 question=question,
                 sql_query="",
                 results=[],
-                error=f"4-stage pipeline failed: {str(e)}",
+                error=f"Enhanced 4-stage pipeline failed: {str(e)}",
                 tables_used=[]
             )
     
-    def _prepare_tables_for_selection(self) -> List[Dict]:
-        """Prepare table information for selection stage"""
+    def _prepare_tables_with_complete_schema(self) -> List[Dict]:
+        """Prepare table information with complete schema details"""
         
         available_tables = []
+        
         for table in self.tables:
-            table_info = {
-                'name': table.full_name,
-                'entity_type': getattr(table, 'entity_type', 'Unknown'),
-                'confidence': getattr(table, 'confidence', 0.0),
-                'row_count': table.row_count,
-                'columns': [col.get('name', '') for col in table.columns[:8]],
-                'sample_data': str(table.sample_data[0]) if table.sample_data else ""
-            }
-            available_tables.append(table_info)
+            if table.full_name in self.database_schema:
+                schema_info = self.database_schema[table.full_name]
+                
+                # Get key columns (first 8 columns)
+                key_columns = [col['name'] for col in schema_info['columns'][:8]]
+                
+                # Create sample preview
+                sample_preview = "No sample data"
+                if schema_info['sample_data']:
+                    sample_row = schema_info['sample_data'][0]
+                    sample_items = []
+                    for key, value in list(sample_row.items())[:3]:
+                        if value is not None:
+                            sample_items.append(f"{key}: {str(value)[:30]}")
+                    sample_preview = ", ".join(sample_items)
+                
+                table_info = {
+                    'full_name': table.full_name,
+                    'entity_type': getattr(table, 'entity_type', 'Unknown'),
+                    'confidence': getattr(table, 'confidence', 0.0),
+                    'row_count': schema_info['row_count'],
+                    'key_columns': key_columns,
+                    'sample_preview': sample_preview,
+                    'object_type': schema_info['object_type']
+                }
+                available_tables.append(table_info)
         
         # Sort by entity type confidence and row count
         available_tables.sort(key=lambda x: (x['confidence'], x['row_count']), reverse=True)
         
         return available_tables
     
-    def _get_selected_table_info(self, selected_table_names: List[str]) -> List[Dict]:
-        """Get detailed info for selected tables"""
+    def _get_complete_table_schemas(self, selected_table_names: List[str]) -> Dict[str, Dict]:
+        """Get complete schema information for selected tables"""
         
-        selected_tables = []
+        selected_schemas = {}
+        
         for table_name in selected_table_names:
-            # Find matching table
-            for table in self.tables:
-                if table.full_name == table_name or table.name in table_name:
-                    table_info = {
-                        'name': table.full_name,
-                        'entity_type': getattr(table, 'entity_type', 'Unknown'),
-                        'columns': table.columns,
-                        'sample_data': table.sample_data
-                    }
-                    selected_tables.append(table_info)
-                    break
+            if table_name in self.database_schema:
+                schema_info = self.database_schema[table_name]
+                
+                # Create sample preview
+                sample_preview = "No sample data"
+                if schema_info['sample_data']:
+                    sample_row = schema_info['sample_data'][0]
+                    sample_items = []
+                    for key, value in list(sample_row.items())[:3]:
+                        if value is not None:
+                            sample_items.append(f"{key}: {str(value)[:50]}")
+                    sample_preview = ", ".join(sample_items)
+                
+                selected_schemas[table_name] = {
+                    'columns': schema_info['columns'],
+                    'sample_preview': sample_preview,
+                    'row_count': schema_info['row_count'],
+                    'object_type': schema_info['object_type']
+                }
+            else:
+                print(f"      ⚠️ Schema not found for table: {table_name}")
         
-        return selected_tables
+        return selected_schemas
+    
+    def _get_table_entity_type(self, table_name: str) -> str:
+        """Get entity type for a table"""
+        for table in self.tables:
+            if table.full_name == table_name:
+                return getattr(table, 'entity_type', 'Unknown')
+        return 'Unknown'
     
     def _prepare_relationships_for_resolution(self, selected_table_names: List[str]) -> List[Dict]:
         """Prepare relationship information for resolution stage"""
@@ -496,12 +582,11 @@ class QueryInterface:
             
             # Provide helpful error messages
             if 'invalid object name' in error_msg.lower():
-                error_msg = f"Table not found: {error_msg[:150]}"
+                error_msg = f"Table not found: {error_msg[:200]}"
             elif 'invalid column name' in error_msg.lower():
-                error_msg = f"Column not found: {error_msg[:150]}"
+                error_msg = f"Column not found: {error_msg[:200]}"
             elif 'syntax error' in error_msg.lower():
-                # Try to suggest fix
-                error_msg = f"SQL syntax error: {error_msg[:150]}"
+                error_msg = f"SQL syntax error: {error_msg[:200]}"
             
             return [], error_msg
     
@@ -526,10 +611,6 @@ class QueryInterface:
                     elif 'Payment' in entities and count_value == 0:
                         return "Warning: Query returned 0 payments. This may indicate a data issue or incorrect date filters."
         
-        # Validate list operations
-        elif operation_type == 'list' and len(results) == 0:
-            return "Warning: Query returned no results. This may indicate overly restrictive filters or a data issue."
-        
         return None
     
     def _safe_database_value(self, value) -> Any:
@@ -543,17 +624,38 @@ class QueryInterface:
         elif isinstance(value, (str, int, float, bool)):
             return value
         else:
-            return str(value)[:200]  # Truncate long values
+            return str(value)[:200]
+    
+    def _show_debug_info(self):
+        """Show debug information about loaded schemas"""
+        print(f"\n🔧 DEBUG INFORMATION:")
+        print(f"   📊 Total tables loaded: {len(self.tables)}")
+        print(f"   💾 Schema cache loaded: {len(self.database_schema)}")
+        print(f"   🔗 Relationships: {len(self.relationships)}")
+        
+        if self.database_schema:
+            print(f"   📋 Sample tables in schema:")
+            for i, (table_name, schema) in enumerate(list(self.database_schema.items())[:5]):
+                columns = [col['name'] for col in schema['columns'][:5]]
+                print(f"      {i+1}. {table_name}: {', '.join(columns)}")
+        
+        if self.tables:
+            print(f"   🧠 Sample classified tables:")
+            for i, table in enumerate(self.tables[:5]):
+                entity_type = getattr(table, 'entity_type', 'Unknown')
+                confidence = getattr(table, 'confidence', 0.0)
+                print(f"      {i+1}. {table.full_name}: {entity_type} ({confidence:.2f})")
     
     def _show_system_capabilities(self):
-        """Show 4-stage pipeline capabilities"""
+        """Show enhanced system capabilities"""
         
         table_count = sum(1 for t in self.tables if t.object_type in ['BASE TABLE', 'TABLE'])
         view_count = sum(1 for t in self.tables if t.object_type == 'VIEW')
         classified_count = sum(1 for t in self.tables if hasattr(t, 'entity_type') and t.entity_type != 'Unknown')
         
-        print(f"✅ 4-STAGE AUTOMATED PIPELINE READY:")
+        print(f"✅ ENHANCED 4-STAGE AUTOMATED PIPELINE READY:")
         print(f"   📊 Database: {table_count} tables, {view_count} views")
+        print(f"   💾 Complete schemas loaded: {len(self.database_schema)} objects")
         print(f"   🧠 Classified: {classified_count} business entities")
         print(f"   🔗 Relationships: {len(self.relationships)} discovered")
         
@@ -570,21 +672,15 @@ class QueryInterface:
                 print(f"   🏢 Business Entities:")
                 for entity_type, count in sorted(entity_counts.items()):
                     print(f"      • {entity_type}: {count}")
-            
-            # Show capabilities
-            if self.domain.capabilities:
-                enabled_caps = [cap for cap, enabled in self.domain.capabilities.items() if enabled]
-                if enabled_caps:
-                    print(f"   🎯 Query Types: {', '.join(cap.replace('_', ' ') for cap in enabled_caps)}")
         
-        print("\n🚀 4-Stage Pipeline Process:")
+        print("\n🚀 Enhanced 4-Stage Pipeline Process:")
         print("   🎯 Stage 1: Business Intent Analysis (2-3s)")
-        print("   📋 Stage 2: Smart Table Selection (2-3s)")  
-        print("   🔗 Stage 3: Relationship Resolution (2s)")
-        print("   ⚡ Stage 4: Validated SQL Generation (2-3s)")
-        print("   💡 Total time: 10-15 seconds for complex queries")
+        print("   📋 Stage 2: Smart Table Selection with Complete Schemas (2-3s)")  
+        print("   🔗 Stage 3: Relationship Resolution using Actual Column Names (2s)")
+        print("   ⚡ Stage 4: SQL Generation with Exact Table/Column Names (2-3s)")
+        print("   💡 Total time: 10-15 seconds with accurate schema reading")
         
-        print("\n💡 Type 'help' for commands, 'examples' for sample questions")
+        print("\n💡 Type 'help' for commands, 'examples' for sample questions, 'debug' for schema info")
     
     def _show_help(self):
         """Show help information"""
@@ -592,13 +688,15 @@ class QueryInterface:
         print("\n🔧 COMMANDS:")
         print("   • 'help' - Show this help")
         print("   • 'examples' - Show sample questions")
+        print("   • 'debug' - Show schema debug information")
         print("   • 'quit' or 'exit' - Exit pipeline")
         
-        print("\n🚀 4-STAGE PIPELINE FEATURES:")
-        print("   • Automatic business intent understanding")
-        print("   • AI-powered table selection from 100s of options")
-        print("   • Smart relationship resolution using view definitions")
-        print("   • Validated SQL generation with error recovery")
+        print("\n🚀 ENHANCED 4-STAGE PIPELINE FEATURES:")
+        print("   • Reads exact table schemas from database_structure.json")
+        print("   • Uses actual column names and data types in SQL generation")
+        print("   • AI-powered table selection with complete schema context")
+        print("   • Smart relationship resolution using real foreign keys")
+        print("   • Validated SQL generation with exact table/column references")
         print("   • Business logic validation of results")
         
         print("\n💡 QUERY TIPS:")
@@ -632,7 +730,7 @@ class QueryInterface:
         print("   • 'Product performance by customer segment'")
         print("   • 'Customer lifetime value analysis'")
         
-        print("\n⚡ The 4-stage pipeline handles complex business questions automatically!")
+        print("\n⚡ The enhanced pipeline uses exact database schemas for accurate results!")
     
     def _display_result(self, result: QueryResult):
         """Display query result with enhanced formatting"""
@@ -640,7 +738,7 @@ class QueryInterface:
         if result.error:
             print(f"❌ Error: {result.error}")
             if result.tables_used:
-                print(f"💡 Tables considered: {', '.join(result.tables_used)}")
+                print(f"💡 Tables used: {', '.join(result.tables_used)}")
         else:
             print(f"📋 Generated SQL:")
             print(f"   {result.sql_query}")
@@ -675,13 +773,13 @@ class QueryInterface:
                 print(f"📋 Tables used: {', '.join(result.tables_used)}")
             
             if result.execution_time > 0:
-                pipeline_stages = "🎯🔍🔗⚡"  # Icons for the 4 stages
-                print(f"⚡ Pipeline time: {result.execution_time:.1f}s {pipeline_stages}")
+                pipeline_stages = "🎯📋🔗⚡"  # Icons for the 4 stages
+                print(f"⚡ Enhanced pipeline time: {result.execution_time:.1f}s {pipeline_stages}")
             
             # Success indicator for business queries
             if not result.error and result.results:
-                print("✅ Query completed successfully with business validation")
+                print("✅ Query completed successfully with schema-accurate SQL generation")
 
 # For backward compatibility
-IntelligentQueryInterface = QueryInterface
-EnhancedQueryInterface = QueryInterface
+QueryInterface = EnhancedQueryInterface
+QueryLLMClient = EnhancedQueryLLMClient

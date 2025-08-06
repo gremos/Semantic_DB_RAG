@@ -152,15 +152,22 @@ class DatabaseDiscovery:
         """Analyze objects and collect sample data"""
         
         pbar = tqdm(objects, desc="Analyzing objects", unit="obj")
+        timeout_seconds = 5 * 60  # Convert minutes to seconds
         
         for obj in pbar:
             try:
-                table_info = await asyncio.to_thread(self._analyze_single_object, obj)
+                # Add timeout wrapper - skip objects that take too long
+                table_info = await asyncio.wait_for(
+                    asyncio.to_thread(self._analyze_single_object, obj),
+                    timeout=timeout_seconds
+                )
                 if table_info:
                     self.tables.append(table_info)
                     
                 pbar.set_description(f"Analyzed {len(self.tables)}/{len(objects)}")
                 
+            except asyncio.TimeoutError:
+                print(f"   ⏰ Timeout analyzing {obj.name} (>{timeout_seconds//60}min) - skipping")
             except Exception as e:
                 print(f"   ⚠️ Failed to analyze {obj.name}: {e}")
         
