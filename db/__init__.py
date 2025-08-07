@@ -1,6 +1,5 @@
 """
-Enhanced Database Discovery Module
-Implements view definition mining and comprehensive relationship discovery
+Database discovery module
 """
 
 from .discovery import DatabaseDiscovery

@@ -1,8 +1,7 @@
 """
-Enhanced Semantic Analysis Module
-Implements business domain analysis and entity classification with LLM enhancement
+Semantic analysis module
 """
 
-from .analysis import SemanticAnalyzer, LLMClient
+from .analysis import SemanticAnalyzer
 
-__all__ = ["SemanticAnalyzer", "LLMClient"]
+__all__ = ["SemanticAnalyzer"]

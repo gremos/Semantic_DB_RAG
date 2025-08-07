@@ -1,25 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Enhanced Semantic Analysis - Simple and Maintainable
-Implements business domain analysis and entity classification
+Simple Semantic Analysis - Let LLM Decide Everything
+Uses actual sample data instead of hardcoded patterns
 """
 
 import asyncio
 import json
+import time
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from pathlib import Path
 
-# Progress bar
-try:
-    from tqdm import tqdm
-except ImportError:
-    import subprocess
-    subprocess.check_call(["pip", "install", "tqdm"])
-    from tqdm import tqdm
-
-# Azure OpenAI
 from langchain_openai import AzureChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
 
@@ -27,7 +19,7 @@ from shared.config import Config
 from shared.models import TableInfo, BusinessDomain, Relationship
 
 class LLMClient:
-    """Simple LLM client for semantic analysis"""
+    """Simple LLM client"""
     
     def __init__(self, config: Config):
         self.llm = AzureChatOpenAI(
@@ -39,295 +31,211 @@ class LLMClient:
             request_timeout=60
         )
     
-    async def analyze_entities(self, prompt: str) -> str:
-        """Analyze entities using LLM"""
+    async def analyze(self, prompt: str) -> str:
+        """Analyze with LLM"""
         try:
             messages = [
-                SystemMessage(content="You are an expert database analyst. Analyze database structures and classify business entities. Respond with valid JSON only."),
+                SystemMessage(content="You are a business analyst. Analyze database structures using sample data. Respond with JSON only."),
                 HumanMessage(content=prompt)
             ]
             response = await asyncio.to_thread(self.llm.invoke, messages)
             return response.content
         except Exception as e:
-            print(f"   ⚠️ LLM analysis failed: {e}")
+            print(f"   ⚠️ LLM error: {e}")
             return ""
 
 class SemanticAnalyzer:
-    """Enhanced semantic analyzer with business intelligence"""
+    """Simple semantic analyzer using LLM + sample data"""
     
     def __init__(self, config: Config):
         self.config = config
-        self.llm_client = LLMClient(config)
+        self.llm = LLMClient(config)
         self.tables: List[TableInfo] = []
         self.relationships: List[Relationship] = []
         self.domain: Optional[BusinessDomain] = None
-        self.business_templates: Dict[str, Any] = {}
     
     async def analyze_tables(self, tables: List[TableInfo]) -> bool:
-        """Main analysis method"""
+        """Main analysis - let LLM decide everything"""
         
-        # Check cache first
-        if self._load_from_cache():
+        if self.load_from_cache():
             return True
         
         if not tables:
             print("❌ No tables to analyze")
             return False
         
-        print(f"🧠 Starting enhanced semantic analysis of {len(tables)} tables...")
+        print(f"🧠 Starting LLM-driven analysis of {len(tables)} tables...")
         
-        # Store tables
         self.tables = tables.copy()
         
         try:
-            # Step 1: Pattern-based classification
-            print("   📊 Step 1: Pattern-based entity classification...")
-            self._classify_entities_by_patterns()
+            # Step 1: Let LLM classify tables using sample data
+            print("   🤖 Step 1: LLM classifying tables using sample data...")
+            await self.classify_with_llm()
             
-            # Step 2: LLM-enhanced classification
-            print("   🤖 Step 2: LLM-enhanced classification...")
-            await self._enhance_with_llm()
+            # Step 2: Find relationships
+            print("   🔗 Step 2: Finding relationships...")
+            self.find_relationships()
             
-            # Step 3: Discover relationships
-            print("   🔗 Step 3: Discovering entity relationships...")
-            self._discover_entity_relationships()
+            # Step 3: Determine domain
+            print("   🏢 Step 3: Determining business domain...")
+            await self.determine_domain()
             
-            # Step 4: Analyze business domain
-            print("   🏢 Step 4: Analyzing business domain...")
-            self._analyze_business_domain()
+            # Step 4: Save results
+            print("   💾 Step 4: Saving results...")
+            self.save_to_cache()
             
-            # Step 5: Create business templates
-            print("   📋 Step 5: Creating business query templates...")
-            self._create_business_templates()
+            # Show summary
+            self.show_results()
             
-            # Step 6: Save results
-            print("   💾 Step 6: Saving analysis results...")
-            self._save_to_cache()
-            
-            # Show results
-            self._show_analysis_results()
-            
-            print("✅ Enhanced semantic analysis completed!")
             return True
             
         except Exception as e:
-            print(f"❌ Semantic analysis failed: {e}")
+            print(f"❌ Analysis failed: {e}")
             return False
     
-    def _classify_entities_by_patterns(self):
-        """Step 1: Pattern-based entity classification"""
+    async def classify_with_llm(self):
+        """Let LLM classify tables using actual sample data"""
         
+        # Process tables in batches
+        batch_size = 10
         classified_count = 0
         
-        for table in self.tables:
-            entity_type, confidence = self._get_entity_type_by_pattern(table)
+        for i in range(0, len(self.tables), batch_size):
+            batch = self.tables[i:i+batch_size]
             
-            if entity_type != 'Unknown':
-                table.entity_type = entity_type
-                table.confidence = confidence
-                table.business_role = 'Core' if confidence > 0.8 else 'Supporting'
-                classified_count += 1
-        
-        print(f"      ✅ Classified {classified_count} tables using patterns")
-    
-    def _get_entity_type_by_pattern(self, table: TableInfo) -> tuple:
-        """Classify entity type based on patterns"""
-        
-        name_lower = table.name.lower()
-        column_names = [col.get('name', '').lower() for col in table.columns]
-        
-        # High confidence patterns - exact matches
-        high_confidence_patterns = {
-            'Customer': ['customer', 'client', 'account'],
-            'Payment': ['payment', 'transaction', 'billing', 'invoice'],
-            'Order': ['order', 'sale', 'purchase'],
-            'Product': ['product', 'item', 'inventory'],
-            'User': ['user', 'person', 'employee'],
-            'Company': ['company', 'business', 'organization', 'vendor']
-        }
-        
-        for entity_type, patterns in high_confidence_patterns.items():
-            for pattern in patterns:
-                if pattern in name_lower:
-                    return entity_type, 0.9
-        
-        # Medium confidence - column analysis
-        column_patterns = {
-            'Customer': ['customer_id', 'customer_name', 'email', 'phone'],
-            'Payment': ['amount', 'payment_date', 'payment_method', 'total'],
-            'Order': ['order_id', 'order_date', 'quantity', 'customer_id'],
-            'Product': ['product_id', 'product_name', 'price', 'category'],
-            'User': ['username', 'password', 'email', 'first_name', 'last_name'],
-            'Contact': ['email', 'phone', 'address', 'contact_name']
-        }
-        
-        for entity_type, patterns in column_patterns.items():
-            matches = sum(1 for pattern in patterns if any(pattern in col for col in column_names))
-            if matches >= 2:  # At least 2 matching columns
-                confidence = min(0.7, 0.5 + (matches * 0.1))
-                return entity_type, confidence
-        
-        # Low confidence - general patterns
-        if any(col in column_names for col in ['id', 'name', 'created_date']):
-            return 'Entity', 0.3
-        
-        return 'Unknown', 0.0
-    
-    async def _enhance_with_llm(self):
-        """Step 2: Use LLM to enhance classification"""
-        
-        # Find tables that need LLM analysis
-        unclear_tables = [t for t in self.tables if t.confidence < 0.6 or t.entity_type == 'Unknown']
-        
-        if not unclear_tables:
-            print("      ✅ No unclear entities found")
-            return
-        
-        print(f"      🤖 Analyzing {len(unclear_tables)} unclear entities with LLM...")
-        
-        # Process in small batches
-        batch_size = 5
-        enhanced_count = 0
-        
-        for i in range(0, len(unclear_tables), batch_size):
-            batch = unclear_tables[i:i+batch_size]
-            
-            # Create LLM prompt
-            prompt = self._create_classification_prompt(batch)
+            # Create prompt with actual sample data
+            prompt = self.create_classification_prompt(batch)
             
             # Get LLM response
-            response = await self.llm_client.analyze_entities(prompt)
+            response = await self.llm.analyze(prompt)
             
-            # Parse and apply results
-            enhanced_count += self._apply_llm_classifications(response, batch)
+            # Apply classifications
+            classified_count += self.apply_classifications(response, batch)
             
             # Rate limiting
             await asyncio.sleep(1)
         
-        print(f"      ✅ Enhanced {enhanced_count} entities using LLM")
+        print(f"      ✅ Classified {classified_count} tables using LLM + sample data")
     
-    def _create_classification_prompt(self, tables_batch: List[TableInfo]) -> str:
-        """Create LLM prompt for entity classification"""
+    def create_classification_prompt(self, tables_batch: List[TableInfo]) -> str:
+        """Create prompt with actual sample data"""
         
-        table_descriptions = []
+        table_data = []
         for table in tables_batch:
-            columns_info = []
-            for col in table.columns[:8]:  # Limit columns
-                col_info = f"{col.get('name', '')} ({col.get('data_type', '')})"
-                columns_info.append(col_info)
-            
-            sample_info = ""
+            # Get actual sample data
+            sample_preview = ""
             if table.sample_data:
-                sample_info = str(table.sample_data[0])[:200]
+                first_row = table.sample_data[0]
+                sample_items = []
+                for key, value in list(first_row.items())[:6]:
+                    sample_items.append(f"{key}: {value}")
+                sample_preview = ", ".join(sample_items)
             
-            table_descriptions.append({
+            table_data.append({
                 'table_name': table.full_name,
-                'columns': columns_info,
-                'sample_data': sample_info,
+                'columns': [f"{col['name']} ({col['data_type']})" for col in table.columns[:10]],
+                'sample_data': sample_preview,
                 'row_count': table.row_count
             })
         
-        prompt = f"""
-Analyze these database tables and classify each as a business entity type.
+        return f"""
+Look at these database tables with ACTUAL SAMPLE DATA and classify each one:
 
-TABLES TO CLASSIFY:
-{json.dumps(table_descriptions, indent=2)}
+TABLES WITH REAL DATA:
+{json.dumps(table_data, indent=2)}
 
-For each table, determine:
-1. Entity Type: Customer, Order, Product, Payment, User, Company, Contact, Financial, Reference, System, or Unknown
-2. Confidence: 0.0 to 1.0 (how certain you are)
-3. Business Role: Core, Supporting, Reference, or System
+For each table, look at the ACTUAL sample data and determine:
+1. What type of business entity this represents
+2. How confident you are (0.0 to 1.0)
 
-Consider:
-- Table names and naming patterns
-- Column names and data types
-- Sample data content
-- Table relationships
+Entity types:
+- Customer: People, clients, accounts with names/contacts
+- Payment: Financial transactions, payments, billing
+- Order: Sales, purchases, bookings
+- Product: Items, inventory, catalog
+- User: System users, employees
+- Company: Business entities, vendors
+- Contact: Address/contact information
+- Financial: Accounting, revenue data
+- Reference: Lookup tables, codes
+- System: Technical/operational tables
+- Unknown: Cannot determine from data
 
-Respond with JSON only:
+Look at the ACTUAL sample data values to decide.
+
+JSON format:
 {{
   "classifications": [
     {{
-      "table_name": "full_table_name",
+      "table_name": "[schema].[table]",
       "entity_type": "Customer",
-      "confidence": 0.8,
-      "business_role": "Core",
-      "reasoning": "brief explanation"
+      "confidence": 0.9,
+      "reasoning": "Sample data shows customer names, emails, addresses"
     }}
   ]
 }}
 """
-        return prompt
     
-    def _apply_llm_classifications(self, response: str, batch: List[TableInfo]) -> int:
-        """Apply LLM classification results"""
+    def apply_classifications(self, response: str, batch: List[TableInfo]) -> int:
+        """Apply LLM classifications to tables"""
         
         try:
-            # Parse JSON response
-            data = self._extract_json_from_response(response)
+            data = self.parse_json(response)
             if not data or 'classifications' not in data:
                 return 0
             
-            enhanced_count = 0
-            
+            count = 0
             for classification in data['classifications']:
                 table_name = classification.get('table_name', '')
                 entity_type = classification.get('entity_type', 'Unknown')
                 confidence = float(classification.get('confidence', 0.0))
-                business_role = classification.get('business_role', 'Supporting')
                 
                 # Find matching table
                 for table in batch:
                     if table.full_name == table_name:
-                        # Only update if LLM is more confident
-                        if confidence > table.confidence:
-                            table.entity_type = entity_type
-                            table.confidence = confidence
-                            table.business_role = business_role
-                            enhanced_count += 1
+                        table.entity_type = entity_type
+                        table.confidence = confidence
+                        table.business_role = 'Core' if confidence > 0.8 else 'Supporting'
+                        count += 1
                         break
             
-            return enhanced_count
+            return count
             
         except Exception as e:
-            print(f"      ⚠️ Failed to parse LLM response: {e}")
+            print(f"      ⚠️ Failed to parse classifications: {e}")
             return 0
     
-    def _discover_entity_relationships(self):
-        """Step 3: Discover relationships between entities"""
+    def find_relationships(self):
+        """Find simple relationships between tables"""
         
-        # Simple relationship discovery based on entity types and column patterns
         for table in self.tables:
-            if table.entity_type == 'Unknown':
-                continue
-            
             column_names = [col.get('name', '').lower() for col in table.columns]
             
-            # Look for foreign key patterns
             for col_name in column_names:
                 if col_name.endswith('_id') or col_name.endswith('id'):
                     entity_name = col_name.replace('_id', '').replace('id', '')
                     
-                    # Find related entity
+                    # Find related table
                     for other_table in self.tables:
                         if other_table.full_name == table.full_name:
                             continue
                         
-                        if (entity_name in other_table.entity_type.lower() or 
-                            entity_name in other_table.name.lower()):
+                        if (entity_name in other_table.name.lower() or 
+                            entity_name in other_table.entity_type.lower()):
                             
                             self.relationships.append(Relationship(
                                 from_table=table.full_name,
                                 to_table=other_table.full_name,
-                                relationship_type='entity_reference',
+                                relationship_type='reference',
                                 confidence=0.7,
-                                description=f"Entity relationship via {col_name}"
+                                description=f"Reference via {col_name}"
                             ))
         
-        print(f"      ✅ Discovered {len(self.relationships)} entity relationships")
+        print(f"      ✅ Found {len(self.relationships)} relationships")
     
-    def _analyze_business_domain(self):
-        """Step 4: Analyze business domain and industry"""
+    async def determine_domain(self):
+        """Let LLM determine business domain"""
         
         # Count entity types
         entity_counts = {}
@@ -335,177 +243,59 @@ Respond with JSON only:
             if table.entity_type != 'Unknown':
                 entity_counts[table.entity_type] = entity_counts.get(table.entity_type, 0) + 1
         
-        # Determine domain type
-        domain_type = self._determine_domain_type(entity_counts)
+        prompt = f"""
+Based on this entity distribution, determine the business domain:
+
+ENTITY DISTRIBUTION:
+{json.dumps(entity_counts, indent=2)}
+
+What type of business system is this? Consider the entities present.
+
+JSON format:
+{{
+  "domain_type": "E-Commerce",
+  "confidence": 0.8,
+  "sample_questions": [
+    "How many customers do we have?",
+    "What is our total revenue?"
+  ]
+}}
+"""
         
-        # Generate sample questions
-        sample_questions = self._generate_sample_questions(entity_counts)
+        response = await self.llm.analyze(prompt)
+        result = self.parse_json(response)
         
-        # Determine capabilities
-        capabilities = self._determine_capabilities(entity_counts)
+        if result:
+            self.domain = BusinessDomain(
+                domain_type=result.get('domain_type', 'Business'),
+                industry='Business',
+                confidence=result.get('confidence', 0.5),
+                sample_questions=result.get('sample_questions', []),
+                capabilities=self.determine_capabilities(entity_counts)
+            )
         
-        # Calculate confidence
-        classified_tables = sum(1 for t in self.tables if t.entity_type != 'Unknown')
-        confidence = classified_tables / len(self.tables) if self.tables else 0.0
-        
-        self.domain = BusinessDomain(
-            domain_type=domain_type,
-            industry="Business",
-            confidence=confidence,
-            sample_questions=sample_questions,
-            capabilities=capabilities
-        )
-        
-        print(f"      ✅ Identified domain: {domain_type} (confidence: {confidence:.2f})")
+        print(f"      ✅ Identified domain: {self.domain.domain_type if self.domain else 'Unknown'}")
     
-    def _determine_domain_type(self, entity_counts: Dict[str, int]) -> str:
-        """Determine business domain type"""
-        
-        # Domain scoring
-        domain_scores = {
-            'E-Commerce': 0,
-            'CRM/Sales': 0,
-            'Financial Services': 0,
-            'User Management': 0,
-            'Business Operations': 0
-        }
-        
-        # E-Commerce indicators
-        if entity_counts.get('Product', 0) > 0 and entity_counts.get('Order', 0) > 0:
-            domain_scores['E-Commerce'] += 3
-        if entity_counts.get('Customer', 0) > 0 and entity_counts.get('Payment', 0) > 0:
-            domain_scores['E-Commerce'] += 2
-        
-        # CRM/Sales indicators
-        if entity_counts.get('Customer', 0) > 0:
-            domain_scores['CRM/Sales'] += 2
-        if entity_counts.get('Contact', 0) > 0:
-            domain_scores['CRM/Sales'] += 1
-        
-        # Financial indicators
-        if entity_counts.get('Payment', 0) > 0:
-            domain_scores['Financial Services'] += 2
-        if entity_counts.get('Financial', 0) > 0:
-            domain_scores['Financial Services'] += 1
-        
-        # User Management indicators
-        if entity_counts.get('User', 0) > 0:
-            domain_scores['User Management'] += 2
-        
-        # Default to Business Operations
-        domain_scores['Business Operations'] += 1
-        
-        # Return highest scoring domain
-        return max(domain_scores.items(), key=lambda x: x[1])[0]
-    
-    def _generate_sample_questions(self, entity_counts: Dict[str, int]) -> List[str]:
-        """Generate sample questions based on entities"""
-        
-        questions = []
-        
-        if entity_counts.get('Customer', 0) > 0:
-            questions.extend([
-                "How many customers do we have?",
-                "Show customer information",
-                "List all customers"
-            ])
-        
-        if entity_counts.get('Payment', 0) > 0:
-            questions.extend([
-                "What is our total revenue?",
-                "Show payment information",
-                "Calculate total payments for 2025"
-            ])
-        
-        if entity_counts.get('Customer', 0) > 0 and entity_counts.get('Payment', 0) > 0:
-            questions.extend([
-                "How many customers have made payments?",
-                "Show paid customers",
-                "Count total paid customers for 2025"
-            ])
-        
-        if entity_counts.get('Order', 0) > 0:
-            questions.extend([
-                "How many orders do we have?",
-                "Show order information",
-                "List recent orders"
-            ])
-        
-        if entity_counts.get('Product', 0) > 0:
-            questions.extend([
-                "How many products do we have?",
-                "Show product information",
-                "List all products"
-            ])
-        
-        # Generic questions
-        questions.extend([
-            "Show system overview",
-            "List all entities",
-            "What data is available?"
-        ])
-        
-        return questions[:15]  # Limit to 15 questions
-    
-    def _determine_capabilities(self, entity_counts: Dict[str, int]) -> Dict[str, bool]:
+    def determine_capabilities(self, entity_counts: Dict[str, int]) -> Dict[str, bool]:
         """Determine system capabilities"""
-        
         return {
             'customer_analysis': entity_counts.get('Customer', 0) > 0,
             'payment_analysis': entity_counts.get('Payment', 0) > 0,
             'order_analysis': entity_counts.get('Order', 0) > 0,
             'product_analysis': entity_counts.get('Product', 0) > 0,
-            'user_management': entity_counts.get('User', 0) > 0,
             'financial_reporting': entity_counts.get('Payment', 0) > 0 or entity_counts.get('Financial', 0) > 0,
-            'customer_payment_analysis': entity_counts.get('Customer', 0) > 0 and entity_counts.get('Payment', 0) > 0,
-            'cross_entity_analysis': len([c for c in entity_counts.values() if c > 0]) >= 2,
-            'relationship_queries': len(self.relationships) > 0
+            'cross_entity_analysis': len([c for c in entity_counts.values() if c > 0]) >= 2
         }
     
-    def _create_business_templates(self):
-        """Step 5: Create business query templates"""
-        
-        templates = {}
-        
-        # Customer templates
-        customer_tables = [t for t in self.tables if t.entity_type == 'Customer']
-        if customer_tables:
-            templates['customer_count'] = {
-                'description': 'Count total customers',
-                'tables': [t.full_name for t in customer_tables],
-                'sql_pattern': 'SELECT COUNT(*) as total_customers FROM {customer_table}'
-            }
-        
-        # Payment templates
-        payment_tables = [t for t in self.tables if t.entity_type == 'Payment']
-        if payment_tables:
-            templates['total_revenue'] = {
-                'description': 'Calculate total revenue',
-                'tables': [t.full_name for t in payment_tables],
-                'sql_pattern': 'SELECT SUM(amount) as total_revenue FROM {payment_table}'
-            }
-        
-        # Customer-Payment templates
-        if customer_tables and payment_tables:
-            templates['paid_customers'] = {
-                'description': 'Count customers who have made payments',
-                'tables': [t.full_name for t in customer_tables + payment_tables],
-                'sql_pattern': 'SELECT COUNT(DISTINCT c.id) FROM {customer_table} c JOIN {payment_table} p ON c.id = p.customer_id'
-            }
-        
-        self.business_templates = templates
-        print(f"      ✅ Created {len(templates)} business query templates")
-    
-    def _show_analysis_results(self):
+    def show_results(self):
         """Show analysis results"""
         
-        classified_tables = [t for t in self.tables if t.entity_type != 'Unknown']
+        classified = sum(1 for t in self.tables if t.entity_type != 'Unknown')
         
         print(f"\n📊 SEMANTIC ANALYSIS RESULTS:")
         print(f"   📋 Total tables: {len(self.tables)}")
-        print(f"   🧠 Classified: {len(classified_tables)}")
+        print(f"   🧠 Classified: {classified}")
         print(f"   🔗 Relationships: {len(self.relationships)}")
-        print(f"   📝 Business templates: {len(self.business_templates)}")
         
         # Show entity distribution
         entity_counts = {}
@@ -518,23 +308,16 @@ Respond with JSON only:
             for entity_type, count in sorted(entity_counts.items()):
                 print(f"      • {entity_type}: {count} tables")
         
-        # Show domain info
         if self.domain:
-            print(f"   🏢 Domain: {self.domain.domain_type} (confidence: {self.domain.confidence:.2f})")
-            
-            enabled_caps = [cap for cap, enabled in self.domain.capabilities.items() if enabled]
-            if enabled_caps:
-                print(f"   🎯 Capabilities: {len(enabled_caps)} query types enabled")
+            print(f"   🏢 Domain: {self.domain.domain_type}")
     
-    def _extract_json_from_response(self, response: str) -> Optional[Dict]:
-        """Extract JSON from LLM response"""
+    def parse_json(self, response: str) -> Dict:
+        """Parse JSON from LLM response"""
         try:
             import re
-            
-            # Clean response
             cleaned = response.strip()
             
-            # Remove markdown code blocks
+            # Remove markdown
             if '```json' in cleaned:
                 match = re.search(r'```json\s*(.*?)\s*```', cleaned, re.DOTALL)
                 if match:
@@ -545,16 +328,14 @@ Respond with JSON only:
                     cleaned = match.group(1)
             
             return json.loads(cleaned)
-            
-        except Exception:
-            return None
+        except:
+            return {}
     
-    def _save_to_cache(self):
-        """Save analysis results to cache"""
+    def save_to_cache(self):
+        """Save results to cache"""
         
         cache_file = self.config.get_cache_path("semantic_analysis.json")
         
-        # Convert to dictionary format
         tables_data = []
         for table in self.tables:
             tables_data.append({
@@ -595,9 +376,8 @@ Respond with JSON only:
             'tables': tables_data,
             'relationships': relationships_data,
             'domain': domain_data,
-            'business_templates': self.business_templates,
             'created': datetime.now().isoformat(),
-            'version': '2.0-enhanced'
+            'version': '2.0-simple'
         }
         
         try:
@@ -606,8 +386,8 @@ Respond with JSON only:
         except Exception as e:
             print(f"   ⚠️ Failed to save cache: {e}")
     
-    def _load_from_cache(self) -> bool:
-        """Load from cache if available"""
+    def load_from_cache(self) -> bool:
+        """Load from cache"""
         
         cache_file = self.config.get_cache_path("semantic_analysis.json")
         
@@ -615,9 +395,6 @@ Respond with JSON only:
             return False
         
         try:
-            import time
-            
-            # Check cache age
             cache_age = time.time() - cache_file.stat().st_mtime
             if cache_age > (self.config.semantic_cache_hours * 3600):
                 return False
@@ -667,13 +444,9 @@ Respond with JSON only:
                     capabilities=domain_data['capabilities']
                 )
             
-            # Load business templates
-            self.business_templates = data.get('business_templates', {})
-            
             print(f"✅ Loaded semantic analysis from cache")
             print(f"   📊 Tables: {len(self.tables)}")
             print(f"   🔗 Relationships: {len(self.relationships)}")
-            print(f"   📝 Templates: {len(self.business_templates)}")
             
             return True
             
@@ -681,22 +454,11 @@ Respond with JSON only:
             print(f"⚠️ Cache load failed: {e}")
             return False
     
-    def load_from_cache(self) -> bool:
-        """Public method to load from cache"""
-        return self._load_from_cache()
-    
     def get_tables(self) -> List[TableInfo]:
-        """Get analyzed tables"""
         return self.tables
     
     def get_relationships(self) -> List[Relationship]:
-        """Get discovered relationships"""
         return self.relationships
     
     def get_domain(self) -> Optional[BusinessDomain]:
-        """Get business domain"""
         return self.domain
-    
-    def get_business_templates(self) -> Dict[str, Any]:
-        """Get business query templates"""
-        return self.business_templates

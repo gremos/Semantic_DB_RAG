@@ -1,8 +1,7 @@
 """
-4-Stage Automated Query Pipeline Module
-Implements business intent analysis, smart table selection, relationship resolution, and validated SQL generation
+Interactive query interface module
 """
 
-from .query_interface import QueryInterface, QueryLLMClient
+from .query_interface import QueryInterface
 
-__all__ = ["QueryInterface", "QueryLLMClient"]
+__all__ = ["QueryInterface"]
