@@ -27,7 +27,7 @@ class LLMClient:
             api_key=config.api_key,
             azure_deployment=config.deployment_name,
             api_version=config.api_version,
-            temperature=0.1,
+            # temperature=0.1,
             request_timeout=60
         )
     
