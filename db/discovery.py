@@ -147,6 +147,7 @@ class DatabaseDiscovery:
           AND LOWER(t.name) NOT LIKE '%backup%'
           AND LOWER(t.name) NOT LIKE '%dev%'
 
+
         UNION ALL
 
         -- Views
@@ -161,6 +162,9 @@ class DatabaseDiscovery:
           AND LOWER(v.name) NOT LIKE '%bck%'
           AND LOWER(v.name) NOT LIKE '%backup%'
           AND LOWER(v.name) NOT LIKE '%dev%'
+          AND LOWER(v.name) NOT LIKE '%timingview%'
+          AND LOWER(v.name) NOT LIKE '%view_sr_fullproductmap%'
+          AND LOWER(v.name) NOT LIKE '%viewbatchactionanalysis%'
 
         ORDER BY estimated_rows DESC, object_name;
         """
