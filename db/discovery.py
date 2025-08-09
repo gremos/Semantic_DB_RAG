@@ -165,6 +165,16 @@ class DatabaseDiscovery:
           AND LOWER(v.name) NOT LIKE '%timingview%'
           AND LOWER(v.name) NOT LIKE '%view_sr_fullproductmap%'
           AND LOWER(v.name) NOT LIKE '%viewbatchactionanalysis%'
+          AND LOWER(v.name) NOT LIKE '%viewfixOfferfailures%'
+          AND LOWER(v.name) NOT LIKE '%viewrenewalfailure%'
+          AND LOWER(v.name) NOT LIKE '%viewsalesmarketactivecampaign%'
+          AND LOWER(v.name) NOT LIKE '%viewsalesmarketitempotentialownerforcounter%'
+          AND LOWER(v.name) NOT LIKE '%viewtargetgroupiteminfo%'
+          AND LOWER(v.name) NOT LIKE '%viewtasklistfordialer%'
+          AND LOWER(v.name) NOT LIKE '%vw_locacities%'
+          AND LOWER(v.name) NOT LIKE '%vwagora%'
+          AND LOWER(v.name) NOT LIKE '%workflowcontractview%'
+          AND LOWER(v.name) NOT LIKE '%xo_active_banners_vw_old20150401%'
 
         ORDER BY estimated_rows DESC, object_name;
         """
