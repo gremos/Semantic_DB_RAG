@@ -42,8 +42,11 @@ class SemanticRAG:
         print("🔍 DATABASE DISCOVERY")
         print("=" * 50)
         
-        success = await self.discovery.discover_database()
+        # success = await self.discovery.discover_database(test_mode=True)
         
+        
+        success = await self.discovery.discover_database()
+
         if success:
             tables = self.discovery.get_tables()
             print(f"✅ Discovery completed!")
