@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Semantic Database RAG System - Enhanced Query Interface
-Simple, readable, and maintainable implementation with template-based constraints
+Enhanced Interactive Query Interface for Real Database Tables
+Handles real business data with proper column analysis and relationship discovery
 """
 
 import json
@@ -10,1631 +10,1426 @@ import re
 import pyodbc
 import time
 import asyncio
-import logging
-import hashlib
-from typing import List, Dict, Any, Optional, Tuple
-from datetime import datetime, timedelta
+from typing import List, Dict, Any, Optional
+from datetime import datetime
 from pathlib import Path
-from dataclasses import dataclass, field
-from collections import defaultdict
-import threading
-from contextlib import contextmanager
-
-# Enhanced imports for new features
-try:
-    import sqlglot
-    from sqlglot import parse_one, transpile
-    from sqlglot.optimizer import optimize
-    SQLGLOT_AVAILABLE = True
-except ImportError:
-    print("❌ SQLGlot not found. Install with: pip install sqlglot")
-    sqlglot = None
-    SQLGLOT_AVAILABLE = False
-
-try:
-    import numpy as np
-    from sentence_transformers import SentenceTransformer
-    EMBEDDINGS_AVAILABLE = True
-except ImportError:
-    print("⚠️ Embeddings not available. Install with: pip install sentence-transformers numpy")
-    np = None
-    SentenceTransformer = None
-    EMBEDDINGS_AVAILABLE = False
 
 from langchain_openai import AzureChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
-from tqdm import tqdm
 
-# Import shared modules
-try:
-    from shared.config import Config
-    from shared.models import TableInfo, BusinessDomain, Relationship, QueryResult
-except ImportError as e:
-    print(f"❌ Import error: {e}")
-    raise
-
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('semantic_rag.log'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
-
-
-@dataclass
-class QueryStats:
-    """Query execution statistics"""
-    question: str
-    tables_selected: List[str] = field(default_factory=list)
-    sql_generated: str = ""
-    execution_time: float = 0.0
-    result_count: int = 0
-    error: Optional[str] = None
-    retry_count: int = 0
-    validation_failures: int = 0
-    timestamp: datetime = field(default_factory=datetime.now)
-
-
-@dataclass 
-class SchemaNode:
-    """Schema graph node"""
-    table_name: str
-    columns: List[Dict]
-    primary_keys: List[str] = field(default_factory=list)
-    foreign_keys: List[Dict] = field(default_factory=list)
-    relationships: List[str] = field(default_factory=list)
-    embedding: Optional[np.ndarray] = None
-
-
-class LiveSchemaValidator:
-    """Validates columns against actual database schema"""
-    
-    def __init__(self, config: Config):
-        self.config = config
-        self.schema_cache = {}
-        self._lock = threading.Lock()
-    
-    def get_actual_columns(self, table_name: str) -> List[str]:
-        """Get actual column names from database"""
-        with self._lock:
-            if table_name in self.schema_cache:
-                return self.schema_cache[table_name]
-        
-        try:
-            with self._get_connection() as conn:
-                cursor = conn.cursor()
-                
-                # Extract clean table name
-                clean_table = table_name.split('.')[-1].replace('[', '').replace(']', '')
-                
-                # Query actual table schema
-                schema_query = f"""
-                SELECT COLUMN_NAME, DATA_TYPE
-                FROM INFORMATION_SCHEMA.COLUMNS 
-                WHERE TABLE_NAME = ?
-                ORDER BY ORDINAL_POSITION
-                """
-                
-                cursor.execute(schema_query, (clean_table,))
-                columns = [row[0] for row in cursor.fetchall()]
-                
-                if not columns:
-                    # Fallback: try to get columns directly from table
-                    logger.warning(f"No columns found in INFORMATION_SCHEMA for {clean_table}, trying direct query")
-                    try:
-                        cursor.execute(f"SELECT TOP 0 * FROM {table_name}")
-                        columns = [desc[0] for desc in cursor.description] if cursor.description else []
-                    except:
-                        logger.error(f"Direct query also failed for {table_name}")
-                        return []
-                
-                # Cache the result
-                with self._lock:
-                    self.schema_cache[table_name] = columns
-                
-                logger.info(f"Retrieved {len(columns)} actual columns for {table_name}: {columns[:5]}...")
-                return columns
-                
-        except Exception as e:
-            logger.error(f"Failed to get actual columns for {table_name}: {e}")
-            return []
-    
-    def validate_and_fix_columns(self, business_columns: Dict, table_name: str) -> Dict:
-        """Validate business columns against actual database schema"""
-        actual_columns = self.get_actual_columns(table_name)
-        if not actual_columns:
-            logger.warning(f"No actual columns found for {table_name}")
-            return business_columns
-        
-        # Convert to lowercase for comparison
-        actual_lower = [col.lower() for col in actual_columns]
-        actual_map = {col.lower(): col for col in actual_columns}
-        
-        validated_columns = {}
-        
-        for category, cols in business_columns.items():
-            validated_cols = []
-            
-            for col in cols:
-                col_lower = col.lower()
-                
-                # Direct match
-                if col_lower in actual_lower:
-                    validated_cols.append(actual_map[col_lower])
-                    logger.debug(f"Column {col} found as {actual_map[col_lower]}")
-                else:
-                    # Find similar columns
-                    similar = self._find_similar_column(col_lower, actual_columns, category)
-                    if similar:
-                        validated_cols.append(similar)
-                        logger.info(f"Column {col} replaced with similar {similar}")
-                    else:
-                        logger.warning(f"Column {col} not found in {table_name}")
-            
-            if validated_cols:
-                validated_columns[category] = validated_cols
-        
-        # Add missing categories by scanning actual columns
-        validated_columns.update(self._discover_missing_categories(actual_columns, validated_columns))
-        
-        logger.info(f"Validated columns for {table_name}: {validated_columns}")
-        return validated_columns
-    
-    def _find_similar_column(self, target_col: str, actual_columns: List[str], category: str) -> Optional[str]:
-        """Find similar column in actual schema"""
-        target_lower = target_col.lower()
-        
-        # Category-specific patterns
-        patterns = {
-            'customer': ['customer', 'client', 'account', 'user', 'owner', 'billing'],
-            'amount': ['amount', 'price', 'total', 'value', 'cost', 'fee', 'charge'],
-            'date': ['date', 'time', 'created', 'modified', 'signed', 'started'],
-            'complaint': ['case', 'ticket', 'issue', 'problem', 'type'],
-            'content': ['description', 'content', 'text', 'message', 'comment']
-        }
-        
-        category_patterns = patterns.get(category, [])
-        
-        # Look for exact partial matches first
-        for col in actual_columns:
-            col_lower = col.lower()
-            if target_lower in col_lower or col_lower in target_lower:
-                return col
-        
-        # Look for pattern matches
-        for col in actual_columns:
-            col_lower = col.lower()
-            for pattern in category_patterns:
-                if pattern in col_lower:
-                    return col
-        
-        return None
-    
-    def _discover_missing_categories(self, actual_columns: List[str], existing: Dict) -> Dict:
-        """Discover missing business categories from actual columns"""
-        discovered = {}
-        
-        patterns = {
-            'customer': ['customer', 'client', 'account', 'user', 'owner', 'billing'],
-            'amount': ['amount', 'price', 'total', 'value', 'cost', 'fee'],
-            'date': ['date', 'time', 'created', 'modified', 'signed'],
-            'id': ['id', 'key', 'guid']
-        }
-        
-        for category, keywords in patterns.items():
-            if category not in existing:
-                matches = []
-                for col in actual_columns:
-                    col_lower = col.lower()
-                    if any(keyword in col_lower for keyword in keywords):
-                        matches.append(col)
-                
-                if matches:
-                    discovered[category] = matches[:3]  # Limit to 3
-        
-        return discovered
-    
-    @contextmanager
-    def _get_connection(self):
-        """Get database connection"""
-        conn = None
-        try:
-            conn_string = self.config.get_database_connection_string()
-            if 'timeout=' not in conn_string.lower():
-                conn_string += ';timeout=10'  # Quick timeout for schema queries
-            
-            conn = pyodbc.connect(conn_string, autocommit=True)
-            conn.setdecoding(pyodbc.SQL_CHAR, encoding='utf-8')
-            conn.setdecoding(pyodbc.SQL_WCHAR, encoding='utf-8')
-            conn.setencoding(encoding='utf-8')
-            
-            yield conn
-        except Exception as e:
-            logger.error(f"Schema validation connection error: {e}")
-            raise
-        finally:
-            if conn:
-                conn.close()
-    """SQL security validation using AST parsing"""
-    
-    ALLOWED_STATEMENTS = {'SELECT'}
-    BLOCKED_KEYWORDS = {
-        'DROP', 'DELETE', 'UPDATE', 'INSERT', 'TRUNCATE', 
-        'ALTER', 'CREATE', 'EXEC', 'EXECUTE', 'xp_cmdshell'
-    }
-    
-    def __init__(self):
-        self.violation_count = 0
-    
-    def validate_sql(self, sql: str) -> Tuple[bool, str]:
-        """Validate SQL for security and safety"""
-        if not sql or not sql.strip():
-            return False, "Empty SQL query"
-        
-        try:
-            # Parse with SQLGlot if available
-            if SQLGLOT_AVAILABLE:
-                parsed = parse_one(sql, dialect="tsql")
-                return self._validate_ast(parsed)
-            else:
-                return self._validate_regex(sql)
-        except Exception as e:
-            return False, f"Parse error: {str(e)}"
-    
-    def _validate_ast(self, parsed) -> Tuple[bool, str]:
-        """Validate using AST"""
-        try:
-            # Check statement type
-            if not isinstance(parsed, sqlglot.exp.Select):
-                return False, "Only SELECT statements allowed"
-            
-            # Check for blocked functions/procedures
-            for node in parsed.walk():
-                if isinstance(node, sqlglot.exp.Anonymous):
-                    func_name = str(node.this).upper()
-                    if any(blocked in func_name for blocked in self.BLOCKED_KEYWORDS):
-                        return False, f"Blocked function: {func_name}"
-            
-            return True, "Valid"
-        except Exception as e:
-            return False, f"AST validation error: {str(e)}"
-    
-    def _validate_regex(self, sql: str) -> Tuple[bool, str]:
-        """Fallback regex validation"""
-        sql_upper = sql.upper()
-        
-        # Check for blocked keywords
-        for keyword in self.BLOCKED_KEYWORDS:
-            if re.search(rf'\b{keyword}\b', sql_upper):
-                self.violation_count += 1
-                return False, f"Blocked keyword: {keyword}"
-        
-        # Must start with SELECT
-        if not re.match(r'^\s*(WITH|SELECT)\s', sql_upper):
-            return False, "Only SELECT statements allowed"
-        
-        return True, "Valid"
-
-
-class EnhancedSQLGenerator:
-    """Enhanced SQL generator with templates and constraints - No external dependencies"""
-    
-    def __init__(self):
-        self.templates = {
-            'customer_count': """
-            SELECT COUNT(DISTINCT {customer_column}) as total_customers
-            FROM {table}
-            WHERE {conditions}
-            """,
-            
-            'customer_list': """
-            SELECT TOP {limit} 
-                {customer_columns}
-            FROM {table}
-            WHERE {conditions}
-            ORDER BY {order_column} DESC
-            """,
-            
-            'payment_analysis': """
-            SELECT 
-                {customer_column},
-                SUM({amount_column}) as total_paid,
-                COUNT(*) as payment_count
-            FROM {table}
-            WHERE {amount_column} > 0
-                AND {date_filter}
-            GROUP BY {customer_column}
-            ORDER BY total_paid DESC
-            """,
-            
-            'complaint_analysis': """
-            SELECT TOP {limit}
-                {customer_columns},
-                {complaint_columns},
-                {date_column}
-            FROM {table}
-            WHERE {complaint_conditions}
-            ORDER BY {date_column} DESC
-            """,
-            
-            'general_query': """
-            SELECT TOP {limit}
-                {columns}
-            FROM {table}
-            WHERE {conditions}
-            ORDER BY {order_column}
-            """
-        }
-        
-        self.validation_patterns = {
-            'required': [
-                (r'^\s*SELECT\s+', "Must start with SELECT"),
-                (r'\bFROM\s+[\w\[\]\.]+', "Must have FROM clause"),
-            ],
-            'forbidden': [
-                (r'\b(DROP|DELETE|UPDATE|INSERT|TRUNCATE|ALTER|CREATE|EXEC)\b', "Only SELECT allowed"),
-                (r'\bxp_\w+', "System procedures not allowed"),
-            ]
-        }
-        
-        self.intent_keywords = {
-            'customer_count': ['how many customers', 'count customers', 'number of customers'],
-            'customer_list': ['list customers', 'show customers', 'customers who'],
-            'payment_analysis': ['payment', 'paid', 'revenue', 'amount', 'total paid'],
-            'complaint_analysis': ['complaint', 'issue', 'problem', 'error', 'ticket']
-        }
-        
-        logger.info("Enhanced SQL generator initialized with templates")
-    
-    def detect_intent(self, question: str) -> str:
-        """Detect query intent from question"""
-        q_lower = question.lower()
-        
-        # Check for count queries first
-        if any(word in q_lower for word in ['how many', 'count', 'number of']):
-            return 'customer_count'
-        
-        # Check specific business intents
-        for intent, keywords in self.intent_keywords.items():
-            if any(keyword in q_lower for keyword in keywords):
-                return intent
-        
-        return 'customer_list'  # Default fallback
-    
-    def extract_parameters(self, question: str, context: Dict) -> Dict:
-        """Extract parameters from question and context"""
-        params = {
-            'limit': 1000,
-            'conditions': '1=1',
-            'date_filter': '1=1',
-            'order_column': 'ID',
-            'table': 'unknown_table',
-            'columns': '*'
-        }
-        
-        # Extract limit from question
-        limit_match = re.search(r'\btop\s+(\d+)\b|\b(\d+)\s+(?:customers?|rows?|records?)\b', question.lower())
-        if limit_match:
-            limit_val = limit_match.group(1) or limit_match.group(2)
-            params['limit'] = min(int(limit_val), 5000)  # Cap at 5000 for safety
-        
-        # Extract year filter
-        year_match = re.search(r'\b(20\d{2})\b', question)
-        if year_match:
-            year = year_match.group(1)
-            params['date_filter'] = f"YEAR([date_column]) = {year}"
-        
-        # Special conditions for paid customers
-        if 'paid' in question.lower():
-            params['conditions'] = '[amount_column] > 0'
-        
-        # Extract business columns from context - with fallbacks
-        business_cols = context.get('business_columns', {})
-        
-        # Set customer columns with intelligent fallbacks
-        if business_cols.get('customer'):
-            params['customer_column'] = business_cols['customer'][0]
-            params['customer_columns'] = ', '.join(business_cols['customer'][:3])
-        else:
-            # Smart fallback: look for ID columns that might represent customers
-            all_tables = context.get('tables', [])
-            if all_tables:
-                for col_name in all_tables[0].get('columns', []):
-                    col_lower = col_name.lower()
-                    if any(word in col_lower for word in ['customer', 'client', 'account', 'billing']):
-                        params['customer_column'] = col_name
-                        params['customer_columns'] = col_name
-                        break
-                else:
-                    # Final fallback: use any ID column
-                    for col_name in all_tables[0].get('columns', []):
-                        if 'id' in col_name.lower():
-                            params['customer_column'] = col_name
-                            params['customer_columns'] = col_name
-                            break
-                    else:
-                        # Ultimate fallback
-                        params['customer_column'] = '*'
-                        params['customer_columns'] = '*'
-        
-        # Set amount columns with fallbacks
-        if business_cols.get('amount'):
-            params['amount_column'] = business_cols['amount'][0]
-        else:
-            # Smart fallback: look for amount/price columns
-            all_tables = context.get('tables', [])
-            if all_tables:
-                for col_name in all_tables[0].get('columns', []):
-                    col_lower = col_name.lower()
-                    if any(word in col_lower for word in ['amount', 'price', 'total', 'value', 'cost']):
-                        params['amount_column'] = col_name
-                        break
-                else:
-                    params['amount_column'] = '1'  # Fallback to literal
-        
-        # Replace placeholder in conditions
-        if '[amount_column]' in params['conditions']:
-            params['conditions'] = params['conditions'].replace('[amount_column]', params['amount_column'])
-        
-        # Set date columns with fallbacks
-        if business_cols.get('date'):
-            params['date_column'] = business_cols['date'][0]
-            params['order_column'] = business_cols['date'][0]
-        else:
-            # Smart fallback: look for date columns
-            all_tables = context.get('tables', [])
-            if all_tables:
-                for col_name in all_tables[0].get('columns', []):
-                    col_lower = col_name.lower()
-                    if any(word in col_lower for word in ['date', 'time', 'created', 'modified', 'signed']):
-                        params['date_column'] = col_name
-                        params['order_column'] = col_name
-                        break
-                else:
-                    params['date_column'] = 'GETDATE()'  # Fallback to current date
-                    params['order_column'] = params['customer_column']
-        
-        # Replace placeholder in date_filter
-        if '[date_column]' in params['date_filter']:
-            params['date_filter'] = params['date_filter'].replace('[date_column]', params['date_column'])
-        
-        # Set complaint columns
-        if business_cols.get('complaint'):
-            params['complaint_columns'] = ', '.join(business_cols['complaint'][:3])
-            params['complaint_conditions'] = f"{business_cols['complaint'][0]} IS NOT NULL"
-        
-        # Set table name
-        if context.get('tables') and len(context['tables']) > 0:
-            params['table'] = context['tables'][0]['name']
-        
-        # Set general columns
-        all_columns = []
-        for category, cols in business_cols.items():
-            all_columns.extend(cols[:2])  # Take first 2 from each category
-        
-        if all_columns:
-            params['columns'] = ', '.join(all_columns[:10])  # Limit to 10 columns
-        elif context.get('tables') and len(context['tables']) > 0:
-            # Fallback to first few columns from table
-            table_cols = context['tables'][0].get('columns', [])[:5]
-            params['columns'] = ', '.join(table_cols) if table_cols else '*'
-        
-        return params
-    
-    def generate_from_template(self, question: str, context: Dict) -> Tuple[str, str]:
-        """Generate SQL using templates"""
-        try:
-            # Detect intent
-            intent = self.detect_intent(question)
-            logger.info(f"Detected intent: {intent}")
-            
-            # Get template
-            template = self.templates.get(intent, self.templates['general_query'])
-            
-            # Extract parameters
-            params = self.extract_parameters(question, context)
-            logger.info(f"Extracted parameters: {params}")
-            
-            # Check for missing critical parameters
-            critical_params = ['table', 'customer_column']
-            missing_params = [p for p in critical_params if params.get(p) in [None, 'unknown_table', '*']]
-            
-            if missing_params:
-                logger.warning(f"Missing critical parameters: {missing_params}")
-                logger.info(f"Available context: {context}")
-            
-            # Generate SQL from template
-            sql = template.format(**params)
-            sql = re.sub(r'\s+', ' ', sql.strip())  # Clean whitespace
-            
-            logger.info(f"Generated SQL from template: {sql}")
-            return sql, intent
-            
-        except KeyError as e:
-            logger.error(f"Template parameter missing: {e}")
-            logger.error(f"Available parameters: {list(params.keys()) if 'params' in locals() else 'None'}")
-            logger.error(f"Template requires: {re.findall(r'{(\w+)}', template)}")
-            return "", f"Missing parameter: {e}"
-        except Exception as e:
-            logger.error(f"Template generation error: {e}")
-            return "", f"Generation error: {e}"
-    
-    def validate_sql(self, sql: str) -> Tuple[bool, str]:
-        """Validate generated SQL"""
-        if not sql or not sql.strip():
-            return False, "Empty SQL"
-        
-        sql_upper = sql.upper()
-        
-        # Check required patterns
-        for pattern, message in self.validation_patterns['required']:
-            if not re.search(pattern, sql_upper):
-                return False, message
-        
-        # Check forbidden patterns
-        for pattern, message in self.validation_patterns['forbidden']:
-            if re.search(pattern, sql_upper):
-                return False, message
-        
-        return True, "Valid"
-    
-    async def generate_constrained_sql(self, question: str, context: Dict, 
-                                     llm_fallback=None) -> Tuple[str, int]:
-        """Generate SQL with constraints (main interface)"""
-        
-        # Strategy 1: Template-based generation (preferred)
-        sql, intent = self.generate_from_template(question, context)
-        
-        if sql:
-            is_valid, error = self.validate_sql(sql)
-            if is_valid:
-                logger.info(f"Template generation successful: {intent}")
-                return sql, 0  # Success on first try
-            else:
-                logger.warning(f"Template validation failed: {error}")
-        
-        # Strategy 2: LLM fallback with constraints
-        if llm_fallback:
-            logger.info("Falling back to LLM generation")
-            return await self._llm_with_constraints(question, context, llm_fallback)
-        
-        return "", 1
-    
-    async def _llm_with_constraints(self, question: str, context: Dict, 
-                                  llm_client, max_retries: int = 3) -> Tuple[str, int]:
-        """LLM generation with validation and retry"""
-        
-        for attempt in range(max_retries):
-            try:
-                # Enhanced system prompt with strict constraints
-                system_prompt = f"""You are a T-SQL expert. Generate ONLY SELECT statements.
-
-STRICT RULES:
-- Start with SELECT TOP [number]
-- Use exact column names from context
-- Only use tables provided in context
-- Include WHERE clause for filtering
-- Add ORDER BY for consistency
-- NO DDL/DML operations (no DROP, DELETE, UPDATE, INSERT, etc.)
-
-AVAILABLE CONTEXT:
-{json.dumps(context, indent=2)}
-
-Return ONLY the SQL query - no explanations."""
-
-                user_prompt = f'Question: "{question}"\n\nGenerate T-SQL SELECT statement:'
-                
-                # Add error feedback for retries
-                if attempt > 0:
-                    user_prompt += f"\n\nPrevious attempt failed. Ensure you follow all rules above."
-                
-                # Generate using LLM
-                response = await llm_client._generate_sql_direct(system_prompt, user_prompt)
-                sql = self._clean_sql_response(response)
-                
-                if sql:
-                    is_valid, error = self.validate_sql(sql)
-                    if is_valid:
-                        logger.info(f"LLM generation successful on attempt {attempt + 1}")
-                        return sql, attempt
-                    else:
-                        logger.warning(f"LLM validation failed (attempt {attempt + 1}): {error}")
-                
-            except Exception as e:
-                logger.error(f"LLM generation error (attempt {attempt + 1}): {e}")
-        
-        return "", max_retries
-    
-    def _clean_sql_response(self, response: str) -> str:
-        """Clean LLM response to extract SQL"""
-        if not response:
-            return ""
-        
-        # Remove markdown and comments
-        cleaned = re.sub(r'```sql\s*', '', response, flags=re.IGNORECASE)
-        cleaned = re.sub(r'```\s*', '', cleaned)
-        cleaned = re.sub(r'--.*$', '', cleaned, flags=re.MULTILINE)
-        
-        # Extract SQL lines
-        lines = [line.strip() for line in cleaned.split('\n') if line.strip()]
-        sql_lines = []
-        
-        for line in lines:
-            if line.upper().startswith(('SELECT', 'WITH')) or sql_lines:
-                if not line.startswith(('--', '/*', 'Note:', 'Here', 'The', 'This')):
-                    sql_lines.append(line)
-        
-        return ' '.join(sql_lines).rstrip(';').strip()
-
-
-class SchemaEmbedder:
-    """Creates and manages schema embeddings (optional)"""
-    
-    def __init__(self):
-        self.model = None
-        self.embeddings_cache = {}
-        self.available = EMBEDDINGS_AVAILABLE
-        
-        if self.available:
-            self._init_model()
-    
-    def _init_model(self):
-        """Initialize embedding model"""
-        if not EMBEDDINGS_AVAILABLE:
-            return
-        
-        try:
-            self.model = SentenceTransformer('all-MiniLM-L6-v2')
-            logger.info("Schema embedding model loaded")
-        except Exception as e:
-            logger.warning(f"Failed to load embedding model: {e}")
-            self.available = False
-    
-    def embed_schema(self, tables: List[TableInfo]) -> Dict[str, np.ndarray]:
-        """Create embeddings for schema elements"""
-        if not self.available or not self.model:
-            return {}
-        
-        embeddings = {}
-        
-        # Progress bar for embedding creation
-        with tqdm(total=len(tables), desc="Creating embeddings") as pbar:
-            for table in tables:
-                # Create table description
-                description = self._create_table_description(table)
-                cache_key = hashlib.md5(description.encode()).hexdigest()
-                
-                if cache_key in self.embeddings_cache:
-                    embeddings[table.full_name] = self.embeddings_cache[cache_key]
-                else:
-                    embedding = self.model.encode([description])[0]
-                    embeddings[table.full_name] = embedding
-                    self.embeddings_cache[cache_key] = embedding
-                
-                pbar.update(1)
-        
-        return embeddings
-    
-    def _create_table_description(self, table: TableInfo) -> str:
-        """Create searchable description of table"""
-        parts = [
-            f"Table: {table.name}",
-            f"Type: {table.entity_type}",
-            f"Columns: {', '.join([col['name'] for col in table.columns[:10]])}",
-        ]
-        
-        # Add sample data context
-        if table.sample_data:
-            sample_values = []
-            for row in table.sample_data[:3]:
-                for value in row.values():
-                    if isinstance(value, str) and len(value) > 5:
-                        sample_values.append(value[:50])
-            if sample_values:
-                parts.append(f"Sample content: {', '.join(sample_values[:5])}")
-        
-        return " | ".join(parts)
-    
-    def find_similar_tables(self, query: str, embeddings: Dict[str, np.ndarray], 
-                          top_k: int = 10) -> List[Tuple[str, float]]:
-        """Find tables similar to query using embeddings"""
-        if not self.available or not self.model or not embeddings:
-            return []
-        
-        query_embedding = self.model.encode([query])[0]
-        similarities = []
-        
-        for table_name, table_embedding in embeddings.items():
-            similarity = np.dot(query_embedding, table_embedding) / (
-                np.linalg.norm(query_embedding) * np.linalg.norm(table_embedding)
-            )
-            similarities.append((table_name, float(similarity)))
-        
-        similarities.sort(key=lambda x: x[1], reverse=True)
-        return similarities[:top_k]
-
-
-class SchemaGraphBuilder:
-    """Builds schema relationship graph from metadata"""
-    
-    def __init__(self):
-        self.graph = {}
-        self.pk_fk_relationships = []
-    
-    def build_graph(self, tables: List[TableInfo]) -> Dict[str, SchemaNode]:
-        """Build comprehensive schema graph"""
-        logger.info(f"Building schema graph for {len(tables)} tables")
-        
-        # Create nodes
-        nodes = {}
-        for table in tables:
-            node = SchemaNode(
-                table_name=table.full_name,
-                columns=table.columns,
-                primary_keys=self._extract_primary_keys(table),
-                foreign_keys=self._extract_foreign_keys(table)
-            )
-            nodes[table.full_name] = node
-        
-        # Discover relationships
-        self._discover_relationships(nodes)
-        
-        logger.info(f"Schema graph built with {len(self.pk_fk_relationships)} relationships")
-        return nodes
-    
-    def _extract_primary_keys(self, table: TableInfo) -> List[str]:
-        """Extract primary key columns"""
-        pks = []
-        for col in table.columns:
-            col_name = col['name'].lower()
-            # Common PK patterns
-            if (col_name.endswith('_id') or col_name == 'id' or 
-                col_name.startswith('pk_') or 'primary' in col_name):
-                pks.append(col['name'])
-        return pks
-    
-    def _extract_foreign_keys(self, table: TableInfo) -> List[Dict]:
-        """Extract foreign key relationships"""
-        fks = []
-        for col in table.columns:
-            col_name = col['name'].lower()
-            # Common FK patterns
-            if col_name.endswith('_id') and col_name != 'id':
-                # Infer target table
-                target_table = col_name[:-3]  # Remove '_id'
-                fks.append({
-                    'column': col['name'],
-                    'references_table': target_table,
-                    'confidence': 0.8
-                })
-        return fks
-    
-    def _discover_relationships(self, nodes: Dict[str, SchemaNode]):
-        """Discover relationships between nodes"""
-        for table_name, node in nodes.items():
-            for fk in node.foreign_keys:
-                target_pattern = fk['references_table']
-                
-                # Find matching tables
-                for target_name in nodes.keys():
-                    if target_pattern in target_name.lower():
-                        relationship = f"{table_name} -> {target_name} (FK: {fk['column']})"
-                        node.relationships.append(relationship)
-                        self.pk_fk_relationships.append({
-                            'from_table': table_name,
-                            'to_table': target_name,
-                            'join_condition': f"{table_name}.{fk['column']} = {target_name}.id",
-                            'confidence': fk['confidence']
-                        })
-    
-    def get_join_path(self, table1: str, table2: str) -> Optional[str]:
-        """Find join path between two tables"""
-        for rel in self.pk_fk_relationships:
-            if ((rel['from_table'] == table1 and rel['to_table'] == table2) or
-                (rel['from_table'] == table2 and rel['to_table'] == table1)):
-                return rel['join_condition']
-        return None
+from shared.config import Config
+from shared.models import TableInfo, BusinessDomain, Relationship, QueryResult
 
 
 class LLMClient:
-    """Enhanced LLM client with template-based constraints and retry logic"""
+    """Enhanced LLM client for real database analysis"""
     
     def __init__(self, config: Config):
         self.llm = AzureChatOpenAI(
             azure_endpoint=config.azure_endpoint,
             api_key=config.api_key,
             azure_deployment=config.deployment_name,
-            api_version="2024-12-01-preview",  # Use specified version
-            request_timeout=60,
-            temperature=0.1,  # Lower temperature for more deterministic SQL
-            max_retries=3
+            api_version=config.api_version,
+            # temperature=0.1,
+            request_timeout=90
         )
-        
-        self.sql_generator = EnhancedSQLGenerator()  # Replace SQLGrammar
-        self.security_validator = SecurityValidator()
-        self.generation_stats = defaultdict(int)
     
-    async def generate_sql_with_constraints(self, system_prompt: str, user_prompt: str,
-                                          context: Dict = None, max_retries: int = 3) -> Tuple[str, int]:
-        """Generate SQL with template constraints and retry logic"""
-        
-        # Extract question from user_prompt
-        question = user_prompt
-        if '"' in user_prompt:
-            # Extract question from quotes
-            match = re.search(r'"([^"]+)"', user_prompt)
-            if match:
-                question = match.group(1)
-        
-        # Use enhanced SQL generator
-        sql, retry_count = await self.sql_generator.generate_constrained_sql(
-            question, 
-            context or {}, 
-            llm_fallback=self
-        )
-        
-        if sql:
-            # Final security validation
-            is_safe, safety_msg = self.security_validator.validate_sql(sql)
-            if not is_safe:
-                logger.warning(f"Security validation failed: {safety_msg}")
-                self.generation_stats['security_failure'] += 1
-                return "", retry_count + 1
-            
-            # Optimize with SQLGlot if available
-            optimized_sql = self._optimize_sql(sql)
-            
-            self.generation_stats['success'] += 1
-            return optimized_sql, retry_count
-        
-        self.generation_stats['failure'] += 1
-        return "", retry_count
-    
-    async def _generate_sql_direct(self, system_prompt: str, user_prompt: str) -> str:
-        """Direct LLM generation for fallback"""
+    async def analyze(self, system_prompt: str, user_prompt: str) -> str:
+        """Send prompt to LLM and get response"""
         try:
             messages = [
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=user_prompt)
             ]
-            
             response = await asyncio.to_thread(self.llm.invoke, messages)
             return response.content
-            
         except Exception as e:
-            logger.error(f"Direct LLM generation error: {e}")
+            print(f"   ⚠️ LLM error: {e}")
             return ""
-    
-    def _optimize_sql(self, sql: str) -> str:
-        """Optimize SQL using SQLGlot"""
-        if not SQLGLOT_AVAILABLE or not sql:
-            return sql
-        
-        try:
-            # Parse and optimize
-            parsed = parse_one(sql, dialect="tsql")
-            optimized = optimize(parsed, schema={})
-            
-            # Transpile back to T-SQL with formatting
-            formatted = transpile(str(optimized), read="tsql", write="tsql", pretty=True)
-            return formatted[0] if formatted else sql
-            
-        except Exception as e:
-            logger.debug(f"SQL optimization failed: {e}")
-            return sql
 
 
-class SmartTableSelector:
-    """Enhanced table selection using embeddings and business logic"""
-    
-    def __init__(self, tables: List[TableInfo], schema_embedder: SchemaEmbedder,
-                 schema_graph: Dict[str, SchemaNode]):
-        self.tables = tables
-        self.embedder = schema_embedder
-        self.schema_graph = schema_graph
-        self.embeddings = {}
-        self._initialize_embeddings()
-    
-    def _initialize_embeddings(self):
-        """Initialize table embeddings"""
-        if self.embedder.available and self.embedder.model:
-            self.embeddings = self.embedder.embed_schema(self.tables)
-            logger.info(f"Initialized embeddings for {len(self.embeddings)} tables")
-        else:
-            logger.info("Embeddings not available - using keyword-based selection only")
-    
-    async def select_tables(self, question: str, max_tables: int = 8) -> List[TableInfo]:
-        """Select relevant tables using multiple strategies"""
-        candidates = []
-        
-        # Strategy 1: Embedding-based similarity (if available)
-        if self.embeddings:
-            similar_tables = self.embedder.find_similar_tables(question, self.embeddings, 20)
-            embedding_candidates = [(name, score, 'embedding') for name, score in similar_tables]
-            candidates.extend(embedding_candidates)
-        
-        # Strategy 2: Keyword matching with business logic
-        keyword_candidates = self._keyword_based_selection(question)
-        candidates.extend([(name, score, 'keyword') for name, score in keyword_candidates])
-        
-        # Strategy 3: Schema graph relationships
-        if candidates:
-            related_candidates = self._find_related_tables(candidates[:10])
-            candidates.extend([(name, score, 'related') for name, score in related_candidates])
-        
-        # Combine and rank candidates
-        ranked_tables = self._rank_and_select(candidates, max_tables)
-        
-        logger.info(f"Selected {len(ranked_tables)} tables from {len(candidates)} candidates")
-        return ranked_tables
-    
-    def _keyword_based_selection(self, question: str) -> List[Tuple[str, float]]:
-        """Select tables based on keyword matching"""
-        q_lower = question.lower()
-        keywords = set(q_lower.split())
-        
-        # Expand with business synonyms
-        business_synonyms = {
-            'customer': ['client', 'account', 'contact', 'user'],
-            'payment': ['invoice', 'billing', 'revenue', 'transaction'],
-            'complaint': ['issue', 'problem', 'ticket', 'support'],
-            'order': ['purchase', 'sale', 'transaction']
-        }
-        
-        expanded_keywords = set(keywords)
-        for keyword in keywords:
-            if keyword in business_synonyms:
-                expanded_keywords.update(business_synonyms[keyword])
-        
-        candidates = []
-        for table in self.tables:
-            if table.row_count == 0:
-                continue
-                
-            score = 0
-            table_name_lower = table.full_name.lower()
-            
-            # Table name scoring
-            for keyword in expanded_keywords:
-                if keyword in table_name_lower:
-                    score += 5
-            
-            # Column name scoring
-            for col in table.columns:
-                col_name_lower = col['name'].lower()
-                for keyword in expanded_keywords:
-                    if keyword in col_name_lower:
-                        score += 2
-            
-            # Entity type scoring
-            if hasattr(table, 'entity_type') and table.entity_type != 'Unknown':
-                entity_lower = table.entity_type.lower()
-                for keyword in expanded_keywords:
-                    if keyword in entity_lower:
-                        score += 3
-            
-            if score > 0:
-                candidates.append((table.full_name, score))
-        
-        candidates.sort(key=lambda x: x[1], reverse=True)
-        return candidates
-    
-    def _find_related_tables(self, primary_candidates: List[Tuple]) -> List[Tuple[str, float]]:
-        """Find tables related to primary candidates through schema graph"""
-        related = []
-        primary_table_names = [name for name, _, _ in primary_candidates[:5]]
-        
-        for table_name in primary_table_names:
-            if table_name in self.schema_graph:
-                node = self.schema_graph[table_name]
-                for relationship in node.relationships:
-                    # Extract related table name from relationship string
-                    match = re.search(r'-> ([^\s]+)', relationship)
-                    if match:
-                        related_table = match.group(1)
-                        related.append((related_table, 2.0))  # Lower score for related tables
-        
-        return related
-    
-    def _rank_and_select(self, candidates: List[Tuple], max_tables: int) -> List[TableInfo]:
-        """Rank and select final tables"""
-        # Combine scores by table name
-        table_scores = defaultdict(float)
-        table_sources = defaultdict(list)
-        
-        for name, score, source in candidates:
-            table_scores[name] += score
-            table_sources[name].append(source)
-        
-        # Bonus for multiple selection strategies
-        for name in table_scores:
-            if len(set(table_sources[name])) > 1:
-                table_scores[name] *= 1.2
-        
-        # Sort and select
-        ranked_names = sorted(table_scores.keys(), key=lambda x: table_scores[x], reverse=True)
-        selected_names = ranked_names[:max_tables]
-        
-        # Return TableInfo objects
-        selected_tables = []
-        for table in self.tables:
-            if table.full_name in selected_names:
-                selected_tables.append(table)
-        
-        return selected_tables
-
-
-class RelationshipMapper:
-    """Maps relationships between selected tables"""
-    
-    def __init__(self, schema_graph: Dict[str, SchemaNode]):
-        self.schema_graph = schema_graph
-    
-    def find_relationships(self, tables: List[TableInfo]) -> List[Dict]:
-        """Find relationships between tables"""
-        relationships = []
-        table_names = [t.full_name for t in tables]
-        
-        # Use schema graph for relationships
-        for i, table1_name in enumerate(table_names):
-            for table2_name in table_names[i+1:]:
-                join_condition = self._find_join_condition(table1_name, table2_name)
-                if join_condition:
-                    relationships.append({
-                        'table1': table1_name,
-                        'table2': table2_name,
-                        'join_condition': join_condition,
-                        'source': 'schema_graph'
-                    })
-        
-        logger.info(f"Found {len(relationships)} relationships")
-        return relationships
-    
-    def _find_join_condition(self, table1: str, table2: str) -> Optional[str]:
-        """Find join condition between two tables"""
-        node1 = self.schema_graph.get(table1)
-        node2 = self.schema_graph.get(table2)
-        
-        if not (node1 and node2):
-            return None
-        
-        # Check foreign key relationships
-        for fk in node1.foreign_keys:
-            if fk['references_table'] in table2.lower():
-                return f"{table1}.{fk['column']} = {table2}.id"
-        
-        for fk in node2.foreign_keys:
-            if fk['references_table'] in table1.lower():
-                return f"{table2}.{fk['column']} = {table1}.id"
-        
-        return None
-
-
-class SmartSQLGenerator:
-    """Enhanced SQL generator with business logic and live schema validation"""
-    
-    def __init__(self, llm_client: LLMClient, schema_graph: Dict[str, SchemaNode], config: Config):
-        self.llm = llm_client
-        self.schema_graph = schema_graph
-        self.schema_validator = LiveSchemaValidator(config)
-    
-    async def generate_smart_sql(self, question: str, tables: List[TableInfo]) -> Tuple[str, int]:
-        """Generate SQL with smart business logic and live schema validation"""
-        
-        # Build enhanced context with live validation
-        context = self._build_enhanced_context_with_validation(tables, question)
-        
-        # Debug: Show what context we built
-        logger.info(f"Built context for {len(tables)} tables")
-        logger.info(f"Business columns found: {list(context.get('business_columns', {}).keys())}")
-        
-        # Use enhanced LLM client with templates
-        sql, retry_count = await self.llm.generate_sql_with_constraints(
-            system_prompt="",  # System prompt handled in generator
-            user_prompt=question,
-            context=context,
-            max_retries=3
-        )
-        
-        return sql, retry_count
-    
-    def _build_enhanced_context_with_validation(self, tables: List[TableInfo], question: str) -> Dict:
-        """Build enhanced context with live schema validation"""
-        context = {
-            'tables': [],
-            'business_columns': {},
-            'relationships': []
-        }
-        
-        # Analyze tables for business columns with live validation
-        all_business_cols = defaultdict(list)
-        
-        for table in tables:
-            table_info = {
-                'name': table.full_name,
-                'entity_type': getattr(table, 'entity_type', 'Unknown'),
-                'columns': [col['name'] for col in table.columns],
-                'row_count': table.row_count
-            }
-            
-            # Categorize business columns for this table (from cached analysis)
-            cached_business_cols = self._categorize_columns(table.columns)
-            
-            # Validate against actual database schema
-            validated_business_cols = self.schema_validator.validate_and_fix_columns(
-                cached_business_cols, table.full_name
-            )
-            
-            # Store per-table business columns
-            context['business_columns'][table.full_name] = validated_business_cols
-            
-            # Aggregate all business columns across tables
-            for category, cols in validated_business_cols.items():
-                all_business_cols[category].extend(cols)
-            
-            context['tables'].append(table_info)
-        
-        # Flatten business columns for template generation
-        # Use the most relevant table's columns, with fallbacks from others
-        if context['tables']:
-            primary_table = context['tables'][0]['name']
-            primary_business_cols = context['business_columns'].get(primary_table, {})
-            
-            # Create flattened structure with primary table's columns first
-            flattened_cols = {}
-            for category in ['customer', 'amount', 'date', 'complaint', 'content', 'id']:
-                # Start with primary table's columns
-                cols = primary_business_cols.get(category, [])
-                
-                # Add from other tables if primary is empty
-                if not cols:
-                    cols = all_business_cols.get(category, [])
-                
-                if cols:
-                    flattened_cols[category] = cols
-            
-            # Set as top-level business_columns for template access
-            context['business_columns'] = flattened_cols
-            
-            # Log final validated columns
-            logger.info(f"Final validated business columns: {flattened_cols}")
-        
-        return context
-    
-    def _categorize_columns(self, columns: List[Dict]) -> Dict:
-        """Categorize columns by business purpose"""
-        categories = {
-            'customer': [],
-            'date': [],
-            'amount': [],
-            'complaint': [],
-            'content': [],
-            'id': []
-        }
-        
-        for col in columns:
-            name_lower = col['name'].lower()
-            
-            # Customer/Client patterns (more aggressive)
-            if any(word in name_lower for word in [
-                'customer', 'client', 'account', 'billing', 'contact', 
-                'user', 'subscriber', 'member', 'tenant', 'owner'
-            ]):
-                categories['customer'].append(col['name'])
-            
-            # Date patterns (more comprehensive)
-            elif any(word in name_lower for word in [
-                'date', 'time', 'created', 'modified', 'updated', 'signed', 
-                'started', 'ended', 'timestamp', 'when'
-            ]):
-                categories['date'].append(col['name'])
-            
-            # Amount/Money patterns (more comprehensive)
-            elif any(word in name_lower for word in [
-                'amount', 'total', 'price', 'value', 'cost', 'fee', 'charge',
-                'payment', 'revenue', 'income', 'sum', 'final', 'net', 'gross'
-            ]):
-                categories['amount'].append(col['name'])
-            
-            # Complaint/Issue patterns
-            elif any(word in name_lower for word in [
-                'complaint', 'issue', 'problem', 'error', 'fault', 'defect',
-                'ticket', 'case', 'incident', 'alert'
-            ]):
-                categories['complaint'].append(col['name'])
-            
-            # Content/Description patterns
-            elif any(word in name_lower for word in [
-                'description', 'content', 'text', 'message', 'comment', 'note',
-                'details', 'info', 'summary', 'subject', 'title'
-            ]):
-                categories['content'].append(col['name'])
-            
-            # ID patterns (catch-all for identifiers)
-            elif any(word in name_lower for word in ['id', 'key', 'ref', 'guid', 'uuid']):
-                categories['id'].append(col['name'])
-        
-        return {k: v for k, v in categories.items() if v}
-    
-    def _categorize_columns(self, columns: List[Dict]) -> Dict:
-        """Categorize columns by business purpose"""
-        categories = {
-            'customer': [],
-            'date': [],
-            'amount': [],
-            'complaint': [],
-            'content': [],
-            'id': []
-        }
-        
-        for col in columns:
-            name_lower = col['name'].lower()
-            
-            # Customer/Client patterns (more aggressive)
-            if any(word in name_lower for word in [
-                'customer', 'client', 'account', 'billing', 'contact', 
-                'user', 'subscriber', 'member', 'tenant'
-            ]):
-                categories['customer'].append(col['name'])
-            
-            # Date patterns (more comprehensive)
-            elif any(word in name_lower for word in [
-                'date', 'time', 'created', 'modified', 'updated', 'signed', 
-                'started', 'ended', 'timestamp', 'when'
-            ]):
-                categories['date'].append(col['name'])
-            
-            # Amount/Money patterns (more comprehensive)
-            elif any(word in name_lower for word in [
-                'amount', 'total', 'price', 'value', 'cost', 'fee', 'charge',
-                'payment', 'revenue', 'income', 'sum', 'final', 'net', 'gross'
-            ]):
-                categories['amount'].append(col['name'])
-            
-            # Complaint/Issue patterns
-            elif any(word in name_lower for word in [
-                'complaint', 'issue', 'problem', 'error', 'fault', 'defect',
-                'ticket', 'case', 'incident', 'alert'
-            ]):
-                categories['complaint'].append(col['name'])
-            
-            # Content/Description patterns
-            elif any(word in name_lower for word in [
-                'description', 'content', 'text', 'message', 'comment', 'note',
-                'details', 'info', 'summary', 'subject', 'title'
-            ]):
-                categories['content'].append(col['name'])
-            
-            # ID patterns (catch-all for identifiers)
-            elif any(word in name_lower for word in ['id', 'key', 'ref', 'guid', 'uuid']):
-                categories['id'].append(col['name'])
-        
-        # Log categorization results for debugging
-        non_empty_cats = {k: v for k, v in categories.items() if v}
-        logger.debug(f"Column categorization: {non_empty_cats}")
-        
-        return {k: v for k, v in categories.items() if v}
-
-
-class QueryExecutor:
-    """Enhanced query executor with safety and monitoring"""
+class DataLoader:
+    """Load and analyze real cached database structure"""
     
     def __init__(self, config: Config):
         self.config = config
-        self.execution_stats = defaultdict(int)
-        self.query_cache = {}
-        self._lock = threading.Lock()
-    
-    @contextmanager
-    def _get_connection(self):
-        """Get database connection with proper configuration"""
-        conn = None
+        self.tables = []
+        self.relationships = []
+        self.domain = None
+        self.database_structure = {}
+        self.view_patterns = []
+        
+    def load_data(self) -> bool:
+        """Load all cached data with real database information"""
         try:
-            # Build connection string with timeout
-            conn_string = self.config.get_database_connection_string()
-            if 'timeout=' not in conn_string.lower():
-                conn_string += ';timeout=30'
+            # Load database structure with real table information
+            db_file = self.config.get_cache_path("database_structure.json")
+            if db_file.exists():
+                with open(db_file, 'r', encoding='utf-8') as f:
+                    self.database_structure = json.load(f)
+                    self._extract_view_patterns()
             
-            conn = pyodbc.connect(
-                conn_string,
-                autocommit=True,
-                readonly=True  # Force read-only
-            )
+            # Load semantic analysis with real business context
+            semantic_file = self.config.get_cache_path("semantic_analysis.json")
+            if semantic_file.exists():
+                with open(semantic_file, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    self._load_tables(data)
+                    self._load_relationships(data)
+                    self._load_domain(data)
             
-            # Configure for Greek text support
-            conn.setdecoding(pyodbc.SQL_CHAR, encoding='utf-8')
-            conn.setdecoding(pyodbc.SQL_WCHAR, encoding='utf-8') 
-            conn.setencoding(encoding='utf-8')
-            
-            yield conn
+            print(f"   📊 Loaded {len(self.tables)} real tables, {len(self.relationships)} relationships")
+            print(f"   👁️ Extracted {len(self.view_patterns)} view patterns from real database")
+            return len(self.tables) > 0
             
         except Exception as e:
-            logger.error(f"Database connection error: {e}")
-            raise
-        finally:
-            if conn:
-                conn.close()
+            print(f"❌ Failed to load data: {e}")
+            return False
     
-    def execute_with_safety(self, sql: str, timeout: int = 60) -> Tuple[List[Dict], Optional[str]]:
-        """Execute SQL with comprehensive safety measures"""
+    def _extract_view_patterns(self):
+        """Extract real view patterns from database structure"""
+        self.view_patterns = []
+        view_info = self.database_structure.get('view_info', {})
+        
+        for view_name, view_data in view_info.items():
+            if view_data.get('execution_success') and view_data.get('sample_data'):
+                pattern = {
+                    'view_name': view_name,
+                    'definition': view_data.get('definition', ''),
+                    'sample_data': view_data.get('sample_data', [])[:3],
+                    'tables_involved': self._extract_tables_from_view(view_data.get('definition', '')),
+                    'join_patterns': self._extract_join_patterns(view_data.get('definition', '')),
+                    'business_context': self._analyze_business_context(view_name, view_data)
+                }
+                self.view_patterns.append(pattern)
+    
+    def _extract_tables_from_view(self, definition: str) -> List[str]:
+        """Extract real table names from view definitions"""
+        if not definition:
+            return []
+        
+        tables = []
+        # Enhanced patterns for real database table references
+        patterns = [
+            r'FROM\s+(\[?[a-zA-Z_][a-zA-Z0-9_]*\]?\.\[?[a-zA-Z_][a-zA-Z0-9_]*\]?)',
+            r'JOIN\s+(\[?[a-zA-Z_][a-zA-Z0-9_]*\]?\.\[?[a-zA-Z_][a-zA-Z0-9_]*\]?)',
+            r'INNER\s+JOIN\s+(\[?[a-zA-Z_][a-zA-Z0-9_]*\]?\.\[?[a-zA-Z_][a-zA-Z0-9_]*\]?)',
+            r'LEFT\s+JOIN\s+(\[?[a-zA-Z_][a-zA-Z0-9_]*\]?\.\[?[a-zA-Z_][a-zA-Z0-9_]*\]?)'
+        ]
+        
+        for pattern in patterns:
+            matches = re.findall(pattern, definition, re.IGNORECASE)
+            tables.extend(matches)
+        
+        return list(set(tables))
+    
+    def _extract_join_patterns(self, definition: str) -> List[str]:
+        """Extract real join patterns from view definitions"""
+        if not definition:
+            return []
+        
+        joins = []
+        on_pattern = r'ON\s+([^WHERE^GROUP^ORDER^INNER^LEFT^RIGHT^JOIN]+?)(?=\s+(?:WHERE|GROUP|ORDER|INNER|LEFT|RIGHT|JOIN|$))'
+        matches = re.findall(on_pattern, definition, re.IGNORECASE | re.DOTALL)
+        
+        for match in matches:
+            clean_join = match.strip().replace('\n', ' ').replace('\r', '').replace('\t', ' ')
+            # Clean up multiple spaces
+            clean_join = re.sub(r'\s+', ' ', clean_join)
+            if clean_join and len(clean_join) < 300:
+                joins.append(clean_join)
+        
+        return joins
+    
+    def _analyze_business_context(self, view_name: str, view_data: Dict) -> Dict:
+        """Analyze business context from real view data"""
+        context = {
+            'likely_business_function': 'unknown',
+            'data_complexity': 'simple',
+            'contains_aggregations': False,
+            'contains_financial_data': False,
+            'contains_customer_data': False
+        }
+        
+        view_name_lower = view_name.lower()
+        definition = view_data.get('definition', '').lower()
+        
+        # Analyze business function from real view names
+        if any(word in view_name_lower for word in ['customer', 'client', 'account']):
+            context['likely_business_function'] = 'customer_management'
+            context['contains_customer_data'] = True
+        elif any(word in view_name_lower for word in ['payment', 'invoice', 'billing', 'financial']):
+            context['likely_business_function'] = 'financial_management'
+            context['contains_financial_data'] = True
+        elif any(word in view_name_lower for word in ['order', 'purchase', 'sales']):
+            context['likely_business_function'] = 'order_management'
+        elif any(word in view_name_lower for word in ['product', 'inventory', 'catalog']):
+            context['likely_business_function'] = 'product_management'
+        
+        # Analyze complexity from definition
+        if any(func in definition for func in ['sum(', 'count(', 'avg(', 'max(', 'min(']):
+            context['contains_aggregations'] = True
+            context['data_complexity'] = 'complex'
+        
+        if definition.count('join') > 2:
+            context['data_complexity'] = 'complex'
+        
+        return context
+    
+    def _load_tables(self, data: Dict):
+        """Load real table information from semantic analysis"""
+        self.tables = []
+        for table_data in data.get('tables', []):
+            table = TableInfo(
+                name=table_data['name'],
+                schema=table_data['schema'],
+                full_name=table_data['full_name'],
+                object_type=table_data['object_type'],
+                row_count=table_data['row_count'],
+                columns=table_data['columns'],
+                sample_data=table_data['sample_data'],
+                relationships=table_data.get('relationships', [])
+            )
+            table.entity_type = table_data.get('entity_type', 'Unknown')
+            table.confidence = table_data.get('confidence', 0.0)
+            table.business_role = table_data.get('business_role', 'Unknown')
+            self.tables.append(table)
+    
+    def _load_relationships(self, data: Dict):
+        """Load real relationships from semantic analysis"""
+        self.relationships = []
+        for rel_data in data.get('relationships', []):
+            self.relationships.append(Relationship(
+                from_table=rel_data['from_table'],
+                to_table=rel_data['to_table'],
+                relationship_type=rel_data['relationship_type'],
+                confidence=rel_data['confidence'],
+                description=rel_data.get('description', '')
+            ))
+    
+    def _load_domain(self, data: Dict):
+        """Load real business domain information"""
+        domain_data = data.get('domain')
+        if domain_data:
+            self.domain = BusinessDomain(
+                domain_type=domain_data['domain_type'],
+                industry=domain_data['industry'],
+                confidence=domain_data['confidence'],
+                sample_questions=domain_data['sample_questions'],
+                capabilities=domain_data['capabilities']
+            )
+
+
+class TableSelector:
+    """Smart table selector for real database tables"""
+    
+    def __init__(self, tables: List[TableInfo], llm: LLMClient, view_patterns: List[Dict]):
+        self.tables = tables
+        self.llm = llm
+        self.view_patterns = view_patterns
+    
+    async def find_relevant_tables(self, question: str) -> List[TableInfo]:
+        """Find relevant real tables using business intelligence"""
+        print("   📋 Analyzing real database tables for relevance...")
+        
+        # Stage 1: Business intent analysis
+        business_intent = self._analyze_business_intent(question)
+        print(f"      🎯 Business intent: {business_intent}")
+        
+        # Stage 2: Smart table filtering
+        candidate_tables = self._smart_table_filtering(question, business_intent)
+        print(f"      📊 Found {len(candidate_tables)} candidate tables")
+        
+        # Stage 3: LLM-powered selection for complex cases
+        if len(candidate_tables) > 8:
+            final_tables = await self._llm_table_selection(question, candidate_tables[:15], business_intent)
+        else:
+            final_tables = candidate_tables
+        
+        print(f"      ✅ Selected {len(final_tables)} tables: {[t.name for t in final_tables]}")
+        return final_tables
+    
+    def _analyze_business_intent(self, question: str) -> Dict[str, Any]:
+        """Analyze business intent from question"""
+        q_lower = question.lower()
+        
+        intent = {
+            'primary_entity': 'unknown',
+            'operation_type': 'query',
+            'time_dimension': False,
+            'aggregation_needed': False,
+            'financial_focus': False,
+            'customer_focus': False
+        }
+        
+        # Detect primary entity
+        if any(word in q_lower for word in ['customer', 'client', 'account', 'user']):
+            intent['primary_entity'] = 'customer'
+            intent['customer_focus'] = True
+        elif any(word in q_lower for word in ['payment', 'paid', 'billing', 'invoice', 'revenue', 'financial']):
+            intent['primary_entity'] = 'financial'
+            intent['financial_focus'] = True
+        elif any(word in q_lower for word in ['order', 'purchase', 'sale', 'transaction']):
+            intent['primary_entity'] = 'order'
+        elif any(word in q_lower for word in ['product', 'item', 'inventory']):
+            intent['primary_entity'] = 'product'
+        
+        # Detect operation type
+        if any(word in q_lower for word in ['count', 'number', 'how many']):
+            intent['operation_type'] = 'count'
+            intent['aggregation_needed'] = True
+        elif any(word in q_lower for word in ['total', 'sum', 'revenue', 'amount']):
+            intent['operation_type'] = 'sum'
+            intent['aggregation_needed'] = True
+        elif any(word in q_lower for word in ['average', 'avg', 'mean']):
+            intent['operation_type'] = 'average'
+            intent['aggregation_needed'] = True
+        
+        # Detect time dimension
+        if any(word in q_lower for word in ['2025', '2024', 'year', 'month', 'quarter', 'last', 'this', 'period']):
+            intent['time_dimension'] = True
+        
+        return intent
+    
+    def _smart_table_filtering(self, question: str, business_intent: Dict) -> List[TableInfo]:
+        """Smart filtering using real table characteristics"""
+        q_lower = question.lower()
+        scored_tables = []
+        
+        for table in self.tables:
+            score = 0
+            reasons = []
+            
+            # Score by entity type match
+            entity_match_score = self._calculate_entity_match_score(table, business_intent)
+            score += entity_match_score['score']
+            if entity_match_score['score'] > 0:
+                reasons.append(entity_match_score['reason'])
+            
+            # Score by table name relevance
+            name_score = self._calculate_name_relevance_score(table, q_lower)
+            score += name_score['score']
+            if name_score['score'] > 0:
+                reasons.append(name_score['reason'])
+            
+            # Score by column relevance
+            column_score = self._calculate_column_relevance_score(table, q_lower, business_intent)
+            score += column_score['score']
+            if column_score['score'] > 0:
+                reasons.append(column_score['reason'])
+            
+            # Score by sample data relevance
+            data_score = self._calculate_sample_data_score(table, q_lower, business_intent)
+            score += data_score['score']
+            if data_score['score'] > 0:
+                reasons.append(data_score['reason'])
+            
+            # Score by view pattern usage
+            view_score = self._calculate_view_pattern_score(table, business_intent)
+            score += view_score['score']
+            if view_score['score'] > 0:
+                reasons.append(view_score['reason'])
+            
+            # Bonus for tables with actual data
+            if table.row_count > 0 and table.sample_data:
+                score += 1
+                reasons.append("has_real_data")
+            
+            if score > 0:
+                scored_tables.append({
+                    'table': table,
+                    'score': score,
+                    'reasons': reasons
+                })
+        
+        # Sort by score and return top tables
+        scored_tables.sort(key=lambda x: x['score'], reverse=True)
+        return [item['table'] for item in scored_tables[:12]]
+    
+    def _calculate_entity_match_score(self, table: TableInfo, business_intent: Dict) -> Dict:
+        """Calculate entity type matching score"""
+        primary_entity = business_intent.get('primary_entity', '')
+        
+        if primary_entity == 'customer' and table.entity_type == 'Customer':
+            return {'score': 5, 'reason': 'customer_entity_match'}
+        elif primary_entity == 'financial' and table.entity_type == 'Financial':
+            return {'score': 5, 'reason': 'financial_entity_match'}
+        elif primary_entity == 'order' and table.entity_type in ['Order', 'Transaction']:
+            return {'score': 5, 'reason': 'order_entity_match'}
+        elif primary_entity == 'product' and table.entity_type == 'Product':
+            return {'score': 5, 'reason': 'product_entity_match'}
+        elif table.entity_type in ['Customer', 'Financial', 'Order', 'Product'] and primary_entity != 'unknown':
+            return {'score': 2, 'reason': 'related_entity'}
+        
+        return {'score': 0, 'reason': ''}
+    
+    def _calculate_name_relevance_score(self, table: TableInfo, question: str) -> Dict:
+        """Calculate table name relevance score"""
+        table_name_lower = table.name.lower()
+        full_name_lower = table.full_name.lower()
+        
+        question_words = [word for word in question.split() if len(word) > 3]
+        
+        score = 0
+        matched_words = []
+        
+        for word in question_words:
+            word_lower = word.lower()
+            if word_lower in table_name_lower:
+                score += 3
+                matched_words.append(word)
+            elif word_lower in full_name_lower:
+                score += 2
+                matched_words.append(word)
+        
+        if matched_words:
+            return {'score': score, 'reason': f'name_match:{",".join(matched_words[:3])}'}
+        
+        return {'score': 0, 'reason': ''}
+    
+    def _calculate_column_relevance_score(self, table: TableInfo, question: str, business_intent: Dict) -> Dict:
+        """Calculate column relevance score using real column names"""
+        column_names = [col.get('name', '').lower() for col in table.columns]
+        question_words = question.lower().split()
+        
+        score = 0
+        matched_columns = []
+        
+        # Direct column name matches
+        for col_name in column_names:
+            for word in question_words:
+                if len(word) > 3 and word in col_name:
+                    score += 2
+                    matched_columns.append(col_name)
+                    break
+        
+        # Business intent specific columns
+        if business_intent.get('financial_focus'):
+            financial_columns = [col for col in column_names 
+                               if any(fin_word in col for fin_word in ['amount', 'price', 'cost', 'total', 'revenue', 'payment'])]
+            score += len(financial_columns) * 2
+            matched_columns.extend(financial_columns[:3])
+        
+        if business_intent.get('customer_focus'):
+            customer_columns = [col for col in column_names 
+                              if any(cust_word in col for cust_word in ['customer', 'client', 'account', 'user'])]
+            score += len(customer_columns) * 2
+            matched_columns.extend(customer_columns[:3])
+        
+        if business_intent.get('time_dimension'):
+            date_columns = [col for col in column_names 
+                          if any(date_word in col for date_word in ['date', 'time', 'created', 'updated'])]
+            score += len(date_columns) * 1
+            matched_columns.extend(date_columns[:3])
+        
+        if matched_columns:
+            return {'score': min(score, 10), 'reason': f'column_match:{",".join(matched_columns[:3])}'}
+        
+        return {'score': 0, 'reason': ''}
+    
+    def _calculate_sample_data_score(self, table: TableInfo, question: str, business_intent: Dict) -> Dict:
+        """Calculate relevance score from real sample data"""
+        if not table.sample_data:
+            return {'score': 0, 'reason': ''}
+        
+        sample_text = json.dumps(table.sample_data).lower()
+        question_words = [word for word in question.lower().split() if len(word) > 3]
+        
+        score = 0
+        matched_values = []
+        
+        # Look for question words in sample data
+        for word in question_words:
+            if word in sample_text:
+                score += 1
+                matched_values.append(word)
+        
+        # Look for business context indicators in sample data
+        if business_intent.get('financial_focus'):
+            if any(indicator in sample_text for indicator in ['€', '$', '£', 'amount', 'total', 'price']):
+                score += 2
+                matched_values.append('financial_data')
+        
+        if business_intent.get('time_dimension'):
+            if any(indicator in sample_text for indicator in ['2025', '2024', '2023', 'date']):
+                score += 2
+                matched_values.append('time_data')
+        
+        if matched_values:
+            return {'score': min(score, 5), 'reason': f'sample_match:{",".join(matched_values[:3])}'}
+        
+        return {'score': 0, 'reason': ''}
+    
+    def _calculate_view_pattern_score(self, table: TableInfo, business_intent: Dict) -> Dict:
+        """Calculate score based on real view pattern usage"""
+        score = 0
+        view_usage_count = 0
+        
+        table_name = table.full_name
+        
+        for pattern in self.view_patterns:
+            tables_involved = pattern.get('tables_involved', [])
+            if any(table_name.lower() in t.lower() or t.lower() in table_name.lower() for t in tables_involved):
+                view_usage_count += 1
+                
+                # Bonus for business context match
+                business_context = pattern.get('business_context', {})
+                if business_intent.get('customer_focus') and business_context.get('contains_customer_data'):
+                    score += 2
+                elif business_intent.get('financial_focus') and business_context.get('contains_financial_data'):
+                    score += 2
+                else:
+                    score += 1
+        
+        if view_usage_count > 0:
+            return {'score': min(score, 5), 'reason': f'used_in_{view_usage_count}_views'}
+        
+        return {'score': 0, 'reason': ''}
+    
+    async def _llm_table_selection(self, question: str, candidate_tables: List[TableInfo], 
+                                 business_intent: Dict) -> List[TableInfo]:
+        """Use LLM for final table selection with real table analysis"""
+        
+        # Prepare enhanced table summaries with real data analysis
+        table_summaries = []
+        for table in candidate_tables:
+            # Real column analysis
+            important_columns = self._analyze_important_columns(table, business_intent)
+            
+            # Real sample data analysis
+            sample_analysis = self._analyze_real_sample_data(table, business_intent)
+            
+            table_summaries.append({
+                'table_name': table.full_name,
+                'entity_type': table.entity_type,
+                'confidence': table.confidence,
+                'row_count': table.row_count,
+                'important_columns': important_columns,
+                'sample_analysis': sample_analysis,
+                'business_relevance': self._assess_business_relevance(table, business_intent)
+            })
+        
+        system_prompt = f"""You are analyzing a real {business_intent.get('primary_entity', 'business')} database for E-Commerce/Order Management.
+Select the most relevant tables for answering this specific business question.
+
+BUSINESS CONTEXT:
+- Primary Entity: {business_intent.get('primary_entity', 'unknown')}
+- Operation: {business_intent.get('operation_type', 'query')}
+- Needs Aggregation: {business_intent.get('aggregation_needed', False)}
+- Time Dimension: {business_intent.get('time_dimension', False)}
+- Financial Focus: {business_intent.get('financial_focus', False)}
+
+Focus on tables that:
+1. Contain the actual data needed for the question
+2. Have meaningful sample data showing real business information
+3. Have columns that match the business intent
+4. Are used in proven view patterns for similar queries
+
+Return 4-8 tables maximum."""
+        
+        user_prompt = f"""
+BUSINESS QUESTION: "{question}"
+
+CANDIDATE TABLES WITH REAL DATA ANALYSIS:
+{json.dumps(table_summaries, indent=2)}
+
+Select tables that contain the actual data needed to answer this question.
+Consider the sample data analysis and business relevance scores.
+
+JSON format:
+{{
+  "selected_tables": ["[schema].[table1]", "[schema].[table2]"],
+  "reasoning": "Why these specific tables contain the needed data"
+}}
+"""
+        
+        response = await self.llm.analyze(system_prompt, user_prompt)
+        result = self._parse_json(response)
+        
+        if result and 'selected_tables' in result:
+            selected_names = result['selected_tables']
+            selected_tables = [t for t in candidate_tables if t.full_name in selected_names]
+            return selected_tables
+        
+        # Fallback to top scoring tables
+        return candidate_tables[:6]
+    
+    def _analyze_important_columns(self, table: TableInfo, business_intent: Dict) -> Dict:
+        """Analyze important columns based on real column names and business intent"""
+        important_cols = {
+            'id_columns': [],
+            'date_columns': [],
+            'amount_columns': [],
+            'status_columns': [],
+            'name_columns': [],
+            'business_specific': []
+        }
+        
+        for col in table.columns:
+            col_name = col.get('name', '').lower()
+            
+            # ID columns
+            if col_name.endswith('id') or col_name.endswith('_id') or col_name == 'id':
+                important_cols['id_columns'].append(col['name'])
+            
+            # Date columns
+            elif any(date_word in col_name for date_word in ['date', 'time', 'created', 'updated', 'modified']):
+                important_cols['date_columns'].append(col['name'])
+            
+            # Amount/Financial columns
+            elif any(fin_word in col_name for fin_word in ['amount', 'price', 'cost', 'total', 'revenue', 'value', 'sum']):
+                important_cols['amount_columns'].append(col['name'])
+            
+            # Status columns
+            elif any(status_word in col_name for status_word in ['status', 'state', 'active', 'enabled', 'cancelled']):
+                important_cols['status_columns'].append(col['name'])
+            
+            # Name columns
+            elif any(name_word in col_name for name_word in ['name', 'title', 'description', 'label']):
+                important_cols['name_columns'].append(col['name'])
+            
+            # Business-specific columns based on intent
+            elif business_intent.get('customer_focus') and any(cust_word in col_name for cust_word in ['customer', 'client', 'account', 'user']):
+                important_cols['business_specific'].append(col['name'])
+            elif business_intent.get('financial_focus') and any(fin_word in col_name for fin_word in ['payment', 'invoice', 'billing', 'transaction']):
+                important_cols['business_specific'].append(col['name'])
+        
+        return important_cols
+    
+    def _analyze_real_sample_data(self, table: TableInfo, business_intent: Dict) -> Dict:
+        """Analyze real sample data for business relevance"""
+        analysis = {
+            'has_meaningful_data': False,
+            'data_patterns': [],
+            'business_indicators': [],
+            'data_quality': 'unknown'
+        }
+        
+        if not table.sample_data:
+            return analysis
+        
+        try:
+            first_row = table.sample_data[0]
+            analysis['has_meaningful_data'] = True
+            
+            # Analyze data patterns
+            for key, value in first_row.items():
+                if value is not None:
+                    value_str = str(value).lower()
+                    
+                    # Financial data patterns
+                    if any(char in value_str for char in ['€', '$', '£']) or (isinstance(value, (int, float)) and value > 0):
+                        if any(fin_word in key.lower() for fin_word in ['amount', 'price', 'cost', 'total']):
+                            analysis['data_patterns'].append('financial_amounts')
+                    
+                    # Date patterns
+                    if isinstance(value, str) and ('2025' in value_str or '2024' in value_str):
+                        analysis['data_patterns'].append('recent_dates')
+                    
+                    # ID patterns
+                    if key.lower().endswith('id') and isinstance(value, (int, str)):
+                        analysis['data_patterns'].append('valid_ids')
+                    
+                    # Customer data patterns
+                    if business_intent.get('customer_focus') and any(cust_word in key.lower() for cust_word in ['customer', 'client', 'name']):
+                        analysis['business_indicators'].append('customer_data')
+            
+            # Assess data quality
+            non_null_values = sum(1 for v in first_row.values() if v is not None)
+            total_values = len(first_row)
+            
+            if non_null_values / total_values > 0.8:
+                analysis['data_quality'] = 'high'
+            elif non_null_values / total_values > 0.5:
+                analysis['data_quality'] = 'medium'
+            else:
+                analysis['data_quality'] = 'low'
+                
+        except Exception:
+            analysis['data_quality'] = 'error'
+        
+        return analysis
+    
+    def _assess_business_relevance(self, table: TableInfo, business_intent: Dict) -> Dict:
+        """Assess overall business relevance of the table"""
+        relevance = {
+            'score': 0,
+            'primary_reason': 'unknown',
+            'confidence': table.confidence
+        }
+        
+        # Entity type relevance
+        entity_mapping = {
+            'customer': ['Customer'],
+            'financial': ['Financial', 'Payment'],
+            'order': ['Order', 'Transaction'],
+            'product': ['Product']
+        }
+        
+        primary_entity = business_intent.get('primary_entity', '')
+        if primary_entity in entity_mapping:
+            if table.entity_type in entity_mapping[primary_entity]:
+                relevance['score'] += 5
+                relevance['primary_reason'] = f'{primary_entity}_entity_match'
+        
+        # Data quality relevance
+        if table.row_count > 1000 and table.sample_data:
+            relevance['score'] += 2
+        
+        # Business role relevance
+        if hasattr(table, 'business_role') and table.business_role == 'Core':
+            relevance['score'] += 1
+        
+        return relevance
+    
+    def _parse_json(self, response: str) -> Dict:
+        """Parse JSON from LLM response"""
+        try:
+            cleaned = re.sub(r'```json\s*', '', response)
+            cleaned = re.sub(r'```\s*', '', cleaned)
+            cleaned = re.sub(r'^[^{]*', '', cleaned)
+            cleaned = re.sub(r'[^}]*$', '', cleaned)
+            return json.loads(cleaned)
+        except:
+            return {}
+
+
+class RelationshipFinder:
+    """Find relationships between real database tables"""
+    
+    def __init__(self, database_structure: Dict, relationships: List[Relationship], view_patterns: List[Dict]):
+        self.database_structure = database_structure
+        self.global_relationships = relationships
+        self.view_patterns = view_patterns
+        self.foreign_keys = self._build_foreign_key_map()
+        self.view_join_patterns = self._extract_view_join_patterns()
+    
+    def _build_foreign_key_map(self) -> Dict[str, List[Dict]]:
+        """Build foreign key mapping from real database structure"""
+        fk_map = {}
+        
+        # Extract from database structure relationships
+        for rel in self.global_relationships:
+            from_table = rel.from_table
+            if from_table:
+                fk_map.setdefault(from_table, []).append({
+                    'from_table': rel.from_table,
+                    'to_table': rel.to_table,
+                    'relationship_type': rel.relationship_type,
+                    'confidence': rel.confidence
+                })
+        
+        # Extract from table-level relationship information
+        tables_info = self.database_structure.get('tables', {})
+        for table_name, table_data in tables_info.items():
+            relationships = table_data.get('relationships', [])
+            for rel_str in relationships:
+                if '->' in rel_str:
+                    try:
+                        from_col, to_info = [x.strip() for x in rel_str.split('->', 1)]
+                        # Parse foreign key relationships
+                        fk_map.setdefault(table_name, []).append({
+                            'from_table': table_name,
+                            'from_column': from_col,
+                            'to_info': to_info,
+                            'confidence': 0.8
+                        })
+                    except Exception:
+                        continue
+        
+        return fk_map
+    
+    def _extract_view_join_patterns(self) -> Dict[str, List[Dict]]:
+        """Extract proven join patterns from real views"""
+        join_patterns = {}
+        
+        for pattern in self.view_patterns:
+            joins = pattern.get('join_patterns', [])
+            tables = pattern.get('tables_involved', [])
+            
+            for join in joins:
+                # Extract table pairs and join conditions
+                for i, table1 in enumerate(tables):
+                    for table2 in tables[i+1:]:
+                        if self._tables_referenced_in_join(join, table1, table2):
+                            key = f"{table1}:{table2}"
+                            if key not in join_patterns:
+                                join_patterns[key] = []
+                            
+                            join_patterns[key].append({
+                                'join_condition': join,
+                                'source_view': pattern.get('view_name', ''),
+                                'business_context': pattern.get('business_context', {}),
+                                'proven_working': True
+                            })
+        
+        return join_patterns
+    
+    def _tables_referenced_in_join(self, join_condition: str, table1: str, table2: str) -> bool:
+        """Check if both tables are referenced in the join condition"""
+        join_lower = join_condition.lower()
+        
+        # Extract simple table names for matching
+        table1_simple = table1.split('.')[-1].replace('[', '').replace(']', '').lower()
+        table2_simple = table2.split('.')[-1].replace('[', '').replace(']', '').lower()
+        
+        return table1_simple in join_lower and table2_simple in join_lower
+    
+    def find_relationships(self, tables: List[TableInfo]) -> List[Dict]:
+        """Find relationships between selected real tables"""
+        print("   🔗 Analyzing real table relationships...")
+        
+        table_names = [t.full_name for t in tables]
+        relationships = []
+        
+        # Method 1: Use proven view join patterns (highest confidence)
+        view_relationships = self._find_view_pattern_relationships(table_names)
+        relationships.extend(view_relationships)
+        
+        # Method 2: Use explicit foreign key relationships
+        fk_relationships = self._find_foreign_key_relationships(table_names)
+        relationships.extend(fk_relationships)
+        
+        # Method 3: Infer relationships from column patterns
+        inferred_relationships = self._find_inferred_relationships(tables)
+        relationships.extend(inferred_relationships)
+        
+        # Remove duplicates and prioritize by confidence
+        unique_relationships = self._deduplicate_relationships(relationships)
+        
+        print(f"      ✅ Found {len(unique_relationships)} relationships:")
+        print(f"         • View patterns: {len(view_relationships)}")
+        print(f"         • Foreign keys: {len(fk_relationships)}")
+        print(f"         • Inferred: {len(inferred_relationships)}")
+        
+        return unique_relationships
+    
+    def _find_view_pattern_relationships(self, table_names: List[str]) -> List[Dict]:
+        """Find relationships using proven view patterns"""
+        relationships = []
+        
+        for i, table1 in enumerate(table_names):
+            for table2 in table_names[i+1:]:
+                # Check both directions
+                for pattern_key in [f"{table1}:{table2}", f"{table2}:{table1}"]:
+                    if pattern_key in self.view_join_patterns:
+                        patterns = self.view_join_patterns[pattern_key]
+                        best_pattern = max(patterns, key=lambda p: 1.0)  # All view patterns are equally valid
+                        
+                        relationships.append({
+                            'from_table': table1,
+                            'to_table': table2,
+                            'join_condition': best_pattern['join_condition'],
+                            'join_type': 'INNER JOIN',
+                            'source': 'view_pattern',
+                            'source_view': best_pattern['source_view'],
+                            'confidence': 0.95,
+                            'proven_working': True
+                        })
+        
+        return relationships
+    
+    def _find_foreign_key_relationships(self, table_names: List[str]) -> List[Dict]:
+        """Find explicit foreign key relationships"""
+        relationships = []
+        
+        for table_name in table_names:
+            if table_name in self.foreign_keys:
+                for fk_info in self.foreign_keys[table_name]:
+                    target_table = fk_info.get('to_table', '')
+                    
+                    # Check if target table is in our selected tables
+                    if any(target_table in selected_table for selected_table in table_names):
+                        from_col = fk_info.get('from_column', '')
+                        
+                        relationships.append({
+                            'from_table': table_name,
+                            'to_table': target_table,
+                            'from_column': from_col,
+                            'join_condition': f"{table_name}.{from_col} = {target_table}.ID",
+                            'join_type': 'INNER JOIN',
+                            'source': 'foreign_key',
+                            'confidence': fk_info.get('confidence', 0.9)
+                        })
+        
+        return relationships
+    
+    def _find_inferred_relationships(self, tables: List[TableInfo]) -> List[Dict]:
+        """Infer relationships from real column patterns"""
+        relationships = []
+        
+        for i, table1 in enumerate(tables):
+            for table2 in tables[i+1:]:
+                join_condition = self._infer_join_condition(table1, table2)
+                if join_condition:
+                    relationships.append({
+                        'from_table': table1.full_name,
+                        'to_table': table2.full_name,
+                        'join_condition': join_condition,
+                        'join_type': 'INNER JOIN',
+                        'source': 'inferred',
+                        'confidence': 0.7
+                    })
+        
+        return relationships
+    
+    def _infer_join_condition(self, table1: TableInfo, table2: TableInfo) -> Optional[str]:
+        """Infer join condition between two real tables"""
+        table1_columns = [(col.get('name', ''), col.get('data_type', '')) for col in table1.columns]
+        table2_columns = [(col.get('name', ''), col.get('data_type', '')) for col in table2.columns]
+        
+        # Method 1: Exact column name and type match
+        for col1_name, col1_type in table1_columns:
+            for col2_name, col2_type in table2_columns:
+                if (col1_name.lower() == col2_name.lower() and 
+                    col1_type.lower() == col2_type.lower() and
+                    ('id' in col1_name.lower() or col1_name.lower().endswith('_id'))):
+                    return f"{table1.full_name}.{col1_name} = {table2.full_name}.{col2_name}"
+        
+        # Method 2: Foreign key pattern matching
+        for col1_name, col1_type in table1_columns:
+            if col1_name.lower().endswith('_id') or col1_name.lower().endswith('id'):
+                # Extract entity name
+                entity_name = col1_name.lower().replace('_id', '').replace('id', '')
+                
+                # Look for matching table or ID column
+                if entity_name in table2.name.lower():
+                    # Find ID column in table2
+                    for col2_name, col2_type in table2_columns:
+                        if col2_name.lower() in ['id', 'primaryid', f'{entity_name}id']:
+                            return f"{table1.full_name}.{col1_name} = {table2.full_name}.{col2_name}"
+        
+        # Method 3: Check if table names suggest relationship
+        table1_simple = table1.name.lower()
+        table2_simple = table2.name.lower()
+        
+        if table1_simple in table2_simple or table2_simple in table1_simple:
+            # Look for common ID patterns
+            for col1_name, _ in table1_columns:
+                for col2_name, _ in table2_columns:
+                    if (col1_name.lower() == col2_name.lower() and 
+                        col1_name.lower() in ['id', 'key', 'primarykey']):
+                        return f"{table1.full_name}.{col1_name} = {table2.full_name}.{col2_name}"
+        
+        return None
+    
+    def _deduplicate_relationships(self, relationships: List[Dict]) -> List[Dict]:
+        """Remove duplicate relationships and prioritize by confidence"""
+        seen_pairs = set()
+        unique_relationships = []
+        
+        # Sort by confidence (highest first)
+        sorted_relationships = sorted(relationships, key=lambda r: r.get('confidence', 0), reverse=True)
+        
+        for rel in sorted_relationships:
+            from_table = rel.get('from_table', '')
+            to_table = rel.get('to_table', '')
+            
+            # Create normalized pair key
+            pair1 = f"{from_table}:{to_table}"
+            pair2 = f"{to_table}:{from_table}"
+            
+            if pair1 not in seen_pairs and pair2 not in seen_pairs:
+                seen_pairs.add(pair1)
+                unique_relationships.append(rel)
+        
+        return unique_relationships
+
+
+class SQLGenerator:
+    """Generate SQL queries for real database tables"""
+    
+    def __init__(self, llm: LLMClient, view_patterns: List[Dict]):
+        self.llm = llm
+        self.view_patterns = view_patterns
+    
+    async def generate_query(self, question: str, tables: List[TableInfo], 
+                           relationships: List[Dict]) -> str:
+        """Generate SQL query using real table and column information"""
+        print("   ⚡ Generating SQL for real database tables...")
+        
+        # Analyze query requirements
+        query_analysis = self._analyze_query_requirements(question, tables)
+        
+        # Find relevant view patterns as examples
+        relevant_patterns = self._find_relevant_view_patterns(question, tables)
+        
+        # Prepare comprehensive context
+        table_context = self._prepare_detailed_table_context(tables, query_analysis)
+        join_context = self._prepare_join_context(relationships, relevant_patterns)
+        
+        # Create enhanced system prompt
+        system_prompt = self._create_system_prompt(query_analysis, relevant_patterns)
+        
+        user_prompt = f"""
+BUSINESS QUESTION: "{question}"
+
+QUERY ANALYSIS:
+{json.dumps(query_analysis, indent=2)}
+
+AVAILABLE REAL TABLES:
+{table_context}
+
+PROVEN RELATIONSHIPS & JOIN PATTERNS:
+{join_context}
+
+SUCCESSFUL VIEW EXAMPLES:
+{self._format_view_examples(relevant_patterns)}
+
+Generate SQL that answers this business question using the real table structure provided.
+Use proven join patterns from the view examples where applicable.
+Return only the SQL query.
+"""
+        
+        response = await self.llm.analyze(system_prompt, user_prompt)
+        sql = self._clean_sql(response)
+        
+        print(f"      ✅ Generated SQL using real table structure")
+        return sql
+    
+    def _analyze_query_requirements(self, question: str, tables: List[TableInfo]) -> Dict:
+        """Analyze what the query needs based on question and real tables"""
+        q_lower = question.lower()
+        
+        analysis = {
+            'operation_type': 'select',
+            'aggregation_needed': False,
+            'aggregation_functions': [],
+            'time_filtering': False,
+            'grouping_needed': False,
+            'entity_focus': [],
+            'likely_result_columns': [],
+            'complexity': 'simple'
+        }
+        
+        # Determine operation type
+        if any(word in q_lower for word in ['count', 'number of', 'how many']):
+            analysis['operation_type'] = 'count'
+            analysis['aggregation_needed'] = True
+            analysis['aggregation_functions'].append('COUNT')
+        
+        if any(word in q_lower for word in ['total', 'sum']):
+            analysis['aggregation_needed'] = True
+            analysis['aggregation_functions'].append('SUM')
+        
+        if any(word in q_lower for word in ['average', 'avg', 'mean']):
+            analysis['aggregation_needed'] = True
+            analysis['aggregation_functions'].append('AVG')
+        
+        # Time filtering detection
+        if any(word in q_lower for word in ['2025', '2024', 'year', 'month', 'last', 'this', 'period']):
+            analysis['time_filtering'] = True
+        
+        # Entity focus
+        for table in tables:
+            if table.entity_type != 'Unknown':
+                analysis['entity_focus'].append(table.entity_type)
+        
+        # Complexity assessment
+        if len(tables) > 1:
+            analysis['complexity'] = 'complex'
+        elif analysis['aggregation_needed']:
+            analysis['complexity'] = 'medium'
+        
+        # Predict likely result columns based on question
+        if 'count' in q_lower or 'number' in q_lower:
+            analysis['likely_result_columns'] = ['Count']
+        elif 'total' in q_lower or 'sum' in q_lower:
+            analysis['likely_result_columns'] = ['Total']
+        else:
+            # Use table columns to predict
+            for table in tables:
+                for col in table.columns[:5]:
+                    col_name = col.get('name', '')
+                    if any(word in col_name.lower() for word in q_lower.split() if len(word) > 3):
+                        analysis['likely_result_columns'].append(col_name)
+        
+        return analysis
+    
+    def _find_relevant_view_patterns(self, question: str, tables: List[TableInfo]) -> List[Dict]:
+        """Find view patterns relevant to the current query"""
+        relevant = []
+        q_lower = question.lower()
+        table_names = [t.full_name for t in tables]
+        
+        for pattern in self.view_patterns:
+            relevance_score = 0
+            
+            # Score by table overlap
+            pattern_tables = pattern.get('tables_involved', [])
+            table_overlap = 0
+            for pt in pattern_tables:
+                for tn in table_names:
+                    if pt.lower() in tn.lower() or tn.lower() in pt.lower():
+                        table_overlap += 1
+                        break
+            
+            relevance_score += table_overlap * 3
+            
+            # Score by business context
+            business_context = pattern.get('business_context', {})
+            if 'customer' in q_lower and business_context.get('contains_customer_data'):
+                relevance_score += 2
+            if 'payment' in q_lower and business_context.get('contains_financial_data'):
+                relevance_score += 2
+            if 'total' in q_lower and business_context.get('contains_aggregations'):
+                relevance_score += 2
+            
+            # Score by view name similarity
+            view_name = pattern.get('view_name', '').lower()
+            question_words = [word for word in q_lower.split() if len(word) > 3]
+            for word in question_words:
+                if word in view_name:
+                    relevance_score += 1
+            
+            if relevance_score > 0:
+                pattern_with_score = pattern.copy()
+                pattern_with_score['relevance_score'] = relevance_score
+                relevant.append(pattern_with_score)
+        
+        # Sort by relevance and return top patterns
+        relevant.sort(key=lambda p: p['relevance_score'], reverse=True)
+        return relevant[:3]
+    
+    def _prepare_detailed_table_context(self, tables: List[TableInfo], query_analysis: Dict) -> str:
+        """Prepare detailed context about real tables"""
+        context_lines = []
+        
+        for table in tables:
+            context_lines.append(f"TABLE: {table.full_name}")
+            context_lines.append(f"  Entity Type: {table.entity_type}")
+            context_lines.append(f"  Rows: {table.row_count:,}")
+            
+            # Show important columns based on query analysis
+            important_columns = []
+            for col in table.columns:
+                col_name = col.get('name', '')
+                col_type = col.get('data_type', '')
+                
+                # Highlight relevant columns
+                if query_analysis.get('time_filtering') and 'date' in col_name.lower():
+                    important_columns.append(f"⭐ {col_name} ({col_type}) [DATE COLUMN]")
+                elif 'id' in col_name.lower():
+                    important_columns.append(f"🔑 {col_name} ({col_type}) [ID COLUMN]")
+                elif any(word in col_name.lower() for word in ['amount', 'total', 'price', 'revenue']):
+                    important_columns.append(f"💰 {col_name} ({col_type}) [FINANCIAL]")
+                else:
+                    important_columns.append(f"   {col_name} ({col_type})")
+            
+            context_lines.append(f"  Key Columns: {', '.join(important_columns[:8])}")
+            
+            # Show sample data insights
+            if table.sample_data:
+                sample_insights = self._extract_sample_insights(table.sample_data[0])
+                if sample_insights:
+                    context_lines.append(f"  Sample Data: {sample_insights}")
+            
+            context_lines.append("")
+        
+        return "\n".join(context_lines)
+    
+    def _extract_sample_insights(self, sample_row: Dict) -> str:
+        """Extract meaningful insights from sample data"""
+        insights = []
+        
+        for key, value in list(sample_row.items())[:4]:
+            if value is not None:
+                if isinstance(value, str) and len(str(value)) > 50:
+                    insights.append(f"{key}=[TEXT]")
+                elif 'date' in key.lower() and ('2025' in str(value) or '2024' in str(value)):
+                    insights.append(f"{key}={value} [RECENT]")
+                elif isinstance(value, (int, float)) and value > 1000:
+                    insights.append(f"{key}={value:,}")
+                else:
+                    insights.append(f"{key}={value}")
+        
+        return ", ".join(insights)
+    
+    def _prepare_join_context(self, relationships: List[Dict], view_patterns: List[Dict]) -> str:
+        """Prepare context about joins with proven patterns"""
+        context_lines = []
+        
+        if relationships:
+            context_lines.append("AVAILABLE RELATIONSHIPS:")
+            for rel in relationships:
+                source = rel.get('source', 'unknown')
+                confidence = rel.get('confidence', 0)
+                join_condition = rel.get('join_condition', 'No condition specified')
+                
+                if source == 'view_pattern':
+                    context_lines.append(f"  ✅ PROVEN: {join_condition} (from view: {rel.get('source_view', 'unknown')})")
+                elif source == 'foreign_key':
+                    context_lines.append(f"  🔑 FK: {join_condition} (confidence: {confidence:.1f})")
+                else:
+                    context_lines.append(f"  💡 INFERRED: {join_condition} (confidence: {confidence:.1f})")
+        else:
+            context_lines.append("NO RELATIONSHIPS FOUND - Use single table queries")
+        
+        if view_patterns:
+            context_lines.append("\nPROVEN JOIN PATTERNS FROM SUCCESSFUL VIEWS:")
+            for pattern in view_patterns:
+                joins = pattern.get('join_patterns', [])
+                if joins:
+                    context_lines.append(f"  Pattern from {pattern.get('view_name', 'unknown')}:")
+                    for join in joins[:2]:  # Show top 2 join patterns
+                        context_lines.append(f"    {join}")
+        
+        return "\n".join(context_lines)
+    
+    def _format_view_examples(self, view_patterns: List[Dict]) -> str:
+        """Format view patterns as examples for SQL generation"""
+        if not view_patterns:
+            return "No relevant view patterns found."
+        
+        examples = []
+        for pattern in view_patterns:
+            example = f"VIEW: {pattern.get('view_name', 'Unknown')}"
+            
+            if pattern.get('definition'):
+                # Extract key parts of the view definition
+                definition = pattern['definition']
+                key_lines = []
+                
+                for line in definition.split('\n'):
+                    line = line.strip()
+                    if any(keyword in line.upper() for keyword in ['SELECT', 'FROM', 'JOIN', 'WHERE', 'GROUP BY']):
+                        key_lines.append(line)
+                        if len(key_lines) >= 6:  # Limit example length
+                            break
+                
+                if key_lines:
+                    example += "\nKey SQL Logic:\n" + "\n".join(key_lines)
+            
+            if pattern.get('business_context'):
+                bc = pattern['business_context']
+                if bc.get('likely_business_function') != 'unknown':
+                    example += f"\nBusiness Function: {bc['likely_business_function']}"
+            
+            examples.append(example)
+        
+        return "\n\n" + "\n---\n".join(examples)
+    
+    def _create_system_prompt(self, query_analysis: Dict, view_patterns: List[Dict]) -> str:
+        """Create enhanced system prompt for real database SQL generation"""
+        
+        base_prompt = """You are an expert SQL generator for a real E-Commerce/Order Management database.
+Generate accurate, efficient SQL queries that work with the actual table structure provided.
+
+IMPORTANT RULES:
+1. Use actual table names and column names EXACTLY as provided
+2. Use proper table aliases for readability (t1, t2, etc.)
+3. Include TOP 100 to limit results unless counting
+4. Use meaningful column aliases for business users
+5. Handle international characters properly (UTF-8)
+6. Use proven JOIN patterns from successful views when available
+7. Return only the SQL query, no explanations"""
+        
+        # Add query-specific guidance
+        if query_analysis.get('aggregation_needed'):
+            base_prompt += f"""
+
+AGGREGATION REQUIREMENTS:
+- This query needs {', '.join(query_analysis.get('aggregation_functions', ['COUNT']))}
+- Use appropriate GROUP BY clauses
+- Provide meaningful aggregate column names"""
+        
+        if query_analysis.get('time_filtering'):
+            base_prompt += """
+
+TIME FILTERING:
+- Look for date columns in the provided tables
+- Use appropriate date filtering (YEAR, DATEPART, etc.)
+- Consider date ranges if specific years mentioned"""
+        
+        if view_patterns:
+            base_prompt += f"""
+
+VIEW PATTERN GUIDANCE:
+- You have {len(view_patterns)} proven view patterns as examples
+- These patterns show successful SQL that works in this database
+- Use their JOIN logic and business patterns as guidance"""
+        
+        return base_prompt
+    
+    def _clean_sql(self, response: str) -> str:
+        """Clean and format SQL from LLM response"""
+        # Remove markdown
+        cleaned = re.sub(r'```sql\s*', '', response, flags=re.IGNORECASE)
+        cleaned = re.sub(r'```\s*', '', cleaned)
+        
+        # Extract SQL statement
+        lines = cleaned.strip().split('\n')
+        sql_lines = []
+        found_select = False
+        
+        for line in lines:
+            line = line.strip()
+            if line.upper().startswith(('SELECT', 'WITH')) or found_select:
+                found_select = True
+                sql_lines.append(line)
+                if line.endswith(';'):
+                    break
+        
+        if sql_lines:
+            sql = '\n'.join(sql_lines).rstrip(';').strip()
+            
+            # Add TOP clause if not present and not a COUNT query
+            if ('TOP ' not in sql.upper() and 
+                'COUNT(' not in sql.upper() and 
+                sql.upper().startswith('SELECT')):
+                sql = sql.replace('SELECT', 'SELECT TOP 100', 1)
+            
+            return sql
+        
+        return cleaned.strip()
+
+
+class QueryExecutor:
+    """Execute SQL queries safely on real database"""
+    
+    def __init__(self, config: Config):
+        self.config = config
+    
+    def execute_query(self, sql: str) -> tuple:
+        """Execute SQL query on real database and return results"""
         if not sql or not sql.strip():
             return [], "Empty SQL query"
         
-        # Check cache first
-        cache_key = hashlib.md5(sql.encode()).hexdigest()
-        if cache_key in self.query_cache:
-            cached_result = self.query_cache[cache_key]
-            logger.info("Query result served from cache")
-            return cached_result
-        
-        start_time = time.time()
-        
-        # Wrapper function for execution with timeout
-        def execute_query():
-            try:
-                with self._get_connection() as conn:
-                    cursor = conn.cursor()
-                    
-                    # Execute with monitoring (timeout handled at connection level)
-                    logger.info(f"Executing SQL: {sql[:100]}...")
-                    
-                    cursor.execute(sql)
-                    
-                    # Process results
-                    if cursor.description:
-                        columns = [col[0] for col in cursor.description]
-                        results = []
-                        
-                        # Fetch with limit for safety
-                        for row in cursor.fetchmany(5000):  # Hard limit
-                            row_dict = {}
-                            for i, value in enumerate(row):
-                                if i < len(columns):
-                                    row_dict[columns[i]] = self._safe_value(value)
-                            results.append(row_dict)
-                        
-                        return results, None
-                    else:
-                        return [], None
-                        
-            except pyodbc.Error as e:
-                self.execution_stats['db_error'] += 1
-                error_msg = str(e)
-                
-                # Categorize database errors
-                if "Invalid column name" in error_msg:
-                    return [], f"Column not found: {self._extract_column_name(error_msg)}"
-                elif "Invalid object name" in error_msg:
-                    return [], f"Table not found: {self._extract_table_name(error_msg)}"
-                elif "timeout" in error_msg.lower() or "query timeout" in error_msg.lower():
-                    return [], f"Query timeout after {timeout}s - query too complex"
-                elif "permission" in error_msg.lower() or "access" in error_msg.lower():
-                    return [], f"Access denied - insufficient permissions"
-                else:
-                    logger.error(f"Database error: {error_msg}")
-                    return [], f"Database error: {error_msg}"
-            
-            except Exception as e:
-                self.execution_stats['system_error'] += 1
-                logger.error(f"System error during query execution: {e}")
-                return [], f"System error: {str(e)}"
-        
-        # Execute the query
         try:
-            results, error = execute_query()
+            with pyodbc.connect(self.config.get_database_connection_string()) as conn:
+                # Set UTF-8 encoding for international characters
+                conn.setdecoding(pyodbc.SQL_CHAR, encoding='utf-8')
+                conn.setdecoding(pyodbc.SQL_WCHAR, encoding='utf-8')
+                conn.setencoding(encoding='utf-8')
+                
+                cursor = conn.cursor()
+                
+                # Set query timeout for safety
+                cursor.timeout = 30
+                
+                cursor.execute(sql)
+                
+                if cursor.description:
+                    columns = [col[0] for col in cursor.description]
+                    results = []
+                    
+                    # Fetch results with safety limit
+                    row_count = 0
+                    for row in cursor:
+                        if row_count >= 100:  # Safety limit
+                            break
+                        
+                        row_dict = {}
+                        for i, value in enumerate(row):
+                            if i < len(columns):
+                                row_dict[columns[i]] = self._safe_value(value)
+                        results.append(row_dict)
+                        row_count += 1
+                    
+                    return results, None
+                else:
+                    return [], None
+                    
+        except pyodbc.Error as e:
+            error_msg = str(e)
             
-            if error is None and results is not None:
-                # Cache successful results
-                with self._lock:
-                    self.query_cache[cache_key] = (results, None)
-                    # Limit cache size
-                    if len(self.query_cache) > 100:
-                        oldest_key = next(iter(self.query_cache))
-                        del self.query_cache[oldest_key]
-                
-                execution_time = time.time() - start_time
-                self.execution_stats['success'] += 1
-                self.execution_stats['total_time'] += execution_time
-                
-                logger.info(f"Query executed successfully: {len(results)} rows in {execution_time:.1f}s")
-                return results, None
+            # Provide helpful error messages for common issues
+            if "Invalid column name" in error_msg:
+                return [], f"Column not found in database: {error_msg}"
+            elif "Invalid object name" in error_msg:
+                return [], f"Table not found in database: {error_msg}"
+            elif "Timeout" in error_msg:
+                return [], "Query timeout - try a simpler query or add more filters"
+            elif "Permission" in error_msg:
+                return [], "Database permission error - check access rights"
             else:
-                return results or [], error
-                
+                return [], f"Database error: {error_msg}"
+        
         except Exception as e:
-            self.execution_stats['system_error'] += 1
-            error_msg = f"Execution wrapper error: {str(e)}"
-            logger.error(error_msg)
-            return [], error_msg
+            return [], f"Unexpected error: {str(e)}"
     
-    def _safe_value(self, value) -> Any:
-        """Convert value to safe, serializable format"""
+    def _safe_value(self, value):
+        """Convert database value to safe display format"""
         if value is None:
             return None
         elif isinstance(value, datetime):
             return value.isoformat()
         elif isinstance(value, (str, int, float, bool)):
-            # Truncate very long strings
-            if isinstance(value, str) and len(value) > 500:
-                return value[:500] + "... [truncated]"
             return value
+        elif hasattr(value, 'decode'):  # Handle binary data
+            try:
+                return value.decode('utf-8')[:200]
+            except:
+                return "[Binary Data]"
         else:
             return str(value)[:200]
-    
-    def _extract_column_name(self, error_msg: str) -> str:
-        """Extract column name from error message"""
-        match = re.search(r"Invalid column name '([^']+)'", error_msg)
-        return match.group(1) if match else "unknown"
-    
-    def _extract_table_name(self, error_msg: str) -> str:
-        """Extract table name from error message"""
-        match = re.search(r"Invalid object name '([^']+)'", error_msg)
-        return match.group(1) if match else "unknown"
-    
-    def get_stats(self) -> Dict:
-        """Get execution statistics"""
-        stats = dict(self.execution_stats)
-        if stats.get('success', 0) > 0:
-            stats['avg_execution_time'] = stats.get('total_time', 0) / stats['success']
-        return stats
 
 
-class SemanticRAG:
-    """Main Semantic RAG System - Enhanced with template-based constraints"""
+class QueryInterface:
+    """Enhanced interactive query interface for real database"""
     
     def __init__(self, config: Config):
         self.config = config
-        self.start_time = time.time()
-        
-        # Initialize components
-        logger.info("Initializing Enhanced Semantic RAG System...")
-        
-        self.llm_client = LLMClient(config)
-        self.embedder = SchemaEmbedder() 
-        self.graph_builder = SchemaGraphBuilder()
+        self.llm = LLMClient(config)
+        self.data_loader = DataLoader(config)
         self.executor = QueryExecutor(config)
         
-        # Load data
-        self._load_semantic_data()
+        # Load real cached data
+        if not self.data_loader.load_data():
+            raise ValueError("Failed to load cached data. Run discovery and analysis first.")
         
-        # Build enhanced structures
-        logger.info("Building enhanced schema structures...")
-        self.schema_graph = self.graph_builder.build_graph(self.tables)
+        # Initialize components with real data
+        self.table_selector = TableSelector(
+            self.data_loader.tables, 
+            self.llm, 
+            self.data_loader.view_patterns
+        )
+        self.relationship_finder = RelationshipFinder(
+            self.data_loader.database_structure, 
+            self.data_loader.relationships,
+            self.data_loader.view_patterns
+        )
+        self.sql_generator = SQLGenerator(
+            self.llm, 
+            self.data_loader.view_patterns
+        )
         
-        # Initialize selectors and generators
-        self.table_selector = SmartTableSelector(self.tables, self.embedder, self.schema_graph)
-        self.relationship_mapper = RelationshipMapper(self.schema_graph)
-        self.sql_generator = SmartSQLGenerator(self.llm_client, self.schema_graph, config)  # Pass config
-        
-        # Statistics tracking
-        self.session_stats = {
-            'queries_processed': 0,
-            'successful_queries': 0,
-            'failed_queries': 0,
-            'total_execution_time': 0.0,
-            'cache_hits': 0
-        }
-        
-        init_time = time.time() - self.start_time
-        logger.info(f"Enhanced Semantic RAG System initialized in {init_time:.1f}s")
-        
-        # Print initialization summary
-        self._print_initialization_summary()
+        print(f"   📊 Loaded {len(self.data_loader.tables)} real tables")
+        print(f"   🔗 Database relationships: {len(self.data_loader.relationships)}")
+        print(f"   👁️ View patterns for examples: {len(self.data_loader.view_patterns)}")
     
-    def _load_semantic_data(self):
-        """Load semantic analysis data"""
-        try:
-            semantic_file = self.config.get_cache_path("semantic_analysis.json")
-            if not semantic_file.exists():
-                raise FileNotFoundError("No semantic analysis found. Run analysis first.")
-            
-            with open(semantic_file, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            
-            # Load tables
-            self.tables = []
-            for table_data in data.get('tables', []):
-                table = TableInfo(
-                    name=table_data['name'],
-                    schema=table_data['schema'], 
-                    full_name=table_data['full_name'],
-                    object_type=table_data['object_type'],
-                    row_count=table_data['row_count'],
-                    columns=table_data['columns'],
-                    sample_data=table_data['sample_data'],
-                    relationships=table_data.get('relationships', [])
-                )
-                table.entity_type = table_data.get('entity_type', 'Unknown')
-                table.confidence = table_data.get('confidence', 0.0)
-                self.tables.append(table)
-            
-            # Load domain
-            domain_data = data.get('domain')
-            if domain_data:
-                self.domain = BusinessDomain(
-                    domain_type=domain_data['domain_type'],
-                    industry=domain_data['industry'],
-                    confidence=domain_data['confidence'],
-                    sample_questions=domain_data['sample_questions'],
-                    capabilities=domain_data['capabilities']
-                )
-            else:
-                self.domain = None
-            
-            logger.info(f"Loaded {len(self.tables)} tables from semantic analysis")
-            
-        except Exception as e:
-            logger.error(f"Failed to load semantic data: {e}")
-            raise
-    
-    def _print_initialization_summary(self):
-        """Print system initialization summary"""
-        print("\n" + "="*70)
-        print("🧠 ENHANCED SEMANTIC DATABASE RAG SYSTEM")
-        print("="*70)
-        print(f"📊 Tables loaded: {len(self.tables):,}")
-        print(f"🏗️ Schema relationships: {len(self.graph_builder.pk_fk_relationships)}")
+    async def start_interactive_session(self, tables: List[TableInfo], 
+                                      domain: Optional[BusinessDomain], 
+                                      relationships: List[Relationship]):
+        """Start interactive session with real database"""
         
-        if self.domain:
-            print(f"🏢 Business domain: {self.domain.domain_type} ({self.domain.industry})")
+        print(f"🚀 Enhanced Query Interface for Real Database")
+        print(f"   📊 Real tables available: {len(tables)}")
         
-        # Entity distribution
-        entity_counts = defaultdict(int)
-        for table in self.tables:
-            entity_counts[table.entity_type] += 1
+        if domain:
+            print(f"   🏢 Business Domain: {domain.domain_type}")
+            if domain.sample_questions:
+                print(f"   💡 Try asking: {domain.sample_questions[0]}")
+        
+        # Show real entity distribution
+        entity_counts = {}
+        for table in tables:
+            if table.entity_type != 'Unknown':
+                entity_counts[table.entity_type] = entity_counts.get(table.entity_type, 0) + 1
         
         if entity_counts:
-            print("📋 Entity types:")
-            for entity_type, count in sorted(entity_counts.items(), key=lambda x: x[1], reverse=True)[:5]:
-                print(f"   • {entity_type}: {count}")
-        
-        # Capabilities summary
-        capabilities = []
-        if EMBEDDINGS_AVAILABLE and self.embedder.available:
-            capabilities.append("🎯 Semantic search")
-        else:
-            capabilities.append("🔍 Keyword-based search")
+            print(f"   📊 Available entities: {dict(list(entity_counts.items())[:5])}")
             
-        if SQLGLOT_AVAILABLE:
-            capabilities.append("⚡ SQL optimization") 
-        
-        capabilities.append("📝 Template-based generation")
-        capabilities.append("🔒 Multi-layer validation")
-        capabilities.append("🎯 Live schema validation")  # New capability
-        
-        if capabilities:
-            print("🚀 Available capabilities:")
-            for cap in capabilities:
-                print(f"   {cap}")
-        
-        # Show missing optional dependencies
-        missing = []
-        if not EMBEDDINGS_AVAILABLE:
-            missing.append("sentence-transformers (semantic search)")
-        if not SQLGLOT_AVAILABLE:
-            missing.append("sqlglot (SQL optimization)")
-        
-        if missing:
-            print("⚠️  Optional features disabled:")
-            for miss in missing:
-                print(f"   • {miss}")
-            print("   Install missing dependencies to enable these features")
-        
-        print("="*70)
-        print("✅ Template-based SQL generation ready!")
-        print("Ready for queries! Type 'quit' to exit.\n")
-    
-    async def start_interactive_session(self, tables=None, domain=None, relationships=None):
-        """Start enhanced interactive session"""
-        print("🎯 Starting interactive query session...")
+            # Show business capabilities
+            print(f"   💼 You can ask about:")
+            if entity_counts.get('Customer', 0) > 0:
+                print(f"      • Customer analysis ({entity_counts['Customer']} customer tables)")
+            if entity_counts.get('Financial', 0) > 0:
+                print(f"      • Financial analysis ({entity_counts['Financial']} financial tables)")
+            if entity_counts.get('Product', 0) > 0:
+                print(f"      • Product analysis ({entity_counts['Product']} product tables)")
         
         query_count = 0
-        session_start = time.time()
         
         while True:
             try:
@@ -1646,268 +1441,160 @@ class SemanticRAG:
                     continue
                 
                 query_count += 1
-                print(f"\n🚀 Processing query {query_count}...")
+                print(f"🔄 Processing query with real database analysis...")
                 
-                # Process with progress indicators
                 start_time = time.time()
-                result = await self._process_query_with_progress(question)
+                result = await self.process_query(question)
                 result.execution_time = time.time() - start_time
                 
-                # Update statistics
-                self.session_stats['queries_processed'] += 1
-                self.session_stats['total_execution_time'] += result.execution_time
-                
-                if result.error:
-                    self.session_stats['failed_queries'] += 1
-                else:
-                    self.session_stats['successful_queries'] += 1
-                
-                # Display result
-                self._display_enhanced_result(result, query_count)
+                self.display_result(result)
                 
             except KeyboardInterrupt:
-                print("\n⏸️ Session interrupted by user")
+                print("\n⏸️ Interrupted")
                 break
             except Exception as e:
-                logger.error(f"Unexpected error in query {query_count}: {e}")
-                print(f"❌ Unexpected error: {e}")
+                print(f"❌ Error: {e}")
         
-        # Session summary
-        self._print_session_summary(query_count, time.time() - session_start)
+        print(f"\n📊 Session summary: {query_count} queries processed")
+        print(f"   🔍 Used real database with {len(self.data_loader.tables)} tables")
+        print(f"   👁️ Leveraged {len(self.data_loader.view_patterns)} proven view patterns")
     
-    async def _process_query_with_progress(self, question: str) -> QueryResult:
-        """Process query with progress indicators"""
+    async def process_query(self, question: str) -> QueryResult:
+        """Process query using real database intelligence"""
+        
         try:
-            with tqdm(total=4, desc="Processing", bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt}') as pbar:
-                
-                # Step 1: Table selection
-                pbar.set_description("Selecting tables")
-                selected_tables = await self.table_selector.select_tables(question)
-                pbar.update(1)
-                
-                if not selected_tables:
-                    return QueryResult(
-                        question=question,
-                        sql_query="",
-                        results=[],
-                        error="No relevant tables found for the question"
-                    )
-                
-                # Step 2: SQL generation  
-                pbar.set_description("Generating SQL")
-                sql, retry_count = await self.sql_generator.generate_smart_sql(question, selected_tables)
-                pbar.update(1)
-                
-                if not sql:
-                    return QueryResult(
-                        question=question,
-                        sql_query="",
-                        results=[],
-                        error=f"Failed to generate valid SQL after {retry_count} attempts"
-                    )
-                
-                # Step 3: Query execution
-                pbar.set_description("Executing query")
-                results, error = self.executor.execute_with_safety(sql)
-                pbar.update(1)
-                
-                # Step 4: Result processing
-                pbar.set_description("Processing results")
-                query_result = QueryResult(
+            # Stage 1: Intelligent table selection using real data
+            selected_tables = await self.table_selector.find_relevant_tables(question)
+            
+            if not selected_tables:
+                return QueryResult(
                     question=question,
-                    sql_query=sql,
-                    results=results,
-                    error=error,
-                    tables_used=[t.full_name for t in selected_tables]
+                    sql_query="",
+                    results=[],
+                    error="No relevant tables found in real database"
                 )
-                pbar.update(1)
-                
-                return query_result
-                
+            
+            # Stage 2: Find real relationships (including view patterns)
+            relationships = self.relationship_finder.find_relationships(selected_tables)
+            
+            # Stage 3: Generate SQL using real table structure
+            sql = await self.sql_generator.generate_query(question, selected_tables, relationships)
+            
+            if not sql:
+                return QueryResult(
+                    question=question,
+                    sql_query="",
+                    results=[],
+                    error="Failed to generate SQL for real database"
+                )
+            
+            # Stage 4: Execute on real database
+            results, error = self.executor.execute_query(sql)
+            
+            return QueryResult(
+                question=question,
+                sql_query=sql,
+                results=results,
+                error=error,
+                tables_used=[t.full_name for t in selected_tables]
+            )
+            
         except Exception as e:
-            logger.error(f"Error in query processing pipeline: {e}")
             return QueryResult(
                 question=question,
                 sql_query="",
                 results=[],
-                error=f"Pipeline error: {str(e)}"
+                error=f"Real database query processing failed: {str(e)}"
             )
     
-    def _display_enhanced_result(self, result: QueryResult, query_num: int):
-        """Display enhanced query results"""
-        print(f"\n📊 QUERY {query_num} RESULTS")
+    def display_result(self, result: QueryResult):
+        """Display results with real database context"""
+        
+        print(f"⏱️ Completed in {result.execution_time:.1f}s")
         print("-" * 60)
-        print(f"⏱️ Execution time: {result.execution_time:.2f}s")
         
         if result.error:
             print(f"❌ Error: {result.error}")
             if result.sql_query:
-                print(f"\n📝 Generated SQL:")
-                print(f"   {result.sql_query}")
+                print(f"📋 Generated SQL:")
+                print(f"```sql\n{result.sql_query}\n```")
+                
+                # Provide helpful debugging for real database
+                print("\n🔍 Real Database Debugging:")
+                print("   • Check that table and column names exist in your database")
+                print("   • Verify you have read permissions on the selected tables")
+                print("   • Consider if the tables contain the expected data")
         else:
-            print(f"✅ Success: {len(result.results)} rows returned")
+            print(f"📋 Generated SQL:")
+            print(f"```sql\n{result.sql_query}\n```")
+            print(f"📊 Results: {len(result.results)} rows")
             
-            # Show SQL
-            print(f"\n📝 Generated SQL:")
-            sql_lines = result.sql_query.split('\n')
-            for line in sql_lines:
-                print(f"   {line}")
-            
-            # Show results intelligently
             if result.results:
-                self._display_results_smart(result.results)
-            else:
-                print("📊 No data returned")
-            
-            # Show table usage
-            if result.tables_used:
-                print(f"\n📋 Tables queried ({len(result.tables_used)}):")
-                for table_name in result.tables_used:
-                    table_info = self._get_table_info(table_name)
-                    print(f"   • {table_name} ({table_info['entity_type']}) - {table_info['row_count']:,} rows")
-        
-        print("-" * 60)
-    
-    def _display_results_smart(self, results: List[Dict]):
-        """Smart result display based on data type and volume"""
-        if not results:
-            return
-        
-        # Single value results
-        if len(results) == 1 and len(results[0]) == 1:
-            key, value = next(iter(results[0].items()))
-            if isinstance(value, (int, float)):
-                print(f"🎯 Result: {value:,} ({key})")
-            else:
-                print(f"🎯 Result: {value} ({key})")
-            return
-        
-        # Multiple results
-        print(f"\n📊 Data preview (showing up to 10 rows):")
-        
-        # Determine display columns (limit very wide tables)
-        sample_row = results[0]
-        all_columns = list(sample_row.keys())
-        display_columns = all_columns[:8]  # Limit columns for readability
-        
-        # Format and display
-        for i, row in enumerate(results[:10], 1):
-            row_display = {}
-            for col in display_columns:
-                value = row.get(col)
-                if isinstance(value, str) and len(value) > 50:
-                    row_display[col] = value[:50] + "..."
-                elif isinstance(value, (int, float)) and abs(value) > 1000:
-                    row_display[col] = f"{value:,}"
+                # Handle single value results (like counts)
+                if result.is_single_value():
+                    value = result.get_single_value()
+                    column_name = list(result.results[0].keys())[0]
+                    
+                    if isinstance(value, (int, float)) and value >= 1000:
+                        print(f"   🎯 {column_name}: {value:,}")
+                    else:
+                        print(f"   🎯 {column_name}: {value}")
                 else:
-                    row_display[col] = value
+                    # Handle multiple rows with smart formatting
+                    for i, row in enumerate(result.results[:5], 1):
+                        display_row = {}
+                        for key, value in list(row.items())[:6]:
+                            if isinstance(value, str) and len(value) > 40:
+                                display_row[key] = value[:37] + "..."
+                            elif isinstance(value, (int, float)) and value >= 1000:
+                                display_row[key] = f"{value:,}"
+                            else:
+                                display_row[key] = value
+                        print(f"   {i}. {display_row}")
+                    
+                    if len(result.results) > 5:
+                        print(f"   ... and {len(result.results) - 5} more rows")
+            else:
+                print("   ⚠️ No results returned from real database")
+                print("   💡 This could mean:")
+                print("      • No data matches your criteria")
+                print("      • Date filters are too restrictive") 
+                print("      • Tables don't contain the expected data")
+                print("      • Column values don't match your question")
             
-            print(f"   {i:2d}. {row_display}")
+            # Show real tables used with context
+            if result.tables_used:
+                print(f"📋 Real tables analyzed:")
+                for table_name in result.tables_used:
+                    # Find table info for context
+                    table_info = next((t for t in self.data_loader.tables if t.full_name == table_name), None)
+                    if table_info:
+                        entity_type = table_info.entity_type
+                        row_count = table_info.row_count
+                        print(f"      • {table_name} ({entity_type}) - {row_count:,} rows")
+                    else:
+                        print(f"      • {table_name}")
         
-        if len(results) > 10:
-            print(f"   ... and {len(results) - 10} more rows")
+        # Enhanced troubleshooting for real database
+        print("\n💡 Real Database Troubleshooting:")
+        print("   • Database structure: data/database_structure.json")
+        print("   • Semantic analysis: data/semantic_analysis.json")
         
-        if len(all_columns) > len(display_columns):
-            hidden_cols = len(all_columns) - len(display_columns)
-            print(f"   (+ {hidden_cols} more columns)")
-    
-    def _get_table_info(self, table_name: str) -> Dict:
-        """Get table information"""
-        for table in self.tables:
-            if table.full_name == table_name:
-                return {
-                    'entity_type': getattr(table, 'entity_type', 'Unknown'),
-                    'row_count': table.row_count
-                }
-        return {'entity_type': 'Unknown', 'row_count': 0}
-    
-    def _print_session_summary(self, query_count: int, session_duration: float):
-        """Print session summary"""
-        print(f"\n📈 SESSION SUMMARY")
-        print("="*50)
-        print(f"Queries processed: {query_count}")
-        print(f"Successful: {self.session_stats['successful_queries']}")
-        print(f"Failed: {self.session_stats['failed_queries']}")
-        print(f"Success rate: {(self.session_stats['successful_queries']/max(query_count,1)*100):.1f}%")
-        print(f"Session duration: {session_duration:.1f}s")
+        if result.error:
+            print("   🔧 For errors, try:")
+            print("      • Simpler questions to test table accessibility")
+            print("      • Questions about tables you know contain data")
+            print("      • Checking database permissions")
+        elif len(result.results) == 0:
+            print("   🔍 For empty results, try:")
+            print("      • Broader time ranges (remove year filters)")
+            print("      • Different entity types from your domain")
+            print("      • Questions about data you know exists")
         
-        if query_count > 0:
-            avg_time = self.session_stats['total_execution_time'] / query_count
-            print(f"Average query time: {avg_time:.2f}s")
-        
-        # Component statistics
-        executor_stats = self.executor.get_stats()
-        if executor_stats:
-            print(f"\nExecutor stats: {executor_stats}")
-        
-        llm_stats = self.llm_client.generation_stats
-        if llm_stats:
-            print(f"LLM stats: {dict(llm_stats)}")
-        
-        print("="*50)
-        print("Thank you for using Enhanced Semantic RAG! 🎉")
-    
-    async def process_single_query(self, question: str) -> QueryResult:
-        """Process a single query - useful for API integration"""
-        return await self._process_query_with_progress(question)
-
-
-# Backward compatibility
-QueryInterface = SemanticRAG
-
-
-async def main():
-    """Main entry point for testing"""
-    try:
-        # Check critical dependencies
-        missing_critical = []
-        try:
-            import sqlglot
-        except ImportError:
-            missing_critical.append("sqlglot")
-        
-        try:
-            from langchain_openai import AzureChatOpenAI
-        except ImportError:
-            missing_critical.append("langchain-openai")
-        
-        try:
-            import pyodbc
-        except ImportError:
-            missing_critical.append("pyodbc")
-        
-        if missing_critical:
-            print(f"❌ Critical dependencies missing: {', '.join(missing_critical)}")
-            print("Install with: pip install " + " ".join(missing_critical))
-            return
-        
-        # Load configuration
-        config = Config()
-        
-        # Initialize and start the enhanced semantic RAG system
-        print("🚀 Starting Enhanced Semantic Database RAG System...")
-        
-        # Show dependency status
-        print(f"✅ Core dependencies loaded")
-        if not EMBEDDINGS_AVAILABLE:
-            print(f"⚠️  Semantic search disabled (install: pip install sentence-transformers numpy)")
-        if not SQLGLOT_AVAILABLE:
-            print(f"⚠️  SQL optimization disabled (install: pip install sqlglot)")
-        
-        print("✅ Template-based SQL generation with live schema validation enabled")
-        
-        semantic_rag = SemanticRAG(config)
-        await semantic_rag.start_interactive_session()
-        
-    except Exception as e:
-        logger.error(f"Failed to start system: {e}")
-        print(f"❌ System startup failed: {e}")
-        print("\n💡 Troubleshooting tips:")
-        print("   • Ensure semantic_analysis.json exists (run analysis first)")
-        print("   • Check database connection settings")
-        print("   • Verify Azure OpenAI configuration")
-        print("   • Install core dependencies: pip install sqlglot langchain-openai pyodbc tqdm")
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+        # Show sample business questions for this real database
+        if hasattr(self.data_loader, 'domain') and self.data_loader.domain:
+            domain = self.data_loader.domain
+            if domain.sample_questions:
+                print(f"   💼 Try these {domain.domain_type} questions:")
+                for question in domain.sample_questions[:2]:
+                    print(f"      • \"{question}\"")
