@@ -367,6 +367,18 @@ class DatabaseDiscovery:
           AND LOWER(v.name) NOT LIKE '%backup%'
           AND LOWER(v.name) NOT LIKE '%dev%'
           AND LOWER(v.name) NOT LIKE '%timingview%'
+          AND LOWER(v.name) NOT LIKE '%viewbatchactionanalysis%'
+          AND LOWER(v.name) NOT LIKE '%viewfixofferfailure%'
+          AND LOWER(v.name) NOT LIKE '%viewrenewalfailure%'
+          AND LOWER(v.name) NOT LIKE '%viewsalesmarketactivecampaign%'
+          AND LOWER(v.name) NOT LIKE '%viewsalesmarketItempotentialownerbasic%'
+          AND LOWER(v.name) NOT LIKE '%viewsalesmarketitempotentialownerforcounter%'
+          AND LOWER(v.name) NOT LIKE '%viewtargetgroupiteminfo%'
+          AND LOWER(v.name) NOT LIKE '%viewtasklistfordialer%'
+          AND LOWER(v.name) NOT LIKE '%vw_locacities%'
+          AND LOWER(v.name) NOT LIKE '%vwagora%'
+          AND LOWER(v.name) NOT LIKE '%workflowcontractview%'
+
 
         UNION ALL
 
