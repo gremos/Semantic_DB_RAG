@@ -116,7 +116,7 @@ class TableSelector:
                 'financial': ['revenue', 'amount', 'total', 'value', 'price', 'cost']
             }
             
-            table_entity = table.entity_type.lower()
+            table_entity = getattr(table, 'entity_type', '').lower()
             for entity, keywords in entity_mapping.items():
                 if any(kw in q_lower for kw in keywords):
                     if entity in table_entity or any(kw in table_name_lower for kw in keywords):
@@ -157,7 +157,8 @@ class TableSelector:
                 reasons.append(f"has_data:{table.row_count:,}")
             
             # Business role bonus
-            if table.business_role == 'Core':
+            business_role = getattr(table, 'business_role', '')
+            if business_role == 'Core':
                 score += 1.0
                 reasons.append("core_business_table")
             
@@ -166,7 +167,7 @@ class TableSelector:
                 scored_tables.append((table, score, reasons))
                 explanations['lexical_matches'].append({
                     'table': table.full_name,
-                    'entity_type': table.entity_type,
+                    'entity_type': getattr(table, 'entity_type', ''),
                     'score': score,
                     'reasoning': '; '.join(reasons)
                 })
@@ -193,7 +194,7 @@ class TableSelector:
         for table in candidates:
             table_summaries.append({
                 'table_name': table.full_name,
-                'entity_type': table.entity_type,
+                'entity_type': getattr(table, 'entity_type', ''),
                 'row_count': table.row_count,
                 'columns': [col.get('name') for col in table.columns[:5]]
             })
@@ -234,6 +235,7 @@ class SQLGenerator:
         self.config = config
         self.database_structure = self.load_database_structure()
         self.view_patterns = self.extract_view_patterns()
+        self.allowed_identifiers = self.build_allowed_identifiers()
     
     def load_database_structure(self) -> Dict:
         """Load database structure for constraints"""
@@ -245,6 +247,119 @@ class SQLGenerator:
         except Exception:
             pass
         return {}
+    
+    def build_allowed_identifiers(self) -> set:
+        """Build allowed identifiers from database structure - README requirement"""
+        identifiers = set()
+        
+        # Add tables from database structure
+        if 'tables' in self.database_structure:
+            for table_data in self.database_structure['tables']:
+                # Add table names in various formats
+                full_name = table_data.get('full_name', '')
+                schema = table_data.get('schema', '')
+                name = table_data.get('name', '')
+                
+                if full_name:
+                    identifiers.add(full_name.lower())
+                if schema and name:
+                    identifiers.add(f"{schema}.{name}".lower())
+                    identifiers.add(f"[{schema}].[{name}]".lower())
+                if name:
+                    identifiers.add(name.lower())
+                
+                # Add column names
+                for column in table_data.get('columns', []):
+                    col_name = column.get('name', '')
+                    if col_name:
+                        identifiers.add(col_name.lower())
+                        identifiers.add(f"[{col_name}]".lower())
+        
+        # Add views
+        if 'view_info' in self.database_structure:
+            for view_name, view_data in self.database_structure['view_info'].items():
+                identifiers.add(view_name.lower())
+                full_name = view_data.get('full_name', '')
+                if full_name:
+                    identifiers.add(full_name.lower())
+        
+        print(f"      📊 Built allowlist with {len(identifiers)} identifiers")
+        return identifiers
+    
+    def validate_sql_with_sqlglot(self, sql: str) -> Tuple[bool, str, Optional[Any]]:
+        """Validate SQL using SQLGlot AST - README requirement"""
+        if not HAS_SQLGLOT:
+            return self.basic_sql_validation(sql), "Basic validation (SQLGlot not available)", None
+        
+        if not sql.strip():
+            return False, "Empty SQL query", None
+        
+        try:
+            # Parse SQL to AST
+            parsed = sqlglot.parse_one(sql, dialect="tsql")
+            
+            if not parsed:
+                return False, "Failed to parse SQL", None
+            
+            # Check for dangerous operations
+            if parsed.find(sqlglot.expressions.Insert) or \
+               parsed.find(sqlglot.expressions.Update) or \
+               parsed.find(sqlglot.expressions.Delete) or \
+               parsed.find(sqlglot.expressions.Drop) or \
+               parsed.find(sqlglot.expressions.Create) or \
+               parsed.find(sqlglot.expressions.Alter):
+                return False, "Dangerous SQL operations detected", parsed
+            
+            # Check if it's a SELECT statement
+            if not isinstance(parsed, sqlglot.expressions.Select):
+                return False, "Only SELECT statements allowed", parsed
+            
+            # Validate identifiers exist in allowlist (basic check)
+            sql_lower = sql.lower()
+            found_unknown = []
+            
+            # Extract table names from SQL (simple heuristic)
+            table_patterns = [
+                r'from\s+(\[?\w+\]?\.\[?\w+\]?)',
+                r'join\s+(\[?\w+\]?\.\[?\w+\]?)',
+                r'from\s+(\[?\w+\]?)',
+                r'join\s+(\[?\w+\]?)'
+            ]
+            
+            for pattern in table_patterns:
+                matches = re.findall(pattern, sql_lower, re.IGNORECASE)
+                for match in matches:
+                    clean_match = match.strip('[]').lower()
+                    if clean_match not in self.allowed_identifiers and len(clean_match) > 2:
+                        # Check if it might be a partial match
+                        if not any(clean_match in allowed for allowed in self.allowed_identifiers):
+                            found_unknown.append(match)
+            
+            if found_unknown and len(found_unknown) > 2:  # Allow some flexibility
+                return False, f"Unknown identifiers: {', '.join(found_unknown[:3])}", parsed
+            
+            return True, "SQL validated successfully", parsed
+            
+        except Exception as e:
+            return False, f"SQLGlot validation error: {str(e)}", None
+    
+    def basic_sql_validation(self, sql: str) -> bool:
+        """Basic SQL validation when SQLGlot is not available"""
+        if not sql:
+            return False
+        
+        sql_upper = sql.upper().strip()
+        
+        # Must be SELECT
+        if not sql_upper.startswith('SELECT'):
+            return False
+        
+        # No dangerous operations
+        dangerous = ['INSERT', 'UPDATE', 'DELETE', 'DROP', 'CREATE', 'ALTER', 'TRUNCATE']
+        if any(op in sql_upper for op in dangerous):
+            return False
+        
+        return True
     
     def extract_view_patterns(self) -> List[Dict]:
         """Extract proven join patterns from views - README requirement"""
@@ -422,7 +537,7 @@ Generate adapted SQL:
         formatted = []
         for table in tables:
             formatted.append(f"TABLE: {table.full_name}")
-            formatted.append(f"  Entity: {table.entity_type}")
+            formatted.append(f"  Entity: {getattr(table, 'entity_type', '')}")
             
             # Focus on key columns
             key_columns = []
@@ -537,8 +652,8 @@ Generate adapted SQL:
         # Add table information
         for table in tables:
             context.append(f"\nTABLE: {table.full_name}")
-            context.append(f"  Entity: {table.entity_type}")
-            context.append(f"  Business Role: {table.business_role}")
+            context.append(f"  Entity: {getattr(table, 'entity_type', '')}")
+            context.append(f"  Business Role: {getattr(table, 'business_role', '')}")
             context.append(f"  Rows: {table.row_count:,}")
             
             # Categorize columns by type
@@ -678,7 +793,7 @@ Generate adapted SQL:
         
         for table in tables:
             context.append(f"\nTABLE: {table.full_name}")
-            context.append(f"  Entity: {table.entity_type}")
+            context.append(f"  Entity: {getattr(table, 'entity_type', '')}")
             context.append(f"  Rows: {table.row_count:,}")
             
             columns = [f"{col.get('name')} ({col.get('data_type', 'unknown')})" 
