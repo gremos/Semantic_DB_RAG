@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Simple Semantic Analysis - Let LLM Decide Everything
-Uses actual sample data instead of hardcoded patterns
+Simple Semantic Analysis - Clean & Maintainable
+Uses LLM for intelligent classification with actual sample data
 """
 
 import asyncio
@@ -10,16 +10,16 @@ import json
 import time
 from typing import List, Dict, Any, Optional
 from datetime import datetime
-from pathlib import Path
 
 from langchain_openai import AzureChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
 
 from shared.config import Config
 from shared.models import TableInfo, BusinessDomain, Relationship
+from shared.utils import parse_json_response
 
 class LLMClient:
-    """Simple LLM client"""
+    """Simple LLM client for semantic analysis"""
     
     def __init__(self, config: Config):
         self.llm = AzureChatOpenAI(
@@ -27,15 +27,14 @@ class LLMClient:
             api_key=config.api_key,
             azure_deployment=config.deployment_name,
             api_version=config.api_version,
-            # temperature=0.1,
             request_timeout=60
         )
     
     async def analyze(self, prompt: str) -> str:
-        """Analyze with LLM"""
+        """Send analysis request to LLM"""
         try:
             messages = [
-                SystemMessage(content="You are a business analyst. Analyze database structures using sample data. Respond with JSON only."),
+                SystemMessage(content="You are a database analyst. Analyze tables using sample data and respond with valid JSON only."),
                 HumanMessage(content=prompt)
             ]
             response = await asyncio.to_thread(self.llm.invoke, messages)
@@ -55,7 +54,7 @@ class SemanticAnalyzer:
         self.domain: Optional[BusinessDomain] = None
     
     async def analyze_tables(self, tables: List[TableInfo]) -> bool:
-        """Main analysis - let LLM decide everything"""
+        """Analyze tables with LLM"""
         
         if self.load_from_cache():
             return True
@@ -64,147 +63,130 @@ class SemanticAnalyzer:
             print("❌ No tables to analyze")
             return False
         
-        print(f"🧠 Starting LLM-driven analysis of {len(tables)} tables...")
-        
-        self.tables = tables.copy()
+        print(f"🧠 Starting semantic analysis of {len(tables)} tables...")
         
         try:
-            # Step 1: Let LLM classify tables using sample data
-            print("   🤖 Step 1: LLM classifying tables using sample data...")
-            await self.classify_with_llm()
+            self.tables = tables.copy()
+            
+            # Step 1: Classify tables using LLM
+            await self.classify_tables()
             
             # Step 2: Find relationships
-            print("   🔗 Step 2: Finding relationships...")
             self.find_relationships()
             
-            # Step 3: Determine domain
-            print("   🏢 Step 3: Determining business domain...")
+            # Step 3: Determine business domain
             await self.determine_domain()
             
             # Step 4: Save results
-            print("   💾 Step 4: Saving results...")
             self.save_to_cache()
             
-            # Show summary
-            self.show_results()
-            
+            self.show_summary()
             return True
             
         except Exception as e:
             print(f"❌ Analysis failed: {e}")
             return False
     
-    async def classify_with_llm(self):
-        """Let LLM classify tables using actual sample data"""
+    async def classify_tables(self):
+        """Classify tables using LLM with sample data"""
         
-        # Process tables in batches
         batch_size = 10
-        classified_count = 0
+        classified = 0
         
         for i in range(0, len(self.tables), batch_size):
             batch = self.tables[i:i+batch_size]
             
-            # Create prompt with actual sample data
             prompt = self.create_classification_prompt(batch)
-            
-            # Get LLM response
             response = await self.llm.analyze(prompt)
             
-            # Apply classifications
-            classified_count += self.apply_classifications(response, batch)
+            classified += self.apply_classifications(response, batch)
             
             # Rate limiting
             await asyncio.sleep(1)
         
-        print(f"      ✅ Classified {classified_count} tables using LLM + sample data")
+        print(f"   ✅ Classified {classified} tables")
     
-    def create_classification_prompt(self, tables_batch: List[TableInfo]) -> str:
-        """Create prompt with actual sample data"""
+    def create_classification_prompt(self, tables: List[TableInfo]) -> str:
+        """Create classification prompt with sample data"""
         
-        table_data = []
-        for table in tables_batch:
-            # Get actual sample data
+        table_summaries = []
+        for table in tables:
+            # Prepare sample data preview
             sample_preview = ""
             if table.sample_data:
                 first_row = table.sample_data[0]
                 sample_items = []
-                for key, value in list(first_row.items())[:6]:
+                for key, value in list(first_row.items())[:5]:
                     sample_items.append(f"{key}: {value}")
                 sample_preview = ", ".join(sample_items)
             
-            table_data.append({
+            table_summaries.append({
                 'table_name': table.full_name,
-                'columns': [f"{col['name']} ({col['data_type']})" for col in table.columns[:10]],
+                'columns': [f"{col['name']} ({col['data_type']})" for col in table.columns[:8]],
                 'sample_data': sample_preview,
                 'row_count': table.row_count
             })
         
         return f"""
-Look at these database tables with ACTUAL SAMPLE DATA and classify each one:
+Analyze these database tables and classify each one based on the actual sample data:
 
-TABLES WITH REAL DATA:
-{json.dumps(table_data, indent=2)}
+TABLES:
+{json.dumps(table_summaries, indent=2)}
 
-For each table, look at the ACTUAL sample data and determine:
-1. What type of business entity this represents
-2. How confident you are (0.0 to 1.0)
+For each table, determine:
+1. Entity type based on the actual sample data
+2. Confidence level (0.0 to 1.0)
 
 Entity types:
-- Customer: People, clients, accounts with names/contacts
-- Payment: Financial transactions, payments, billing
-- Order: Sales, purchases, bookings
+- Customer: People, clients, accounts
+- Payment: Financial transactions, billing
+- Order: Sales, purchases, bookings  
 - Product: Items, inventory, catalog
 - User: System users, employees
 - Company: Business entities, vendors
-- Contact: Address/contact information
 - Financial: Accounting, revenue data
 - Reference: Lookup tables, codes
 - System: Technical/operational tables
-- Unknown: Cannot determine from data
+- Unknown: Cannot determine
 
-Look at the ACTUAL sample data values to decide.
+Look at the actual sample data values to decide.
 
-JSON format:
+Respond with JSON:
 {{
   "classifications": [
     {{
       "table_name": "[schema].[table]",
       "entity_type": "Customer",
       "confidence": 0.9,
-      "reasoning": "Sample data shows customer names, emails, addresses"
+      "reasoning": "Sample data shows customer names and emails"
     }}
   ]
 }}
 """
     
     def apply_classifications(self, response: str, batch: List[TableInfo]) -> int:
-        """Apply LLM classifications to tables"""
+        """Apply LLM classifications"""
         
-        try:
-            data = self.parse_json(response)
-            if not data or 'classifications' not in data:
-                return 0
-            
-            count = 0
-            for classification in data['classifications']:
-                table_name = classification.get('table_name', '')
-                entity_type = classification.get('entity_type', 'Unknown')
-                confidence = float(classification.get('confidence', 0.0))
-                
-                # Find matching table
-                for table in batch:
-                    if table.full_name == table_name:
-                        table.entity_type = entity_type
-                        table.confidence = confidence
-                        table.business_role = 'Core' if confidence > 0.8 else 'Supporting'
-                        count += 1
-                        break
-            
-            return count
-            
-        except Exception as e:
-            print(f"      ⚠️ Failed to parse classifications: {e}")
+        data = parse_json_response(response)
+        if not data or 'classifications' not in data:
             return 0
+        
+        count = 0
+        for classification in data['classifications']:
+            table_name = classification.get('table_name', '')
+            entity_type = classification.get('entity_type', 'Unknown')
+            confidence = float(classification.get('confidence', 0.0))
+            
+            # Find and update table
+            for table in batch:
+                if table.full_name == table_name:
+                    table.entity_type = entity_type
+                    table.confidence = confidence
+                    table.business_role = 'Core' if confidence > 0.8 else 'Supporting'
+                    count += 1
+                    break
+        
+        return count
     
     def find_relationships(self):
         """Find simple relationships between tables"""
@@ -216,7 +198,7 @@ JSON format:
                 if col_name.endswith('_id') or col_name.endswith('id'):
                     entity_name = col_name.replace('_id', '').replace('id', '')
                     
-                    # Find related table
+                    # Look for related tables
                     for other_table in self.tables:
                         if other_table.full_name == table.full_name:
                             continue
@@ -232,10 +214,10 @@ JSON format:
                                 description=f"Reference via {col_name}"
                             ))
         
-        print(f"      ✅ Found {len(self.relationships)} relationships")
+        print(f"   ✅ Found {len(self.relationships)} relationships")
     
     async def determine_domain(self):
-        """Let LLM determine business domain"""
+        """Determine business domain using LLM"""
         
         # Count entity types
         entity_counts = {}
@@ -249,21 +231,21 @@ Based on this entity distribution, determine the business domain:
 ENTITY DISTRIBUTION:
 {json.dumps(entity_counts, indent=2)}
 
-What type of business system is this? Consider the entities present.
+What type of business system is this?
 
-JSON format:
+Respond with JSON:
 {{
   "domain_type": "E-Commerce",
   "confidence": 0.8,
   "sample_questions": [
     "How many customers do we have?",
-    "What is our total revenue?"
+    "What is our total revenue this year?"
   ]
 }}
 """
         
         response = await self.llm.analyze(prompt)
-        result = self.parse_json(response)
+        result = parse_json_response(response)
         
         if result:
             self.domain = BusinessDomain(
@@ -274,7 +256,7 @@ JSON format:
                 capabilities=self.determine_capabilities(entity_counts)
             )
         
-        print(f"      ✅ Identified domain: {self.domain.domain_type if self.domain else 'Unknown'}")
+        print(f"   ✅ Domain: {self.domain.domain_type if self.domain else 'Unknown'}")
     
     def determine_capabilities(self, entity_counts: Dict[str, int]) -> Dict[str, bool]:
         """Determine system capabilities"""
@@ -283,16 +265,15 @@ JSON format:
             'payment_analysis': entity_counts.get('Payment', 0) > 0,
             'order_analysis': entity_counts.get('Order', 0) > 0,
             'product_analysis': entity_counts.get('Product', 0) > 0,
-            'financial_reporting': entity_counts.get('Payment', 0) > 0 or entity_counts.get('Financial', 0) > 0,
-            'cross_entity_analysis': len([c for c in entity_counts.values() if c > 0]) >= 2
+            'financial_reporting': entity_counts.get('Payment', 0) > 0 or entity_counts.get('Financial', 0) > 0
         }
     
-    def show_results(self):
-        """Show analysis results"""
+    def show_summary(self):
+        """Show analysis summary"""
         
         classified = sum(1 for t in self.tables if t.entity_type != 'Unknown')
         
-        print(f"\n📊 SEMANTIC ANALYSIS RESULTS:")
+        print(f"\n📊 SEMANTIC ANALYSIS SUMMARY:")
         print(f"   📋 Total tables: {len(self.tables)}")
         print(f"   🧠 Classified: {classified}")
         print(f"   🔗 Relationships: {len(self.relationships)}")
@@ -304,38 +285,19 @@ JSON format:
                 entity_counts[table.entity_type] = entity_counts.get(table.entity_type, 0) + 1
         
         if entity_counts:
-            print(f"   🏢 Business Entities:")
+            print(f"   🏢 Entities:")
             for entity_type, count in sorted(entity_counts.items()):
-                print(f"      • {entity_type}: {count} tables")
+                print(f"      • {entity_type}: {count}")
         
         if self.domain:
             print(f"   🏢 Domain: {self.domain.domain_type}")
     
-    def parse_json(self, response: str) -> Dict:
-        """Parse JSON from LLM response"""
-        try:
-            import re
-            cleaned = response.strip()
-            
-            # Remove markdown
-            if '```json' in cleaned:
-                match = re.search(r'```json\s*(.*?)\s*```', cleaned, re.DOTALL)
-                if match:
-                    cleaned = match.group(1)
-            elif '```' in cleaned:
-                match = re.search(r'```\s*(.*?)\s*```', cleaned, re.DOTALL)
-                if match:
-                    cleaned = match.group(1)
-            
-            return json.loads(cleaned)
-        except:
-            return {}
-    
     def save_to_cache(self):
-        """Save results to cache"""
+        """Save analysis to cache"""
         
         cache_file = self.config.get_cache_path("semantic_analysis.json")
         
+        # Prepare data
         tables_data = []
         for table in self.tables:
             tables_data.append({
@@ -376,7 +338,7 @@ JSON format:
             'tables': tables_data,
             'relationships': relationships_data,
             'domain': domain_data,
-            'created': datetime.now().isoformat(),
+            'analyzed': datetime.now().isoformat(),
             'version': '2.0-simple'
         }
         
@@ -387,7 +349,7 @@ JSON format:
             print(f"   ⚠️ Failed to save cache: {e}")
     
     def load_from_cache(self) -> bool:
-        """Load from cache"""
+        """Load analysis from cache"""
         
         cache_file = self.config.get_cache_path("semantic_analysis.json")
         
@@ -395,6 +357,7 @@ JSON format:
             return False
         
         try:
+            # Check cache age
             cache_age = time.time() - cache_file.stat().st_mtime
             if cache_age > (self.config.semantic_cache_hours * 3600):
                 return False

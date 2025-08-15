@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Simple Semantic Database RAG System - Clean Main Entry Point
+Semantic Database RAG System - Simple Main Entry Point
 Follows DRY, SOLID, YAGNI principles
 """
 
@@ -10,11 +10,25 @@ import os
 from pathlib import Path
 
 class SemanticRAG:
-    """Simple system orchestrator"""
+    """Simple system orchestrator following single responsibility principle"""
     
     def __init__(self):
         self.load_env()
-        
+        self.init_components()
+        print("✅ Semantic Database RAG System initialized")
+    
+    def load_env(self):
+        """Load environment variables from .env file"""
+        env_file = Path('.env')
+        if env_file.exists():
+            with open(env_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if '=' in line and not line.startswith('#'):
+                        key, value = line.strip().split('=', 1)
+                        os.environ[key] = value.strip('"\'')
+    
+    def init_components(self):
+        """Initialize system components"""
         from shared.config import Config
         from db.discovery import DatabaseDiscovery
         from semantic.analysis import SemanticAnalyzer
@@ -24,34 +38,20 @@ class SemanticRAG:
         self.discovery = DatabaseDiscovery(self.config)
         self.analyzer = SemanticAnalyzer(self.config)
         self.query_interface = QueryInterface(self.config)
-        
-        print("✅ Semantic Database RAG System initialized")
-    
-    def load_env(self):
-        """Load .env file"""
-        env_file = Path('.env')
-        if env_file.exists():
-            with open(env_file, 'r', encoding='utf-8') as f:
-                for line in f:
-                    if '=' in line and not line.startswith('#'):
-                        key, value = line.strip().split('=', 1)
-                        os.environ[key] = value.strip('"\'')
     
     async def run_discovery(self):
         """Option 1: Database Discovery"""
         print("🔍 DATABASE DISCOVERY")
         print("=" * 50)
         
-        # success = await self.discovery.discover_database(test_mode=True)
-        
-        
         success = await self.discovery.discover_database()
-
+        
         if success:
             tables = self.discovery.get_tables()
+            relationships = self.discovery.get_relationships()
             print(f"✅ Discovery completed!")
-            print(f"   📊 Found {len(tables)} objects")
-            print(f"   🔗 Relationships: {len(self.discovery.get_relationships())}")
+            print(f"   📊 Tables: {len(tables)}")
+            print(f"   🔗 Relationships: {len(relationships)}")
             return True
         else:
             print("❌ Discovery failed")
@@ -62,6 +62,7 @@ class SemanticRAG:
         print("\n🧠 SEMANTIC ANALYSIS")
         print("=" * 50)
         
+        # Load tables from discovery or cache
         tables = self.discovery.get_tables()
         if not tables:
             if self.discovery.load_from_cache():
@@ -71,7 +72,7 @@ class SemanticRAG:
                 print("❌ No tables found. Run discovery first.")
                 return False
         
-        print(f"🧠 Analyzing {len(tables)} tables")
+        print(f"🧠 Analyzing {len(tables)} tables...")
         
         success = await self.analyzer.analyze_tables(tables)
         
@@ -86,16 +87,21 @@ class SemanticRAG:
             return False
     
     async def run_queries(self):
-        """Option 3: Interactive Queries"""
+        """Option 3: Interactive Queries (4-Stage Pipeline)"""
         print("\n💬 INTERACTIVE QUERIES")
         print("=" * 50)
         
-        # Load data
-        tables = self.analyzer.get_tables() or self.discovery.get_tables()
+        # Load analyzed data
+        tables = self.analyzer.get_tables()
+        domain = self.analyzer.get_domain()
+        relationships = self.analyzer.get_relationships()
         
+        # Try to load from cache if not available
         if not tables:
             if self.analyzer.load_from_cache():
                 tables = self.analyzer.get_tables()
+                domain = self.analyzer.get_domain()
+                relationships = self.analyzer.get_relationships()
             elif self.discovery.load_from_cache():
                 tables = self.discovery.get_tables()
         
@@ -105,10 +111,7 @@ class SemanticRAG:
             print("   2. Semantic Analysis")
             return False
         
-        domain = self.analyzer.get_domain()
-        relationships = self.analyzer.get_relationships()
-        
-        print(f"🚀 Starting pipeline with {len(tables)} tables")
+        print(f"🚀 Starting 4-stage pipeline with {len(tables)} tables")
         if domain:
             print(f"   🏢 Domain: {domain.domain_type}")
         
@@ -120,33 +123,49 @@ class SemanticRAG:
         print("\n📊 SYSTEM STATUS")
         print("=" * 40)
         
+        # Check discovery status
         discovery_tables = self.discovery.get_tables()
+        if not discovery_tables:
+            self.discovery.load_from_cache()
+            discovery_tables = self.discovery.get_tables()
+        
+        # Check analysis status
         analyzer_tables = self.analyzer.get_tables()
+        if not analyzer_tables:
+            self.analyzer.load_from_cache()
+            analyzer_tables = self.analyzer.get_tables()
+        
         domain = self.analyzer.get_domain()
         relationships = self.analyzer.get_relationships()
         
+        # Display status
         if discovery_tables:
             print(f"📋 Discovery: {len(discovery_tables)} objects")
         else:
             print("📋 Discovery: Not completed")
         
         if analyzer_tables:
-            print(f"🧠 Semantic: {len(analyzer_tables)} tables analyzed")
+            print(f"🧠 Analysis: {len(analyzer_tables)} tables analyzed")
         else:
-            print("🧠 Semantic: Not completed")
+            print("🧠 Analysis: Not completed")
         
         if relationships:
             print(f"🔗 Relationships: {len(relationships)}")
         
         if domain:
             print(f"🏢 Domain: {domain.domain_type}")
+            if domain.capabilities:
+                capabilities = [k for k, v in domain.capabilities.items() if v]
+                if capabilities:
+                    print(f"💼 Capabilities: {', '.join(capabilities[:3])}")
 
 def main():
-    """Main entry point"""
+    """Clean main entry point"""
     print("🚀 SEMANTIC DATABASE RAG SYSTEM")
     print("Simple, Readable, and Maintainable")
     print("=" * 60)
     
+    # Initialize system
     try:
         system = SemanticRAG()
     except Exception as e:
@@ -156,12 +175,13 @@ def main():
         print("   - DATABASE_CONNECTION_STRING")
         return
     
+    # Main menu loop
     while True:
         print("\n" + "="*60)
-        print("SEMANTIC DATABASE RAG SYSTEM:")
+        print("MENU:")
         print("1. 🔍 Database Discovery")
         print("2. 🧠 Semantic Analysis")  
-        print("3. 💬 Interactive Queries")
+        print("3. 💬 Interactive Queries (4-Stage Pipeline)")
         print("4. 📊 System Status")
         print("0. Exit")
         print("="*60)
