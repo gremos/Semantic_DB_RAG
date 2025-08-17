@@ -1,402 +1,364 @@
-# 🧠 Semantic Database RAG System — **v2.0 Production README**
+# 🧠 BI-Aware Semantic Database RAG System — **No-Fallback Production**
 
-> A practical, **production-ready** Text-to-SQL system for enterprise databases with **zero hallucinations** about schema. Built around three proven patterns, strict guardrails, and an optional 4-stage automated query pipeline you can toggle per environment.
-
----
-
-## 🔭 What You Get (At a Glance)
-
-* **A) Constrained + Execution-Guided (EG) Text-to-SQL core**
-  Grammar/PICARD-style constrained decoding + execution-guided retry loop → **valid SQL** and higher end-to-end accuracy with minimal architectural change.
-  PICARD (EMNLP 2021): [https://arxiv.org/abs/2109.05093](https://arxiv.org/abs/2109.05093) • ACL Anthology: [https://aclanthology.org/2021.emnlp-main.779/](https://aclanthology.org/2021.emnlp-main.779/) • EG Decoding (2018): [https://arxiv.org/abs/1807.03100](https://arxiv.org/abs/1807.03100) • Outlines (structured decoding): [https://github.com/dottxt-ai/outlines](https://github.com/dottxt-ai/outlines) • LangChain + Outlines: [https://python.langchain.com/docs/integrations/providers/outlines/](https://python.langchain.com/docs/integrations/providers/outlines/)
-
-* **B) Schema-first retrieval for big/complex DBs**
-  A **catalog** of tables, views, columns, synonyms, embeddings, and value samples → retrieve **only** relevant objects before generation; explain why they were chosen.
-  LangChain SQL-QA: [https://python.langchain.com/docs/tutorials/sql\_qa/](https://python.langchain.com/docs/tutorials/sql_qa/)
-
-* **C) Enterprise guardrails**
-  Read-only principal, **allow-list** of SQL forms, timeouts, cost/row caps, prompt isolation, input/output filters, AST validation via **SQLGlot**. Aligns with OWASP GenAI guidance.
-  OWASP GenAI (LLM01): [https://genai.owasp.org/llmrisk/llm01-prompt-injection/](https://genai.owasp.org/llmrisk/llm01-prompt-injection/) • SQLGlot: [https://github.com/tobymao/sqlglot](https://github.com/tobymao/sqlglot)
+> A **business intelligence aware** Text-to-SQL system with **strict capability contracts** and **zero schema hallucinations**. Never executes unsafe queries—returns **Non-Executable Analysis Reports (NER)** when capability checks fail.
 
 ---
 
-## 🧩 Non-Negotiable Principles
+## 🎯 Core BI-Aware Principles
 
-1. **Grounded in your actual schema**
-   The system **must never invent** tables/columns. All analysis and SQL are limited to **discovered** objects (tables, views, columns, types, PK/FK) and **sampled values**. Any identifier not found in the discovery cache is rejected by grammar + AST checks.
+### **No-Fallback Operating Rules**
+- **Never execute a query unless the schema can prove it supports the ask**
+- If any required capability is missing, return a **Non-Executable Analysis Report (NER)** with what's missing and fix paths
+- **Gate every query behind three validations**: Identifier gate, Relationship gate, Capability gate
+- Use **constrained decoding + AST check + EG retry**, but never schema fallback
 
-2. **Views & Stored Procedures are first-class signals**
-   We capture **full view definitions** and **stored procedure SELECT statements** (static SQL only) so the LLM learns **real join logic and business rules** directly from your code. We **do not execute** procedures; we analyze their text safely. (Dynamic SQL is flagged and skipped.)
+### **Universal Capability Contract**
+For any BI question, require ALL of the following before generation/execution:
 
-3. **Deterministic, explainable retrieval**
-   Before SQL generation, retrieve top-K tables/columns **and show why** (lexical/semantic matches, FK proximity, view-derived joins). Logged for observability; can be shown interactively.
+✅ **Grain**: Row grain of the fact table (payment, invoice_line, order, event)  
+✅ **Measure(s)**: Numeric column(s) compatible with the asked metric (sum/avg/count/distinct)  
+✅ **Time**: Usable timestamp/date for filtering and bucketing  
+✅ **Entity key(s)**: The entity whose metric is grouped by/over (customer, product, user, store, rep)  
+✅ **Join path(s)**: Proven join(s) from fact → dimension(s) via FK or observed view/SP pattern  
+✅ **Filters & Status**: Columns for explicit filters or 'is_refund/is_cancel' flags  
+✅ **Quality minima**: Row count > 0, null-rate thresholds, optional data-freshness check  
 
-4. **International/Unicode correctness**
-   Full UTF-8 handling—Greek and other non-ASCII data are preserved in discovery caches and prompts.
+**If ANY item fails → produce NER instead of executing**
 
 ---
 
-## 🏗️ Architecture (Simple, Readable, Maintainable)
+## 🏗️ Architecture (BI-Enhanced)
 
 ```
 semantic-db-rag/
-├── main.py                         # CLI with three options
+├── main.py                         # CLI with three options + BI validation
 ├── shared/
-│   ├── config.py                   # Env + feature flags
-│   ├── models.py                   # Typed dataclasses
-│   └── utils.py                    # I/O, logging, safety helpers
+│   ├── config.py                   # Env + BI feature flags
+│   ├── models.py                   # BI-enhanced dataclasses with capability contracts
+│   └── utils.py                    # I/O, logging, safety + evidence scoring
 ├── db/
-│   └── discovery.py                # Schema discovery + samples + view/SP text
+│   └── discovery.py                # Schema discovery + samples + view/SP analysis (unchanged)
 ├── semantic/
-│   └── analysis.py                 # Classification, relationships, templates
+│   └── analysis.py                 # BI-AWARE: Capability contracts + Evidence-driven selection + NER
 ├── interactive/
-│   └── query_interface.py          # 3-option CLI + 4-stage pipeline
+│   └── query_interface.py          # BI-aware 4-stage pipeline with capability gates
 └── data/
     ├── database_structure.json     # Canonical cache (schema + samples + views/SP text)
-    ├── semantic_analysis.json      # Entity labels, relationship graph, templates
-    └── query_patterns.json         # Learned successful query patterns (optional)
+    ├── semantic_analysis.json      # BI-enhanced: Operational/Planning classification + capability scores
+    └── query_patterns.json         # Learned successful patterns (capability-validated only)
 ```
 
 ---
 
-## ⚙️ Setup
+## 🧠 BI-Aware Semantic Analysis (NEW)
 
-**Environment (`.env`)**
+### **Enhanced Table Classification**
+Beyond basic entity types, now classifies:
 
-```env
-# Azure OpenAI (used by pipeline + analysis)
-AZURE_OPENAI_API_KEY=...
-AZURE_ENDPOINT=...
-DEPLOYMENT_NAME=gpt-5-mini
-MODEL_VERSION=2025-01-01-preview
+**Data Types:**
+- **Operational**: Real transactions, events, actual business activity
+- **Planning**: Targets, goals, budgets, forecasts (often zeros or future dates)
+- **Reference**: Lookup tables, codes, categories, static definitions
 
-# SQL Server (ODBC or SQLAlchemy DSN)
-DATABASE_CONNECTION_STRING=Driver={ODBC Driver 17 for SQL Server};Server=localhost;Database=YourDB;Trusted_Connection=yes;
+**BI Roles:**
+- **Fact**: Contains measures (amounts, quantities) and foreign keys to dimensions
+- **Dimension**: Contains descriptive attributes (names, descriptions, categories)
+- **Bridge**: Many-to-many relationships between facts and dimensions
 
-# Feature flags
-ENABLE_4_STAGE_PIPELINE=true
-ENABLE_VIEW_ANALYSIS=true
-ENABLE_SPROC_ANALYSIS=true
-ENABLE_RESULT_VALIDATION=true
-ENABLE_QUERY_CACHING=true
+**Capability Assessment:**
+- **Measures**: Numeric columns suitable for SUM/AVG/COUNT operations
+- **Entity Keys**: Columns for GROUP BY operations and joins
+- **Time Columns**: Date/timestamp columns for temporal filtering and trending
+- **Filter Columns**: Status, type, region columns for WHERE conditions
 
-# Performance & safety
-DISCOVERY_CACHE_HOURS=24
-USE_FAST_QUERIES=true
-ROW_LIMIT_DEFAULT=100
-QUERY_TIMEOUT_SECONDS=30
-MAX_RETRY_ATTEMPTS=2
-```
+### **Evidence-Driven Object Selection**
+Tables ranked using weighted evidence score:
 
-**Install**
-
-```bash
-pip install pyodbc python-dotenv tqdm langchain-openai sqlglot
-# optional: vector store of your choice (faiss, chromadb, etc.)
-```
-
-**Run**
-
-```bash
-python main.py
-```
+1. **Role Match** (high weight): Fact table with operational data + has measures/dates
+2. **Join Evidence** (high weight): FK relationships or observed joins from views/SPs
+3. **Lexical/Semantic Match** (medium weight): Synonyms in table/column names
+4. **Graph Proximity** (medium weight): Hop distance between fact and requested dimensions
+5. **Operational Tag** (medium weight): Operational > planning/config tables
+6. **Row Count & Freshness** (tie-breaker): Data availability and recency
 
 ---
 
-## 🧱 The Three Stronger Patterns (Choose per Constraints)
+## 🚫 No-Fallback Query Pipeline
 
-### A) **Constrained + EG** Text-to-SQL Core
+### **Stage 1: Intent → Analytical Task**
+Normalize natural-language question to structured task:
+- **Task type**: aggregation | ranking | trend | distribution | cohort | funnel
+- **Metric(s)**: revenue, orders, active users, conversion rate
+- **Entity**: customer, product, sales rep, region
+- **Time window**: Q2_2025, last_12_months, YTD
+- **Grouping**: by_customer, by_rep, by_product
+- **Filters**: segments, statuses, geos
 
-**What:** Keep your pipeline; add grammar/PICARD-style decoding and an execution-guided repair loop.
-**Why:** Big jump in validity and accuracy with minimal change.
-**How:**
+### **Stage 2: Capability Gate**
+For top-ranked candidate tables, validate capability contract:
+```python
+✓ Has grain definition (what each row represents)
+✓ Has measures OR entity keys for the requested metric
+✓ Has time column for filtering (if time-based query)
+✓ Has proven join paths to requested dimensions
+✓ Passes quality minima (row count > 0, reasonable null rates)
+```
 
-* **Grammar-based decoding** (Outlines/PICARD): reject tokens that violate SQL grammar and **identifier allow-lists** (only objects discovered in `database_structure.json`).
-  PICARD: [https://arxiv.org/abs/2109.05093](https://arxiv.org/abs/2109.05093) • [https://aclanthology.org/2021.emnlp-main.779/](https://aclanthology.org/2021.emnlp-main.779/)
-  Outlines: [https://github.com/dottxt-ai/outlines](https://github.com/dottxt-ai/outlines) • Docs: [https://dottxt-ai.github.io/outlines/](https://dottxt-ai.github.io/outlines/)
-* **Execution-Guided repair loop**: on error/empty results, re-prompt with **DB error + schema excerpt** for 1–2 retries.
-  EG: [https://arxiv.org/abs/1807.03100](https://arxiv.org/abs/1807.03100)
+### **Stage 3: Evidence-Driven Selection**
+Only tables passing capability gate are considered:
+- Score candidates using evidence weights
+- Select top N tables with complete capability contracts
+- Document WHY each table was chosen (role, joins, lexical, operational status)
 
-### B) **Schema-First Retrieval** for Large/Complex DBs
-
-**What:** Build a **catalog** (columns/tables embeddings, synonyms, short value samples); vector/retrieval first, generate second.
-**Why:** Beats keyword heuristics and gives **explainability** (why this table?).
-**How:** Use LangChain SQL-QA retrieval → generation; persist embeddings near the DB.
-Tutorial: [https://python.langchain.com/docs/tutorials/sql\_qa/](https://python.langchain.com/docs/tutorials/sql_qa/)
-
-### C) **Enterprise Guardrails**
-
-**What:** Production safety hardening: read-only principal, allow-list SQL (SELECT/WITH/EXPLAIN), timeouts, row/CPU caps, prompt isolation, input/output filters.
-**How:**
-
-* Enforce **minimal SQL EBNF**; **post-parse** with SQLGlot; block if AST contains DML/DDL or unknown identifiers.
-  SQLGlot: [https://github.com/tobymao/sqlglot](https://github.com/tobymao/sqlglot)
-* Align with **OWASP GenAI** controls (prompt injection & related risks).
-  OWASP LLM01: [https://genai.owasp.org/llmrisk/llm01-prompt-injection/](https://genai.owasp.org/llmrisk/llm01-prompt-injection/)
+### **Stage 4: Validated SQL Generation OR NER**
+**If capable tables found**: Generate SQL using proven schema elements only  
+**If NO capable tables**: Return **Non-Executable Analysis Report** with:
+- What you asked (normalized analytical task)
+- Missing capabilities (grain, measures, time, joins, quality)
+- Top candidate facts/dims with evidence scores
+- Fix paths (suggested mappings, schema additions)
+- Safe exploratory queries (metadata-only SELECTs)
 
 ---
 
-## 🔍 Option 1 — **Advanced Database Discovery** (🔎)
+## 📋 Non-Executable Analysis Report (NER)
 
-**Purpose:** Produce the canonical `database_structure.json` used everywhere else.
-
-### What we collect (only from the live DB)
-
-* User schemas, tables, views (filter system/temporary).
-
-* Columns (name, type, nullability), PKs, FKs.
-
-* **Samples policy (updated):** **First 3 and Last 3 rows** per table/view:
-
-  * Prefer `ORDER BY` **primary key** (or clustered index).
-  * Example T-SQL (first 3):
-
-    ```sql
-    SELECT TOP (3) * FROM [schema].[table] ORDER BY [PrimaryKey] ASC;
-    ```
-  * Example T-SQL (last 3):
-
-    ```sql
-    SELECT * FROM (
-      SELECT TOP (3) * FROM [schema].[table] ORDER BY [PrimaryKey] DESC
-    ) t ORDER BY [PrimaryKey] ASC;
-    ```
-  * If no PK/index: fall back to a stable surrogate (e.g., a timestamp column). If none exists, sample **arbitrary** first/last 3 via `%%physloc%%`/`ROW_NUMBER()` with caution and **label** the order as non-deterministic.
-
-* **View definition capture:**
-
-  * Read definition text from `sys.views` + `sys.sql_modules`.
-  * Persist the **exact** `CREATE VIEW` T-SQL (no redaction by default; consider PII/secret scanning).
-  * Later parsed with SQLGlot to mine **real JOIN/ON patterns** and referenced objects.
-
-* **Stored procedure SELECT capture:**
-
-  * Read procedure text from `sys.procedures` + `sys.sql_modules`.
-  * Extract **static** `SELECT ... FROM ... JOIN ...` statements.
-  * **Do not execute** procedures. **Dynamic SQL** is detected; mark and skip (store the text but do not parse joins).
-
-### Safety
-
-No writes. No execution of procedures. Text is treated as **source** for parsing only.
-
-### Output (shape)
+When capability checks fail, return structured report instead of "safe" query:
 
 ```json
 {
-  "tables": {
-    "dbo.Customers": {
-      "columns": {"CustomerID":"INT","Name":"NVARCHAR(100)","City":"NVARCHAR(80)"},
-      "primary_key": ["CustomerID"],
-      "foreign_keys": [{"column":"RegionID","references":"dbo.Region(RegionID)"}],
-      "samples": {
-        "first_3": [
-          {"CustomerID":1,"Name":"Μαρία","City":"Αθήνα"},
-          {"CustomerID":2,"Name":"Γιάννης","City":"Θεσσαλονίκη"},
-          {"CustomerID":3,"Name":"Ελένη","City":"Πάτρα"}
-        ],
-        "last_3": [
-          {"CustomerID":1045,"Name":"Alice","City":"Heraklion"},
-          {"CustomerID":1046,"Name":"Bob","City":"Volos"},
-          {"CustomerID":1047,"Name":"Chris","City":"Larisa"}
-        ],
-        "ordering": {"column":"CustomerID","deterministic":true}
-      }
-    }
+  "question": "Top 10 customers by revenue in Q2 2025",
+  "normalized_task": {
+    "task_type": "ranking",
+    "metrics": ["revenue"],
+    "entity": "customer",
+    "time_window": "Q2_2025",
+    "top_limit": 10
   },
-  "views": {
-    "dbo.vw_CustomerPayments": {
-      "definition": "CREATE VIEW dbo.vw_CustomerPayments AS SELECT c.CustomerID, c.Name, p.PaymentID, p.Amount, p.PaymentDate FROM dbo.Customers c JOIN dbo.Payments p ON p.CustomerID = c.CustomerID WHERE p.Amount > 0;",
-      "referenced_objects": ["dbo.Customers","dbo.Payments"],
-      "parsed_joins": [
-        {"left":"dbo.Customers.CustomerID","right":"dbo.Payments.CustomerID","type":"INNER"}
-      ],
-      "samples": {
-        "first_3": [ { "CustomerID":1,"Name":"Μαρία","PaymentID":1001,"Amount":120.00,"PaymentDate":"2025-01-02" }, ... ],
-        "last_3":  [ ... ]
-      }
+  "missing_capabilities": [
+    "No measure column found for revenue aggregation",
+    "No proven join path from transactions to customers"
+  ],
+  "top_candidate_tables": [
+    {
+      "table": "[dbo].[Payments]",
+      "evidence_score": 0.8,
+      "reasoning": "Has amount columns but missing customer join"
     }
-  },
-  "procedures": {
-    "dbo.usp_CustomerRevenue": {
-      "has_dynamic_sql": false,
-      "select_statements": [
-        "SELECT c.CustomerID, SUM(p.Amount) AS Revenue FROM dbo.Customers c JOIN dbo.Payments p ON p.CustomerID = c.CustomerID WHERE p.PaymentDate >= @StartDate AND p.PaymentDate < @EndDate GROUP BY c.CustomerID;"
-      ],
-      "parsed_joins": [
-        {"left":"dbo.Customers.CustomerID","right":"dbo.Payments.CustomerID","type":"INNER"}
-      ],
-      "referenced_objects": ["dbo.Customers","dbo.Payments"]
-    }
-  }
+  ],
+  "fix_paths": [
+    "Add foreign key from [Payments].[CustomerID] to [Customers].[ID]",
+    "Use [Payments].[Amount] as revenue measure",
+    "Use [Payments].[PaymentDate] for Q2 2025 filtering"
+  ],
+  "suggested_queries": [
+    "SELECT TOP 5 * FROM [dbo].[Payments] -- Explore structure",
+    "SELECT PaymentDate, Amount, COUNT(*) FROM [dbo].[Payments] GROUP BY PaymentDate, Amount"
+  ]
 }
 ```
 
-> **Note:** In your environment, the **actual** `definition` (views) and `select_statements` (procedures) are written verbatim by discovery. The LLM consumes these exact texts—**no synthetic examples**.
-
 ---
 
-## 🧠 Option 2 — **Multi-Stage Semantic Analysis**
-
-**Purpose:** Enrich the schema cache with **business context** without guessing new identifiers.
-
-**We do:**
-
-* **Entity classification** (table purpose, “dimension/fact”, domain hints) using LLM prompts **restricted to discovered columns/samples**.
-* **Relationship graph**:
-
-  * Explicit FKs (from catalog)
-  * **View-mined joins** (parse `CREATE VIEW` definitions to extract `JOIN ... ON ...`)
-  * **Procedure-mined joins** (static `SELECT` statements only)
-  * Conservative name/sample heuristics with confidence scores
-* **Business templates**: Common patterns (e.g., “customer payments”), **derived solely** from real views/joins found—never invent identifiers.
-
-Graph-augmented retrieval is used as an analogy to **GraphRAG** for structured data; we only use relationships mined from your DB’s views/FKs/SPs.
-Microsoft GraphRAG overview: [https://www.microsoft.com/en-us/research/blog/graphrag-unlocking-llm-discovery-on-narrative-private-data/](https://www.microsoft.com/en-us/research/blog/graphrag-unlocking-llm-discovery-on-narrative-private-data/)
-
----
-
-## 💬 Option 3 — **Interactive Queries** (4-Stage Automated Pipeline)
-
-Turns a business question into validated SQL:
-
-1. **Intent analysis** → understand metric, grouping, timeframe, entities.
-2. **Relevant object retrieval** → select tables/columns via catalog & embeddings (**explain why**).
-3. **Relationship resolution** → choose join paths from FK graph + **view/SP-mined** patterns.
-4. **Validated SQL generation** → constrained decoding (Outlines/PICARD) + **AST check** (SQLGlot) + **EG retry** on error/0-rows.
-
-**Strict “No-Hallucination” Rule**
-
-* Candidate identifiers come **only** from `database_structure.json`.
-* Decoder is limited to that allow-list; AST validation rejects anything else.
-
----
-
-## 🛡️ Security, Safety & Compliance (Enterprise Guardrails)
-
-* **Read-only DB principal**; rotate credentials.
-* **Allow-list** SQL forms (SELECT/WITH/EXPLAIN); block DML/DDL/TRUNCATE/DROP.
-* **Timeouts** (per query + total pipeline), **row caps**, and server-side governor hints.
-* **Prompt isolation** (system vs user), **input/output filters**, and redaction.
-* **AST validation** with SQLGlot (identifier existence, banned nodes).
-  SQLGlot: [https://github.com/tobymao/sqlglot](https://github.com/tobymao/sqlglot)
-* **OWASP GenAI** controls (LLM01 and related).
-  OWASP LLM01: [https://genai.owasp.org/llmrisk/llm01-prompt-injection/](https://genai.owasp.org/llmrisk/llm01-prompt-injection/)
-
----
-
-## 🔧 Concrete Upgrades (Ordered by ROI)
-
-1. **Constrain SQL generation**: add grammar/PICARD or Outlines grammar for your SQL dialect; restrict identifiers to catalog.
-   PICARD: [https://arxiv.org/abs/2109.05093](https://arxiv.org/abs/2109.05093) • [https://aclanthology.org/2021.emnlp-main.779/](https://aclanthology.org/2021.emnlp-main.779/) • Outlines: [https://github.com/dottxt-ai/outlines](https://github.com/dottxt-ai/outlines)
-2. **Execution-Guided repair** on errors or empty results (1–2 retries with error + schema excerpt).
-   EG: [https://arxiv.org/abs/1807.03100](https://arxiv.org/abs/1807.03100)
-3. **Richer schema linking**: maintain a catalog with descriptions, synonyms, examples, embeddings; retrieve top-K.
-   LangChain SQL-QA: [https://python.langchain.com/docs/tutorials/sql\_qa/](https://python.langchain.com/docs/tutorials/sql_qa/)
-4. **Safer join discovery**: build a schema graph from PK/FK + **view/SP-mined joins**; prefer observed patterns.
-   GraphRAG (analogy): [https://www.microsoft.com/en-us/research/blog/graphrag-unlocking-llm-discovery-on-narrative-private-data/](https://www.microsoft.com/en-us/research/blog/graphrag-unlocking-llm-discovery-on-narrative-private-data/)
-5. **Deterministic result shaping**: date windows, `ORDER BY` on business keys, aggregates, pagination.
-6. **Harden security**: read-only, timeouts, cost caps, allow-list, prompt isolation, **SQLGlot AST** validation.
-7. **Observability & eval**: log retrieval choices, prompts, SQL, errors, latencies; evaluate on a **private Spider-style** set for your domain.
-   Spider: [https://arxiv.org/abs/1809.08887](https://arxiv.org/abs/1809.08887) • [https://aclanthology.org/D18-1425/](https://aclanthology.org/D18-1425/) • [https://yale-lily.github.io/spider](https://yale-lily.github.io/spider)
-
----
-
-## 🧪 Evaluation & Observability
-
-* **Private Spider-style eval**: curate realistic NL↔SQL pairs from your domain to catch regressions.
-* **Key logs per query**:
-
-  * user question, intent parse
-  * candidate objects + **why** (scores, matches, FK distance, view/SP pattern hits)
-  * generated SQL, AST, errors, EG retries
-  * rows returned, latency breakdowns
-* **Dashboards**: accuracy, validity rate, retry rate, object-recall precision, token/latency costs.
-
----
-
-## 🧵 Implementation Notes & Design Choices
-
-### Discovery (`db/discovery.py`)
-
-* Enumerate schemas/tables/views via `INFORMATION_SCHEMA` or `sys.*`; pull columns, types, PKs, FKs.
-* **Samples = first\_3 + last\_3** using `ORDER BY` (PK preferred).
-* Extract **view SQL** from `sys.sql_modules`; extract **procedure text** from `sys.procedures` + `sys.sql_modules`.
-* Parse with **SQLGlot** to identify `JOIN`/`ON`, referenced objects, and a normalized join graph.
-* **Do not execute** procedures; parse **static** `SELECT` statements only. Mark dynamic SQL.
-* Normalize and persist into `data/database_structure.json` (UTF-8; preserve international text such as Greek).
-
-### Semantic Analysis (`semantic/analysis.py`)
-
-* **No new identifiers**: classification/relationships/templates are computed **only** over discovered objects and parsed joins.
-* Build a relationship graph:
-
-  * From FKs
-  * From parsed view/procedure SELECT joins (via SQLGlot JOIN/ON extraction)
-* Optional: embed (name, description, samples) for retrieval.
-  LangChain SQL-QA: [https://python.langchain.com/docs/tutorials/sql\_qa/](https://python.langchain.com/docs/tutorials/sql_qa/)
-
-### Interactive Pipeline (`interactive/query_interface.py`)
-
-* **Stage 1**: intent (aggregate? window? group?).
-* **Stage 2**: retrieve top-K tables/columns (lexical + embeddings + graph proximity).
-* **Stage 3**: join selection from graph + view/SP patterns (prefer **observed** joins).
-* **Stage 4**: constrained decoding (Outlines/PICARD) → SQLGlot AST check → EG retry on error/0-rows.
-
----
-
-## 🔐 “Only Real Objects” Enforcement (How It Works)
-
-* **Allow-listed vocabulary** of identifiers (schemas/tables/columns/functions) built from discovery cache.
-* Grammar/PICARD decoding prunes tokens outside grammar **and** outside the identifier allow-list.
-* Post-generation **SQLGlot AST** pass verifies:
-
-  * identifiers exist in catalog
-  * no DML/DDL/utility statements
-  * joins/aggregations parse correctly
-* Any violation → **block + EG retry** with error details.
-
----
-
-## 🧰 Configuration (Common Flags)
+## ⚙️ Configuration (BI-Enhanced)
 
 ```env
-ENABLE_4_STAGE_PIPELINE=true        # Turn the full chain on/off
-ENABLE_VIEW_ANALYSIS=true           # Parse and use view definitions
-ENABLE_SPROC_ANALYSIS=true          # Parse stored procedure SELECTs (no execution)
-ROW_LIMIT_DEFAULT=100               # Append TOP if user didn't
-QUERY_TIMEOUT_SECONDS=30            # DB command timeout
-MAX_RETRY_ATTEMPTS=2                # EG retries
-TABLE_SELECTION_CONFIDENCE=0.7      # Retrieval threshold
-SQL_SYNTAX_VALIDATION=true          # Enforce AST parse via SQLGlot
-RELATIONSHIP_VALIDATION=true        # Validate join paths exist
+# BI-Aware Analysis Settings
+ENABLE_BI_CAPABILITY_CONTRACTS=true
+ENABLE_EVIDENCE_DRIVEN_SELECTION=true
+OPERATIONAL_DATA_PRIORITY=true
+DISABLE_QUERY_FALLBACKS=true
+
+# Capability Contract Thresholds
+MIN_ROW_COUNT_FOR_FACTS=100
+MAX_NULL_RATE_FOR_MEASURES=0.3
+EVIDENCE_SCORE_THRESHOLD=0.6
+CAPABILITY_COMPLETENESS_THRESHOLD=0.8
+
+# NER Generation Settings
+MAX_CANDIDATE_TABLES_IN_NER=5
+INCLUDE_SAFE_EXPLORATORY_QUERIES=true
+DETAILED_FIX_PATH_SUGGESTIONS=true
 ```
 
 ---
 
-## 🧭 Usage Tips (For “Vibe Coding” Sessions)
+## 🔍 Usage Examples
 
-* Start with **Option 1** (Discovery). Re-run only when schema changes; the cache powers everything.
-* Optionally run **Option 2** to enrich context (classes/relationships/templates)—still **zero new identifiers**.
-* Use **Option 3** (Interactive) for NL → SQL with guardrails and explainable retrieval.
-* For very large DBs, increase `DISCOVERY_CACHE_HOURS` and keep embeddings local to the DB host.
+### **✅ Successful Capability Match**
+```
+❓ Query: "What are our top 10 customers by revenue in Q2 2025?"
+
+🧠 BI Analysis:
+   📊 Intent: ranking task, revenue metric, customer entity, Q2_2025 time window
+   🔍 Evidence-driven selection: [dbo].[CustomerPayments] (score: 0.92)
+   ✅ Capability contract satisfied:
+      • Grain: payment transactions
+      • Measures: Amount column (numeric, non-null)
+      • Time: PaymentDate column available
+      • Entity keys: CustomerID for grouping
+      • Join paths: FK to [dbo].[Customers]
+
+📋 Generated SQL:
+SELECT TOP 10 
+    c.CustomerName,
+    SUM(p.Amount) as TotalRevenue,
+    COUNT(*) as TransactionCount
+FROM [dbo].[CustomerPayments] p
+JOIN [dbo].[Customers] c ON p.CustomerID = c.CustomerID
+WHERE p.PaymentDate >= '2025-04-01' AND p.PaymentDate < '2025-07-01'
+GROUP BY c.CustomerID, c.CustomerName
+ORDER BY TotalRevenue DESC
+
+📊 Results: 10 rows returned
+```
+
+### **❌ Capability Contract Failure → NER**
+```
+❓ Query: "Show me customer satisfaction trends by region"
+
+🧠 BI Analysis:
+   📊 Intent: trend task, satisfaction metric, region entity
+   🔍 Evidence-driven selection: [dbo].[Customers] (score: 0.4)
+   ❌ Capability contract FAILED:
+      • Missing: No satisfaction measure column found
+      • Missing: No time column for trend analysis
+      • Missing: No region dimension available
+
+📋 Non-Executable Analysis Report:
+   ⚠️ Cannot execute - missing required capabilities
+   
+   🔧 Fix Paths:
+      • Add satisfaction score column to customer table
+      • Add survey/feedback fact table with satisfaction measures
+      • Add region dimension or region column to customer table
+      • Ensure temporal data for trend analysis
+   
+   🔍 Suggested Exploration:
+      SELECT TOP 5 * FROM [dbo].[Customers] -- Check available columns
+      SELECT COUNT(*) as CustomerCount FROM [dbo].[Customers] -- Data volume
+```
 
 ---
 
-## 📚 References (Linked)
+## 🛡️ Security & Safety (Enhanced)
 
-* PICARD (constrained decoding): [https://arxiv.org/abs/2109.05093](https://arxiv.org/abs/2109.05093) • [https://aclanthology.org/2021.emnlp-main.779/](https://aclanthology.org/2021.emnlp-main.779/)
-* Execution-Guided Decoding: [https://arxiv.org/abs/1807.03100](https://arxiv.org/abs/1807.03100)
-* Outlines (structured generation): [https://github.com/dottxt-ai/outlines](https://github.com/dottxt-ai/outlines) • [https://dottxt-ai.github.io/outlines/](https://dottxt-ai.github.io/outlines/)
-* LangChain SQL-QA tutorial: [https://python.langchain.com/docs/tutorials/sql\_qa/](https://python.langchain.com/docs/tutorials/sql_qa/)
-* SQLGlot (AST/validation/transpiler): [https://github.com/tobymao/sqlglot](https://github.com/tobymao/sqlglot)
-* OWASP GenAI LLM01: [https://genai.owasp.org/llmrisk/llm01-prompt-injection/](https://genai.owasp.org/llmrisk/llm01-prompt-injection/)
-* Spider dataset (benchmark): [https://arxiv.org/abs/1809.08887](https://arxiv.org/abs/1809.08887) • [https://aclanthology.org/D18-1425/](https://aclanthology.org/D18-1425/) • [https://yale-lily.github.io/spider](https://yale-lily.github.io/spider)
-* GraphRAG overview: [https://www.microsoft.com/en-us/research/blog/graphrag-unlocking-llm-discovery-on-narrative-private-data/](https://www.microsoft.com/en-us/research/blog/graphrag-unlocking-llm-discovery-on-narrative-private-data/)
+### **Three-Gate Validation**
+1. **Identifier Gate**: SQL must reference only discovered, allow-listed objects (SQLGlot parse + allow-list)
+2. **Relationship Gate**: All joins must exist in FK graph or observed in parsed view/SP text
+3. **Capability Gate**: Selected fact/dims must satisfy metric template's minimal requirements
+
+### **Enterprise Guardrails**
+- Read-only DB principal with strict permissions
+- Allow-list SQL forms (SELECT/WITH/EXPLAIN only)
+- AST validation via SQLGlot with identifier existence checks
+- No dynamic SQL execution from stored procedures
+- Prompt isolation and input/output filtering
+- Query timeouts and row limits
 
 ---
 
-### ✅ Ready for Implementation
+## 🚀 Getting Started (BI-Aware)
 
-This README is structured to be used **as-is** during pairing/vibe-coding: copy to your repo root, wire up `.env`, run **Option 1**, and iterate. It intentionally avoids synthetic table/column names; **all examples and SQL must be derived from your discovery cache only**—including **actual** view definitions and stored procedure `SELECT` statements captured from your database.
+1. **Setup Environment**
+```bash
+# Copy configuration
+cp env_example.txt .env
 
+# Set required variables
+AZURE_OPENAI_API_KEY=your_key
+DATABASE_CONNECTION_STRING=your_connection
+ENABLE_BI_CAPABILITY_CONTRACTS=true
+DISABLE_QUERY_FALLBACKS=true
+```
 
+2. **Install Dependencies**
+```bash
+pip install pyodbc sqlglot langchain-openai
+```
+
+3. **Run BI-Aware Discovery**
+```bash
+python main.py
+# Choose Option 1: Database Discovery (same as before)
+```
+
+4. **Run BI-Aware Analysis**
+```bash
+# Choose Option 2: Semantic Analysis (now BI-enhanced)
+# - Classifies operational vs planning data
+# - Identifies fact vs dimension tables
+# - Assesses capability contracts for each table
+# - Builds evidence-driven selection rankings
+```
+
+5. **Query with BI Validation**
+```bash
+# Choose Option 3: Interactive Queries (now capability-gated)
+# - Parses intent into analytical tasks
+# - Validates capability contracts before execution
+# - Returns NER when contracts fail
+# - Only executes proven, validated SQL
+```
+
+---
+
+## 📊 What's New in BI-Aware Version
+
+### **🔥 Major Enhancements**
+- **Capability Contracts**: Universal validation before any query execution
+- **Evidence-Driven Selection**: Weighted scoring replaces simple keyword matching
+- **BI Table Classification**: Operational/Planning/Reference + Fact/Dimension/Bridge roles
+- **Non-Executable Analysis Reports**: Structured guidance when queries can't be safely executed
+- **No-Fallback Mode**: Never runs arbitrary "safe" queries on random tables
+
+### **🧠 Intelligence Upgrades**
+- **Grain Detection**: Understands what each table row represents
+- **Measure Identification**: Finds numeric columns suitable for aggregation
+- **Time Dimension Discovery**: Locates columns for temporal analysis
+- **Join Path Validation**: Only uses proven relationships from FKs or observed patterns
+- **Operational Data Priority**: Distinguishes real transactions from planning/target data
+
+### **🛡️ Safety Improvements**
+- **Three-Gate Validation**: Identifier + Relationship + Capability gates
+- **Zero Schema Hallucination**: Only references discovered objects with proven capabilities
+- **Quality Minima**: Checks row counts, null rates, data freshness
+- **Structured Error Reporting**: Actionable guidance instead of generic error messages
+
+---
+
+## 🔧 Migration from Previous Version
+
+If upgrading from the previous version:
+
+1. **Configuration**: Add BI-aware settings to `.env`
+2. **Re-run Analysis**: The semantic analysis now includes BI classification
+3. **Update Queries**: Queries now go through capability validation
+4. **Handle NERs**: Prepare to receive Non-Executable Analysis Reports for unsupported queries
+
+**Breaking Changes**:
+- No more fallback queries - unsupported requests return NER
+- Enhanced table metadata requires re-running semantic analysis
+- Some previously "working" queries may now fail capability validation (this is intentional for safety)
+
+---
+
+## 📈 Success Metrics
+
+**BI-Aware System Quality Indicators**:
+- **Capability Contract Coverage**: % of tables with complete contracts
+- **Evidence Score Distribution**: Quality of table selection reasoning
+- **NER Rate**: % of queries requiring Non-Executable Analysis Reports
+- **False Positive Rate**: Queries that pass validation but fail execution
+- **Business User Satisfaction**: Quality of generated insights and guidance
+
+**Target Metrics for Production**:
+- Capability contract coverage: >80%
+- Evidence-driven selection accuracy: >90%
+- NER rate: <20% (most queries should be executable)
+- False positive rate: <5%
+- Zero schema hallucinations: 100%
+
+---
+
+This BI-aware system ensures **enterprise-grade reliability** by never executing queries that cannot be proven safe and effective. Instead of falling back to arbitrary queries, it provides **actionable intelligence** about what's missing and how to fix it.
