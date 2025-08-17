@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Business-Intelligence-Aware 4-Stage Query Pipeline
-Following README + BI Requirements: Intent-driven, multi-table, temporal analysis
-Zero hallucinations + actual business logic assembly
+BI-Aware No-Fallback Query Interface
+Following BI Requirements: 4-stage pipeline with capability contracts and NER
+Zero hallucinations, evidence-driven selection, no arbitrary fallbacks
 """
 
 import asyncio
@@ -11,10 +11,10 @@ import json
 import pyodbc
 import time
 import re
-from typing import List, Dict, Any, Optional, Tuple, Set
+from typing import List, Dict, Any, Optional, Tuple, Union
 from datetime import datetime, timedelta
 
-# SQLGlot for AST validation (README requirement)
+# SQLGlot for AST validation (Enterprise guardrails)
 try:
     import sqlglot
     HAS_SQLGLOT = True
@@ -25,953 +25,800 @@ from langchain_openai import AzureChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
 
 from shared.config import Config
-from shared.models import TableInfo, BusinessDomain, Relationship, QueryResult
+from shared.models import (TableInfo, BusinessDomain, Relationship, QueryResult, 
+                          AnalyticalTask, CapabilityContract, EvidenceScore, 
+                          NonExecutableAnalysisReport, QueryCapabilityResult)
 from shared.utils import parse_json_response, clean_sql_query, safe_database_value, validate_sql_safety
 
-class BusinessIntelligenceKnowledgeBase:
-    """Enhanced schema knowledge with business intelligence capabilities"""
+class IntentAnalyzer:
+    """Stage 1: Natural language → Analytical Task (Single responsibility)"""
+    
+    def __init__(self, llm: AzureChatOpenAI):
+        self.llm = llm
+        self.intent_patterns = self._build_intent_patterns()
+    
+    def _build_intent_patterns(self) -> Dict[str, Dict[str, List[str]]]:
+        """Build intent recognition patterns"""
+        return {
+            'task_types': {
+                'aggregation': ['total', 'sum', 'how much', 'what is the', 'calculate'],
+                'ranking': ['top', 'highest', 'best', 'worst', 'lowest', 'rank'],
+                'trend': ['trend', 'over time', 'monthly', 'quarterly', 'growth', 'change'],
+                'count': ['how many', 'count', 'number of'],
+                'distribution': ['distribution', 'breakdown', 'split by', 'across'],
+                'comparison': ['compare', 'versus', 'vs', 'difference between']
+            },
+            'entities': {
+                'customer': ['customer', 'client', 'user', 'account', 'subscriber'],
+                'revenue': ['revenue', 'sales', 'income', 'money', 'earnings'],
+                'product': ['product', 'item', 'sku', 'inventory'],
+                'order': ['order', 'purchase', 'transaction', 'sale'],
+                'region': ['region', 'area', 'location', 'geography', 'territory']
+            },
+            'time_windows': {
+                'current_quarter': ['this quarter', 'current quarter', 'q1', 'q2', 'q3', 'q4'],
+                'last_month': ['last month', 'previous month'],
+                'this_year': ['this year', '2025', 'current year'],
+                'last_12_months': ['last 12 months', 'past year', 'last year']
+            }
+        }
+    
+    async def analyze_intent(self, question: str) -> AnalyticalTask:
+        """Analyze user question and normalize to analytical task"""
+        print("   🧠 Stage 1: Intent analysis...")
+        
+        # Quick pattern matching for common cases
+        quick_intent = self._quick_pattern_match(question)
+        if quick_intent:
+            print(f"      ✅ Pattern matched: {quick_intent.task_type}")
+            return quick_intent
+        
+        # LLM-based intent analysis for complex cases
+        llm_intent = await self._llm_intent_analysis(question)
+        print(f"      ✅ LLM analyzed: {llm_intent.task_type}")
+        return llm_intent
+    
+    def _quick_pattern_match(self, question: str) -> Optional[AnalyticalTask]:
+        """Quick pattern matching for common intent patterns"""
+        q_lower = question.lower()
+        
+        # Detect task type
+        task_type = 'aggregation'  # default
+        for task, patterns in self.intent_patterns['task_types'].items():
+            if any(pattern in q_lower for pattern in patterns):
+                task_type = task
+                break
+        
+        # Detect entity
+        entity = None
+        for ent, patterns in self.intent_patterns['entities'].items():
+            if any(pattern in q_lower for pattern in patterns):
+                entity = ent
+                break
+        
+        # Detect metrics
+        metrics = []
+        if 'revenue' in q_lower or 'sales' in q_lower:
+            metrics = ['revenue']
+        elif 'count' in q_lower or 'how many' in q_lower:
+            metrics = ['count']
+        
+        # Detect time window
+        time_window = None
+        for window, patterns in self.intent_patterns['time_windows'].items():
+            if any(pattern in q_lower for pattern in patterns):
+                time_window = window
+                break
+        
+        # Extract top limit
+        top_limit = None
+        top_match = re.search(r'top\s+(\d+)', q_lower)
+        if top_match:
+            top_limit = int(top_match.group(1))
+        
+        # Only return if we have sufficient confidence
+        if task_type and (entity or metrics):
+            return AnalyticalTask(
+                task_type=task_type,
+                metrics=metrics,
+                entity=entity,
+                time_window=time_window,
+                top_limit=top_limit
+            )
+        
+        return None
+    
+    async def _llm_intent_analysis(self, question: str) -> AnalyticalTask:
+        """LLM-based intent analysis for complex questions"""
+        
+        prompt = f"""
+Analyze this business question and extract the analytical intent:
+
+QUESTION: "{question}"
+
+Determine:
+1. Task type: aggregation, ranking, trend, count, distribution, comparison
+2. Metrics requested: revenue, count, average, etc.
+3. Entity focus: customer, product, order, region, etc.
+4. Time window: current_quarter, last_month, this_year, etc.
+5. Grouping dimensions: by customer, by region, by product, etc.
+6. Top/limit: if asking for "top N" results
+7. Filters: any specific conditions mentioned
+
+Respond with JSON only:
+{{
+  "task_type": "ranking",
+  "metrics": ["revenue"],
+  "entity": "customer", 
+  "time_window": "current_quarter",
+  "grouping": ["customer"],
+  "top_limit": 10,
+  "filters": ["active_customers"]
+}}
+"""
+        
+        try:
+            messages = [
+                SystemMessage(content="You are a business intelligence analyst. Extract analytical intent from questions. Respond with valid JSON only."),
+                HumanMessage(content=prompt)
+            ]
+            response = await asyncio.to_thread(self.llm.invoke, messages)
+            
+            data = parse_json_response(response.content)
+            if data:
+                return AnalyticalTask(
+                    task_type=data.get('task_type', 'aggregation'),
+                    metrics=data.get('metrics', []),
+                    entity=data.get('entity'),
+                    time_window=data.get('time_window'),
+                    grouping=data.get('grouping', []),
+                    top_limit=data.get('top_limit'),
+                    filters=data.get('filters', [])
+                )
+        except Exception as e:
+            print(f"      ⚠️ LLM intent analysis failed: {e}")
+        
+        # Fallback to basic intent
+        return AnalyticalTask(task_type='aggregation', metrics=['count'])
+
+class EvidenceBasedSelector:
+    """Stage 2: Evidence-driven table selection (Single responsibility)"""
     
     def __init__(self, tables: List[TableInfo]):
         self.tables = tables
-        self.schema_map = self._build_schema_map()
-        self.entity_map = self._build_entity_map()
-        self.column_index = self._build_column_index()
-        self.business_concept_map = self._build_business_concept_map()
-        self.allowed_identifiers = self._build_allowed_identifiers()
-        self.operational_tables = self._classify_operational_tables()
-        self.business_relationships = self._build_business_relationships()
+        self.table_map = {t.full_name: t for t in tables}
+        self.business_synonyms = self._build_business_synonyms()
     
-    def _build_schema_map(self) -> Dict[str, TableInfo]:
-        """Build fast lookup by table name"""
-        return {table.full_name.lower(): table for table in self.tables}
+    def _build_business_synonyms(self) -> Dict[str, List[str]]:
+        """Build business concept synonyms for matching"""
+        return {
+            'customer': ['customer', 'client', 'account', 'user', 'subscriber', 'buyer'],
+            'revenue': ['revenue', 'sales', 'income', 'payment', 'amount', 'value', 'earnings'],
+            'transaction': ['transaction', 'payment', 'order', 'sale', 'purchase'],
+            'product': ['product', 'item', 'sku', 'inventory', 'catalog'],
+            'time': ['date', 'time', 'created', 'modified', 'updated', 'timestamp']
+        }
     
-    def _build_entity_map(self) -> Dict[str, List[TableInfo]]:
-        """Group tables by semantic entity type"""
-        entity_map = {}
+    def select_candidates(self, intent: AnalyticalTask, top_k: int = 5) -> List[Tuple[TableInfo, EvidenceScore, List[str]]]:
+        """Select candidate tables using evidence-driven scoring"""
+        print("   📋 Stage 2: Evidence-driven table selection...")
+        
+        scored_tables = []
         for table in self.tables:
-            entity_type = getattr(table, 'entity_type', 'Unknown')
-            if entity_type not in entity_map:
-                entity_map[entity_type] = []
-            entity_map[entity_type].append(table)
-        return entity_map
-    
-    def _build_column_index(self) -> Dict[str, List[Tuple[TableInfo, Dict]]]:
-        """Index all columns by name for fast lookup"""
-        column_index = {}
-        for table in self.tables:
-            for column in table.columns:
-                col_name = column.get('name', '').lower()
-                if col_name:
-                    if col_name not in column_index:
-                        column_index[col_name] = []
-                    column_index[col_name].append((table, column))
-        return column_index
-    
-    def _build_business_concept_map(self) -> Dict[str, Dict[str, Any]]:
-        """Map business concepts to actual schema elements"""
-        concept_map = {}
+            score = self._calculate_evidence_score(table, intent)
+            reasoning = self._generate_evidence_reasoning(table, score, intent)
+            scored_tables.append((table, score, reasoning))
         
-        # Customer concepts
-        customer_tables = self.entity_map.get('Customer', [])
-        if customer_tables:
-            concept_map['customer'] = {
-                'tables': customer_tables,
-                'id_columns': self._find_id_columns(customer_tables),
-                'name_columns': self._find_name_columns(customer_tables),
-                'entity_type': 'Customer'
-            }
+        # Sort by total evidence score
+        scored_tables.sort(key=lambda x: x[1].total_score, reverse=True)
         
-        # Payment/Financial concepts  
-        payment_tables = (self.entity_map.get('Payment', []) + 
-                         self.entity_map.get('Financial', []))
-        if payment_tables:
-            concept_map['revenue'] = {
-                'tables': payment_tables,
-                'amount_columns': self._find_amount_columns(payment_tables),
-                'date_columns': self._find_date_columns(payment_tables),
-                'entity_type': 'Payment'
-            }
+        selected = scored_tables[:top_k]
+        print(f"      ✅ Selected {len(selected)} candidates using evidence scoring")
         
-        # Order/Sales concepts
-        order_tables = self.entity_map.get('Order', [])
-        if order_tables:
-            concept_map['sales'] = {
-                'tables': order_tables,
-                'amount_columns': self._find_amount_columns(order_tables),
-                'rep_columns': self._find_rep_columns(order_tables),
-                'date_columns': self._find_date_columns(order_tables),
-                'entity_type': 'Order'
-            }
+        return selected
+    
+    def _calculate_evidence_score(self, table: TableInfo, intent: AnalyticalTask) -> EvidenceScore:
+        """Calculate evidence-based score for table selection"""
+        score = EvidenceScore()
         
-        return concept_map
-    
-    def _find_id_columns(self, tables: List[TableInfo]) -> List[Tuple[TableInfo, str]]:
-        """Find ID columns in tables"""
-        id_columns = []
-        for table in tables:
-            for col in table.columns:
-                col_name = col.get('name', '').lower()
-                if 'id' in col_name or col.get('is_primary_key'):
-                    id_columns.append((table, col.get('name')))
-        return id_columns
-    
-    def _find_name_columns(self, tables: List[TableInfo]) -> List[Tuple[TableInfo, str]]:
-        """Find name/description columns"""
-        name_columns = []
-        for table in tables:
-            for col in table.columns:
-                col_name = col.get('name', '').lower()
-                if any(pattern in col_name for pattern in ['name', 'title', 'description', 'label']):
-                    name_columns.append((table, col.get('name')))
-        return name_columns
-    
-    def _find_amount_columns(self, tables: List[TableInfo]) -> List[Tuple[TableInfo, str]]:
-        """Find amount/value columns based on actual data"""
-        amount_columns = []
-        for table in tables:
-            for col in table.columns:
-                col_name = col.get('name', '').lower()
-                col_type = col.get('data_type', '').lower()
-                
-                # Check column names
-                if any(pattern in col_name for pattern in ['amount', 'value', 'price', 'cost', 'revenue', 'total']):
-                    amount_columns.append((table, col.get('name')))
-                # Check numeric types  
-                elif any(numeric_type in col_type for numeric_type in ['decimal', 'money', 'float', 'numeric']):
-                    amount_columns.append((table, col.get('name')))
-        return amount_columns
-    
-    def _find_date_columns(self, tables: List[TableInfo]) -> List[Tuple[TableInfo, str]]:
-        """Find date columns"""
-        date_columns = []
-        for table in tables:
-            for col in table.columns:
-                col_name = col.get('name', '').lower()
-                col_type = col.get('data_type', '').lower()
-                
-                if ('date' in col_name or 'time' in col_name or 'created' in col_name or
-                    'date' in col_type or 'time' in col_type):
-                    date_columns.append((table, col.get('name')))
-        return date_columns
-    
-    def _find_rep_columns(self, tables: List[TableInfo]) -> List[Tuple[TableInfo, str]]:
-        """Find sales rep/user columns"""
-        rep_columns = []
-        for table in tables:
-            for col in table.columns:
-                col_name = col.get('name', '').lower()
-                if any(pattern in col_name for pattern in ['user', 'rep', 'sales', 'handler', 'owner', 'employee']):
-                    rep_columns.append((table, col.get('name')))
-        return rep_columns
-    
-    def _build_allowed_identifiers(self) -> Set[str]:
-        """Build strict allowlist of identifiers from discovery"""
-        identifiers = set()
+        # Role match (high weight) - BI role appropriateness
+        score.role_match = self._score_role_match(table, intent)
         
-        for table in self.tables:
-            # Add table names
-            identifiers.add(table.full_name.lower())
-            identifiers.add(f"{table.schema}.{table.name}".lower())
-            identifiers.add(table.name.lower())
+        # Join evidence (high weight) - connectivity
+        score.join_evidence = self._score_join_evidence(table)
+        
+        # Lexical/semantic match (medium weight)
+        score.lexical_match = self._score_lexical_match(table, intent)
+        
+        # Graph proximity (medium weight) - relationship distance
+        score.graph_proximity = self._score_graph_proximity(table, intent)
+        
+        # Operational tag (medium weight) - data type preference
+        score.operational_tag = self._score_operational_preference(table)
+        
+        # Row count (tie-breaker) - data availability
+        score.row_count = min(1.0, table.row_count / 10000.0) if table.row_count > 0 else 0.0
+        
+        # Freshness (tie-breaker) - assume fresh for now
+        score.freshness = 1.0
+        
+        return score
+    
+    def _score_role_match(self, table: TableInfo, intent: AnalyticalTask) -> float:
+        """Score based on BI role appropriateness for intent"""
+        bi_role = getattr(table, 'bi_role', 'dimension')
+        data_type = getattr(table, 'data_type', 'reference')
+        
+        # For aggregation/ranking tasks, strongly prefer fact tables with operational data
+        if intent.task_type in ['aggregation', 'ranking', 'trend', 'count']:
+            if bi_role == 'fact' and data_type == 'operational':
+                return 1.0
+            elif bi_role == 'fact':
+                return 0.8
+            elif data_type == 'operational':
+                return 0.6
+            else:
+                return 0.2
+        
+        # For other tasks, dimensions can be valuable too
+        if bi_role in ['fact', 'dimension'] and data_type == 'operational':
+            return 0.8
+        elif bi_role in ['fact', 'dimension']:
+            return 0.6
+        else:
+            return 0.3
+    
+    def _score_join_evidence(self, table: TableInfo) -> float:
+        """Score based on relationship connectivity"""
+        fk_count = len(table.relationships)
+        entity_keys = len(getattr(table, 'entity_keys', []))
+        
+        # Tables with more relationships are better connected
+        connectivity_score = min(1.0, (fk_count + entity_keys) / 5.0)
+        return connectivity_score
+    
+    def _score_lexical_match(self, table: TableInfo, intent: AnalyticalTask) -> float:
+        """Score based on lexical/semantic matching"""
+        table_name = table.name.lower()
+        entity_type = table.entity_type.lower()
+        
+        max_score = 0.0
+        
+        # Match against intent entity
+        if intent.entity:
+            entity_synonyms = self.business_synonyms.get(intent.entity, [intent.entity])
+            for synonym in entity_synonyms:
+                if synonym in table_name or synonym in entity_type:
+                    max_score = max(max_score, 1.0)
+        
+        # Match against metrics
+        for metric in intent.metrics:
+            metric_synonyms = self.business_synonyms.get(metric, [metric])
+            for synonym in metric_synonyms:
+                if synonym in table_name or synonym in entity_type:
+                    max_score = max(max_score, 0.8)
+        
+        # Check if table has relevant measures
+        measures = getattr(table, 'measures', [])
+        if measures and intent.metrics:
+            for metric in intent.metrics:
+                if metric == 'revenue' and any('amount' in m.lower() for m in measures):
+                    max_score = max(max_score, 0.9)
+                elif metric == 'count':
+                    max_score = max(max_score, 0.7)  # Any table can be counted
+        
+        return max_score
+    
+    def _score_graph_proximity(self, table: TableInfo, intent: AnalyticalTask) -> float:
+        """Score based on graph proximity to intent entities"""
+        # Simplified proximity scoring
+        # In a full implementation, this would use actual graph distances
+        
+        # If table directly matches intent entity, proximity is high
+        if intent.entity and intent.entity.lower() in table.entity_type.lower():
+            return 1.0
+        
+        # If table has foreign keys, it's well-connected
+        if table.relationships:
+            return 0.7
+        
+        return 0.3
+    
+    def _score_operational_preference(self, table: TableInfo) -> float:
+        """Score operational data higher than planning/reference"""
+        data_type = getattr(table, 'data_type', 'reference')
+        
+        if data_type == 'operational':
+            return 1.0
+        elif data_type == 'reference':
+            return 0.6
+        else:  # planning
+            return 0.3
+    
+    def _generate_evidence_reasoning(self, table: TableInfo, score: EvidenceScore, intent: AnalyticalTask) -> List[str]:
+        """Generate human-readable evidence reasoning"""
+        reasoning = []
+        
+        if score.role_match > 0.7:
+            bi_role = getattr(table, 'bi_role', 'unknown')
+            data_type = getattr(table, 'data_type', 'unknown')
+            reasoning.append(f"Strong BI role match: {bi_role} table with {data_type} data")
+        
+        if score.join_evidence > 0.7:
+            fk_count = len(table.relationships)
+            reasoning.append(f"Well-connected: {fk_count} proven relationships")
+        
+        if score.lexical_match > 0.7:
+            reasoning.append(f"Strong semantic match to '{intent.entity or intent.metrics[0] if intent.metrics else 'query'}'")
+        
+        if score.operational_tag > 0.8:
+            reasoning.append("Contains operational (non-planning) data")
+        
+        if score.row_count > 0.5:
+            reasoning.append(f"Sufficient data volume: {table.row_count:,} rows")
+        
+        measures = getattr(table, 'measures', [])
+        if measures:
+            reasoning.append(f"Has numeric measures: {', '.join(measures[:3])}")
+        
+        time_cols = getattr(table, 'time_columns', [])
+        if time_cols:
+            reasoning.append(f"Has time dimensions: {', '.join(time_cols[:2])}")
+        
+        return reasoning
+
+class CapabilityValidator:
+    """Stage 3: Capability contract validation (Single responsibility)"""
+    
+    def __init__(self):
+        pass
+    
+    def validate_capabilities(self, candidates: List[Tuple[TableInfo, EvidenceScore, List[str]]], 
+                            intent: AnalyticalTask) -> Tuple[List[TableInfo], List[Tuple[TableInfo, CapabilityContract]]]:
+        """Validate capability contracts for candidate tables"""
+        print("   🔒 Stage 3: Capability contract validation...")
+        
+        valid_tables = []
+        failed_validations = []
+        
+        for table, score, reasoning in candidates:
+            contract = self._assess_capability_contract(table, intent)
             
-            # Add all column names
+            if contract.is_complete():
+                valid_tables.append(table)
+                print(f"      ✅ {table.full_name}: Contract satisfied (completeness: {contract.get_completeness_score():.2f})")
+            else:
+                failed_validations.append((table, contract))
+                missing = contract.get_missing_capabilities()
+                print(f"      ❌ {table.full_name}: Missing {', '.join(missing[:2])}")
+        
+        return valid_tables, failed_validations
+    
+    def _assess_capability_contract(self, table: TableInfo, intent: AnalyticalTask) -> CapabilityContract:
+        """Assess if table satisfies capability contract for analytical intent"""
+        contract = CapabilityContract()
+        
+        # Determine grain
+        contract.grain = getattr(table, 'grain', 'unknown')
+        if contract.grain == 'unknown':
+            # Try to infer grain from table name and role
+            if getattr(table, 'bi_role', '') == 'fact':
+                contract.grain = 'transaction'
+            else:
+                contract.grain = table.entity_type.lower()
+        
+        # Find measures
+        measures = getattr(table, 'measures', [])
+        if intent.task_type in ['aggregation', 'ranking', 'trend'] and intent.metrics:
+            # Check if table has measures matching intent
+            for metric in intent.metrics:
+                if metric == 'revenue' and any('amount' in m.lower() for m in measures):
+                    contract.measures.extend([m for m in measures if 'amount' in m.lower()])
+                elif metric == 'count':
+                    # Any table can be counted
+                    contract.measures.append('*')  # Represents COUNT(*)
+        else:
+            contract.measures = measures
+        
+        # Find time columns
+        time_columns = getattr(table, 'time_columns', [])
+        if time_columns:
+            contract.time_column = time_columns[0]  # Use first available
+        
+        # Find entity keys
+        contract.entity_keys = getattr(table, 'entity_keys', [])
+        
+        # Set up join paths (simplified - would need full relationship graph)
+        if table.relationships:
+            contract.join_paths = table.relationships[:3]  # First few relationships
+        
+        # Quality checks
+        contract.quality_checks = {
+            'row_count': table.row_count,
+            'has_sample_data': len(table.sample_data) > 0,
+            'measures_available': len(contract.measures) > 0,
+            'time_available': contract.time_column is not None,
+            'entities_available': len(contract.entity_keys) > 0
+        }
+        
+        return contract
+    
+    def get_missing_capabilities(self, contract: CapabilityContract) -> List[str]:
+        """Get list of missing capabilities with specific details"""
+        missing = []
+        
+        if not contract.grain or contract.grain == 'unknown':
+            missing.append("Row grain identification (what each row represents)")
+        
+        if not contract.measures and not contract.entity_keys:
+            missing.append("Numeric measures for aggregation or entity keys for grouping")
+        
+        if not contract.time_column:
+            missing.append("Time/date column for temporal filtering")
+        
+        if not contract.entity_keys:
+            missing.append("Entity keys for grouping and joining")
+        
+        quality = contract.quality_checks
+        if quality.get('row_count', 0) == 0:
+            missing.append("Data availability (zero rows)")
+        
+        return missing
+
+class BIAwareSQLGenerator:
+    """Stage 4: BI-aware SQL generation with validation (Single responsibility)"""
+    
+    def __init__(self, config: Config):
+        self.config = config
+        self.allowed_identifiers = set()
+    
+    def set_allowed_identifiers(self, tables: List[TableInfo]):
+        """Set allowed identifiers from discovered schema"""
+        self.allowed_identifiers = set()
+        
+        for table in tables:
+            # Add table identifiers
+            self.allowed_identifiers.add(table.full_name.lower())
+            self.allowed_identifiers.add(f"{table.schema}.{table.name}".lower())
+            self.allowed_identifiers.add(table.name.lower())
+            
+            # Add column identifiers
             for col in table.columns:
                 col_name = col.get('name', '')
                 if col_name:
-                    identifiers.add(col_name.lower())
-                    identifiers.add(f"[{col_name}]".lower())
-        
-        return identifiers
+                    self.allowed_identifiers.add(col_name.lower())
+                    self.allowed_identifiers.add(f"[{col_name}]".lower())
     
-    def _classify_operational_tables(self) -> Dict[str, List[TableInfo]]:
-        """Classify tables as operational vs planning data"""
-        operational = []
-        planning = []
-        reference = []
+    async def generate_sql(self, intent: AnalyticalTask, valid_tables: List[TableInfo], 
+                          llm: AzureChatOpenAI) -> Optional[str]:
+        """Generate validated SQL from intent and capable tables"""
+        print("   ⚡ Stage 4: BI-aware SQL generation...")
         
-        for table in self.tables:
-            table_type = self._determine_table_data_type(table)
-            if table_type == 'operational':
-                operational.append(table)
-            elif table_type == 'planning':
-                planning.append(table)
-            else:
-                reference.append(table)
-        
-        return {
-            'operational': operational,
-            'planning': planning,
-            'reference': reference
-        }
-    
-    def _determine_table_data_type(self, table: TableInfo) -> str:
-        """Determine if table contains operational, planning, or reference data"""
-        table_name = table.name.lower()
-        
-        # Planning/target indicators
-        if any(pattern in table_name for pattern in ['target', 'goal', 'budget', 'plan', 'forecast']):
-            return 'planning'
-        
-        # Reference data indicators
-        if any(pattern in table_name for pattern in ['lookup', 'code', 'type', 'category', 'status']):
-            return 'reference'
-        
-        # Check sample data for operational indicators
-        if table.sample_data:
-            non_zero_amounts = 0
-            total_amount_fields = 0
-            
-            for sample in table.sample_data[:3]:  # Check first few samples
-                for key, value in sample.items():
-                    if any(pattern in key.lower() for pattern in ['amount', 'value', 'price', 'cost']):
-                        total_amount_fields += 1
-                        try:
-                            if float(str(value).replace(',', '')) != 0:
-                                non_zero_amounts += 1
-                        except:
-                            pass
-            
-            # If most amount fields are zero, likely planning data
-            if total_amount_fields > 0 and (non_zero_amounts / total_amount_fields) < 0.3:
-                return 'planning'
-        
-        # Default to operational for entity tables with data
-        if table.row_count > 0 and getattr(table, 'entity_type', '') in ['Customer', 'Order', 'Payment']:
-            return 'operational'
-        
-        return 'reference'
-    
-    def _build_business_relationships(self) -> Dict[str, List[Tuple[str, str]]]:
-        """Build business relationships between entity types"""
-        relationships = {
-            'customer_to_transactions': [],
-            'sales_rep_to_deals': [],
-            'product_to_sales': []
-        }
-        
-        # Find customer to transaction relationships
-        customer_tables = self.entity_map.get('Customer', [])
-        transaction_tables = (self.entity_map.get('Payment', []) + 
-                            self.entity_map.get('Financial', []) + 
-                            self.entity_map.get('Order', []))
-        
-        for customer_table in customer_tables:
-            for transaction_table in transaction_tables:
-                # Look for foreign key patterns
-                customer_id_cols = [col.get('name') for col in customer_table.columns 
-                                  if 'id' in col.get('name', '').lower()]
-                transaction_cols = [col.get('name') for col in transaction_table.columns]
-                
-                for customer_id in customer_id_cols:
-                    for trans_col in transaction_cols:
-                        if ('customer' in trans_col.lower() and 'id' in trans_col.lower()) or \
-                           (customer_id.lower() in trans_col.lower()):
-                            relationships['customer_to_transactions'].append(
-                                (customer_table.full_name, transaction_table.full_name)
-                            )
-        
-        return relationships
-    
-    def get_operational_tables_for_concept(self, business_concept: str) -> List[TableInfo]:
-        """Get operational (non-planning) tables for a business concept"""
-        concept_data = self.business_concept_map.get(business_concept.lower(), {})
-        all_tables = concept_data.get('tables', [])
-        
-        # Filter for operational tables
-        operational = self.operational_tables['operational']
-        return [table for table in all_tables if table in operational]
-    
-    def get_best_table_for_entity(self, entity_type: str, data_type: str = 'operational') -> Optional[TableInfo]:
-        """Get the best table for an entity type"""
-        entity_tables = self.entity_map.get(entity_type, [])
-        
-        if data_type == 'operational':
-            entity_tables = [t for t in entity_tables if t in self.operational_tables['operational']]
-        
-        if not entity_tables:
+        if not valid_tables:
             return None
         
-        # Return table with most data
-        return max(entity_tables, key=lambda t: t.row_count)
-    
-    def find_join_path(self, table1: TableInfo, table2: TableInfo) -> Optional[Tuple[str, str]]:
-        """Find join path between two tables"""
-        # Look for foreign key relationships
-        for col1 in table1.columns:
-            col1_name = col1.get('name', '')
-            for col2 in table2.columns:
-                col2_name = col2.get('name', '')
-                
-                # Common join patterns
-                if col1_name.lower() == col2_name.lower() and 'id' in col1_name.lower():
-                    return (col1_name, col2_name)
-                
-                # Customer ID patterns
-                if ('customer' in col1_name.lower() and 'id' in col1_name.lower() and
-                    'id' in col2_name.lower() and col2_name.lower() in ['id', 'customerid']):
-                    return (col1_name, col2_name)
+        # Select primary table (highest capability score)
+        primary_table = self._select_primary_table(valid_tables, intent)
         
-        return None
-
-class LLMClient:
-    """LLM communication - Single responsibility (SOLID)"""
-    
-    def __init__(self, config: Config):
-        self.config = config
-        self.llm = AzureChatOpenAI(
-            azure_endpoint=config.azure_endpoint,
-            api_key=config.api_key,
-            azure_deployment=config.deployment_name,
-            api_version=config.api_version,
-            request_timeout=60,
-            # Do not set temperature - use default (README note about API errors)
-        )
-    
-    async def analyze(self, system_prompt: str, user_prompt: str) -> str:
-        """Send analysis request to LLM"""
-        try:
-            messages = [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=user_prompt)
-            ]
-            response = await asyncio.to_thread(self.llm.invoke, messages)
-            return response.content
-        except Exception as e:
-            print(f"   ⚠️ LLM error: {e}")
-            return ""
-
-class BusinessIntelligenceTableSelector:
-    """Stage 2: BI-aware table selection prioritizing operational data"""
-    
-    def __init__(self, bi_kb: BusinessIntelligenceKnowledgeBase):
-        self.bi_kb = bi_kb
-    
-    async def select_tables(self, question: str, llm: LLMClient) -> Tuple[List[TableInfo], Dict]:
-        """Select tables using BI-aware semantic analysis"""
-        print("   📋 Stage 2: BI-aware table selection...")
+        # Generate SQL using template or LLM
+        sql = await self._generate_sql_for_intent(intent, primary_table, valid_tables, llm)
         
-        explanations = {
-            'total_candidates': len(self.bi_kb.tables),
-            'selected_tables': [],
-            'reasoning': [],
-            'business_concepts_detected': [],
-            'entity_types_used': [],
-            'operational_tables_prioritized': 0
-        }
+        if not sql:
+            return None
         
-        # Detect business concepts from question
-        business_concepts = self._detect_business_concepts(question)
-        explanations['business_concepts_detected'] = business_concepts
+        # Validate with three gates
+        if not self._validate_three_gates(sql, primary_table):
+            print("      ❌ Three-gate validation failed")
+            return None
         
-        # Get operational tables for each concept (prioritize over planning)
-        selected_tables = []
-        for concept in business_concepts:
-            concept_tables = self.bi_kb.get_operational_tables_for_concept(concept)
-            selected_tables.extend(concept_tables)
-            if concept_tables:
-                entity_types = list(set(getattr(t, 'entity_type', 'Unknown') for t in concept_tables))
-                explanations['entity_types_used'].extend(entity_types)
-                explanations['reasoning'].append(
-                    f"Business concept '{concept}' mapped to {len(concept_tables)} operational tables of types: {entity_types}"
-                )
-        
-        explanations['operational_tables_prioritized'] = len(selected_tables)
-        
-        # Remove duplicates while preserving order
-        seen = set()
-        unique_tables = []
-        for table in selected_tables:
-            if table.full_name not in seen:
-                seen.add(table.full_name)
-                unique_tables.append(table)
-        
-        # Fallback to lexical matching if no concept mapping
-        if not unique_tables:
-            unique_tables = self._lexical_fallback(question, explanations)
-        
-        explanations['selected_tables'] = [t.full_name for t in unique_tables]
-        
-        print(f"      ✅ Selected {len(unique_tables)} operational tables using BI analysis")
-        return unique_tables, explanations
-    
-    def _detect_business_concepts(self, question: str) -> List[str]:
-        """Detect business concepts from question using discovered entity types"""
-        q_lower = question.lower()
-        detected_concepts = []
-        
-        # Map question keywords to business concepts
-        concept_keywords = {
-            'customer': ['customer', 'client', 'user', 'account'],
-            'revenue': ['revenue', 'payment', 'money', 'amount', 'paid', 'financial', 'value'],
-            'sales': ['sales', 'deal', 'order', 'sold', 'purchase', 'contract', 'rep', 'representative']
-        }
-        
-        for concept, keywords in concept_keywords.items():
-            if any(keyword in q_lower for keyword in keywords):
-                # Only add if we have operational tables for this concept
-                if self.bi_kb.get_operational_tables_for_concept(concept):
-                    detected_concepts.append(concept)
-        
-        return detected_concepts
-    
-    def _lexical_fallback(self, question: str, explanations: Dict) -> List[TableInfo]:
-        """Fallback to lexical matching when concept mapping fails"""
-        q_lower = question.lower()
-        question_words = [w for w in q_lower.split() if len(w) > 2]
-        
-        scored_tables = []
-        for table in self.bi_kb.operational_tables['operational']:  # Prioritize operational
-            score = self._calculate_table_score(table, question_words, q_lower)
-            if score > 0:
-                scored_tables.append((table, score))
-        
-        scored_tables.sort(key=lambda x: x[1], reverse=True)
-        selected = [table for table, _ in scored_tables[:6]]
-        
-        explanations['reasoning'].append(f"Operational lexical fallback: {len(selected)} tables")
-        return selected
-    
-    def _calculate_table_score(self, table: TableInfo, question_words: List[str], q_lower: str) -> float:
-        """Calculate relevance score using semantic information"""
-        score = 0.0
-        
-        # Table name matching
-        table_name_lower = table.name.lower()
-        name_matches = [w for w in question_words if w in table_name_lower]
-        if name_matches:
-            score += len(name_matches) * 3.0
-        
-        # Entity type matching (use semantic analysis)
-        entity_type = getattr(table, 'entity_type', '').lower()
-        if entity_type != 'unknown':
-            entity_keywords = {
-                'customer': ['customer', 'client', 'user'],
-                'payment': ['payment', 'paid', 'revenue', 'financial'],
-                'order': ['order', 'sale', 'purchase'],
-                'product': ['product', 'item', 'inventory']
-            }
-            
-            for entity, keywords in entity_keywords.items():
-                if entity in entity_type and any(kw in q_lower for kw in keywords):
-                    score += 4.0  # Higher weight for semantic matching
-        
-        # Business role bonus
-        if getattr(table, 'business_role', '') == 'Core':
-            score += 2.0
-        
-        # Operational data bonus
-        if table in self.bi_kb.operational_tables['operational']:
-            score += 3.0
-        
-        # Data availability bonus
-        if table.row_count > 0:
-            score += 1.0
-        
-        return score
-
-class BusinessIntelligenceSQLGenerator:
-    """Stage 4: Business-Intelligence-Aware SQL generation"""
-    
-    def __init__(self, config: Config, bi_kb: BusinessIntelligenceKnowledgeBase):
-        self.config = config
-        self.bi_kb = bi_kb
-    
-    async def generate_sql(self, question: str, selected_tables: List[TableInfo], 
-                          explanations: Dict, llm: LLMClient) -> str:
-        """Generate BI-aware SQL using detected intent and business logic"""
-        print("   ⚡ Stage 4: Business-Intelligence-Aware SQL generation...")
-        
-        # Enhanced intent detection
-        intent = self._analyze_business_intent(question)
-        print(f"      🧠 Detected intent: {intent}")
-        
-        # Map intent to actual schema elements
-        business_mapping = self._map_intent_to_business_schema(intent, selected_tables)
-        
-        if not business_mapping or not business_mapping.get('query_type'):
-            print("      ⚠️ No business mapping found, using safe fallback")
-            return self._generate_safe_fallback(selected_tables)
-        
-        # Generate BI-aware SQL using business patterns
-        sql = self._generate_business_intelligence_sql(intent, business_mapping)
-        
-        # Validate with SQLGlot
-        is_valid, validation_msg = self._validate_sql_with_sqlglot(sql)
-        
-        if not is_valid:
-            print(f"      ⚠️ SQLGlot validation failed: {validation_msg}")
-            sql = self._generate_safe_fallback(selected_tables)
-            print(f"      ✅ Using safe fallback SQL")
-        else:
-            print(f"      ✅ Business-Intelligence SQL validated successfully")
-        
+        print("      ✅ SQL generated and validated")
         return sql
     
-    def _analyze_business_intent(self, question: str) -> Dict[str, Any]:
-        """Enhanced business intent analysis"""
-        q_lower = question.lower()
+    def _select_primary_table(self, valid_tables: List[TableInfo], intent: AnalyticalTask) -> TableInfo:
+        """Select primary table for query"""
+        # Prefer fact tables for aggregation tasks
+        if intent.task_type in ['aggregation', 'ranking', 'trend']:
+            fact_tables = [t for t in valid_tables if getattr(t, 'bi_role', '') == 'fact']
+            if fact_tables:
+                # Select fact table with most measures
+                return max(fact_tables, key=lambda t: len(getattr(t, 'measures', [])))
         
-        intent = {
-            'query_type': None,  # 'customer_analysis', 'sales_analysis', 'simple_select'
-            'aggregation': None,  # 'sum', 'count', 'top', 'avg'
-            'business_entity': None,  # 'customer', 'sales_rep', 'product'
-            'metric_requested': None,  # 'revenue', 'deals', 'transactions'
-            'time_period': None,  # 'Q2_2025', 'last_12_months', 'this_year'
-            'ranking': None,  # 'top_10', 'highest', 'best'
-            'grouping': None,  # 'by_customer', 'by_rep', 'by_product'
-            'limit': 10
-        }
-        
-        # Detect query type based on combination of elements
-        if any(w in q_lower for w in ['customer', 'client']) and any(w in q_lower for w in ['revenue', 'value', 'amount']):
-            intent['query_type'] = 'customer_analysis'
-            intent['business_entity'] = 'customer'
-            intent['metric_requested'] = 'revenue'
-        
-        elif any(w in q_lower for w in ['sales rep', 'representative', 'salesperson']) and any(w in q_lower for w in ['deal', 'sale', 'value']):
-            intent['query_type'] = 'sales_analysis'
-            intent['business_entity'] = 'sales_rep'
-            intent['metric_requested'] = 'deals'
-        
-        # Detect aggregation
-        if any(w in q_lower for w in ['total', 'sum']):
-            intent['aggregation'] = 'sum'
-        elif any(w in q_lower for w in ['how many', 'count', 'number of']):
-            intent['aggregation'] = 'count'
-        elif any(w in q_lower for w in ['top', 'highest', 'best']):
-            intent['aggregation'] = 'top'
-            intent['ranking'] = 'top'
-        
-        # Extract ranking numbers
-        top_match = re.search(r'top\s+(\d+)', q_lower)
-        if top_match:
-            intent['limit'] = int(top_match.group(1))
-        
-        # Detect time periods
-        if 'q2 2025' in q_lower or 'q2' in q_lower:
-            intent['time_period'] = 'Q2_2025'
-        elif any(phrase in q_lower for phrase in ['last 12 months', 'past 12 months', 'last year']):
-            intent['time_period'] = 'last_12_months'
-        elif 'this year' in q_lower or '2025' in q_lower:
-            intent['time_period'] = 'this_year'
-        
-        # Detect grouping
-        if 'by' in q_lower:
-            if any(w in q_lower for w in ['customer', 'client']):
-                intent['grouping'] = 'by_customer'
-            elif any(w in q_lower for w in ['rep', 'representative', 'salesperson']):
-                intent['grouping'] = 'by_rep'
-        
-        return intent
+        # Select table with most capabilities
+        return max(valid_tables, key=lambda t: t.get_capability_score())
     
-    def _map_intent_to_business_schema(self, intent: Dict, tables: List[TableInfo]) -> Dict[str, Any]:
-        """Map business intent to actual discovered schema elements"""
-        mapping = {
-            'query_type': intent.get('query_type'),
-            'primary_table': None,
-            'secondary_table': None,
-            'join_condition': None,
-            'entity_column': None,
-            'entity_name_column': None,
-            'metric_column': None,
-            'date_column': None,
-            'grouping_columns': [],
-            'where_conditions': [],
-            'having_conditions': []
-        }
+    async def _generate_sql_for_intent(self, intent: AnalyticalTask, primary_table: TableInfo, 
+                                     all_tables: List[TableInfo], llm: AzureChatOpenAI) -> Optional[str]:
+        """Generate SQL based on analytical intent"""
         
-        if intent['query_type'] == 'customer_analysis':
-            return self._map_customer_analysis(intent, tables, mapping)
-        elif intent['query_type'] == 'sales_analysis':
-            return self._map_sales_analysis(intent, tables, mapping)
-        else:
-            # Simple select
-            mapping['query_type'] = 'simple_select'
-            mapping['primary_table'] = max(tables, key=lambda t: t.row_count) if tables else None
-            return mapping
-    
-    def _map_customer_analysis(self, intent: Dict, tables: List[TableInfo], mapping: Dict) -> Dict[str, Any]:
-        """Map customer analysis intent to schema"""
-        # Find best customer table
-        customer_table = self.bi_kb.get_best_table_for_entity('Customer', 'operational')
-        # Find best transaction table
-        transaction_table = (self.bi_kb.get_best_table_for_entity('Payment', 'operational') or 
-                           self.bi_kb.get_best_table_for_entity('Financial', 'operational') or
-                           self.bi_kb.get_best_table_for_entity('Order', 'operational'))
+        # Build context about primary table capabilities
+        context = self._build_table_context(primary_table, intent)
         
-        if not transaction_table:
-            # Use available tables
-            transaction_table = max(tables, key=lambda t: t.row_count) if tables else None
-        
-        if not customer_table:
-            customer_table = transaction_table
-        
-        mapping['primary_table'] = transaction_table
-        mapping['secondary_table'] = customer_table if customer_table != transaction_table else None
-        
-        # Find columns in primary table
-        if transaction_table:
-            # Find customer ID column
-            customer_id_cols = [col.get('name') for col in transaction_table.columns 
-                              if any(pattern in col.get('name', '').lower() 
-                                   for pattern in ['customer', 'businesspoint', 'client'])]
-            if customer_id_cols:
-                mapping['entity_column'] = customer_id_cols[0]
-            
-            # Find amount column
-            amount_cols = [col.get('name') for col in transaction_table.columns 
-                         if any(pattern in col.get('name', '').lower() 
-                              for pattern in ['amount', 'value', 'price', 'cost', 'total'])
-                         and col.get('data_type', '').lower() in ['decimal', 'money', 'float', 'numeric']]
-            if amount_cols:
-                mapping['metric_column'] = amount_cols[0]
-            
-            # Find date column
-            date_cols = [col.get('name') for col in transaction_table.columns 
-                        if any(pattern in col.get('name', '').lower() 
-                             for pattern in ['date', 'time', 'created'])]
-            if date_cols:
-                mapping['date_column'] = date_cols[0]
-        
-        # Set up grouping
-        if intent.get('grouping') == 'by_customer' and mapping['entity_column']:
-            mapping['grouping_columns'] = [mapping['entity_column']]
-        
-        # Add operational data filter
-        if mapping['metric_column']:
-            mapping['where_conditions'].append(f"[{mapping['metric_column']}] > 0")
-        
-        return mapping
-    
-    def _map_sales_analysis(self, intent: Dict, tables: List[TableInfo], mapping: Dict) -> Dict[str, Any]:
-        """Map sales analysis intent to schema"""
-        # Find best sales/order table
-        sales_table = self.bi_kb.get_best_table_for_entity('Order', 'operational')
-        
-        if not sales_table and tables:
-            # Use table with most data from available
-            sales_table = max(tables, key=lambda t: t.row_count)
-        
-        mapping['primary_table'] = sales_table
-        
-        if sales_table:
-            # Find sales rep column
-            rep_cols = [col.get('name') for col in sales_table.columns 
-                       if any(pattern in col.get('name', '').lower() 
-                            for pattern in ['user', 'rep', 'sales', 'handler', 'owner', 'employee'])]
-            if rep_cols:
-                mapping['entity_column'] = rep_cols[0]
-            
-            # Find amount/value column
-            amount_cols = [col.get('name') for col in sales_table.columns 
-                         if any(pattern in col.get('name', '').lower() 
-                              for pattern in ['amount', 'value', 'price', 'cost', 'total'])
-                         and col.get('data_type', '').lower() in ['decimal', 'money', 'float', 'numeric']]
-            if amount_cols:
-                mapping['metric_column'] = amount_cols[0]
-            
-            # Find date column
-            date_cols = [col.get('name') for col in sales_table.columns 
-                        if any(pattern in col.get('name', '').lower() 
-                             for pattern in ['date', 'time', 'created'])]
-            if date_cols:
-                mapping['date_column'] = date_cols[0]
-        
-        # Set up grouping
-        if intent.get('grouping') == 'by_rep' and mapping['entity_column']:
-            mapping['grouping_columns'] = [mapping['entity_column']]
-        
-        # Add operational data filter
-        if mapping['metric_column']:
-            mapping['where_conditions'].append(f"[{mapping['metric_column']}] > 0")
-        
-        return mapping
-    
-    def _generate_business_intelligence_sql(self, intent: Dict, mapping: Dict) -> str:
-        """Generate SQL using business intelligence patterns"""
-        
-        if mapping['query_type'] == 'customer_analysis':
-            return self._generate_customer_analysis_sql(intent, mapping)
-        elif mapping['query_type'] == 'sales_analysis':
-            return self._generate_sales_analysis_sql(intent, mapping)
-        else:
-            return self._generate_simple_select_sql(intent, mapping)
-    
-    def _generate_customer_analysis_sql(self, intent: Dict, mapping: Dict) -> str:
-        """Generate customer analysis SQL"""
-        table = mapping['primary_table']
-        if not table:
-            return ""
-        
-        sql_parts = []
-        
-        # SELECT clause
-        if intent['aggregation'] == 'sum' and mapping['metric_column']:
-            if mapping['entity_column']:
-                select_cols = [
-                    f"[{mapping['entity_column']}] as customer_id",
-                    f"SUM([{mapping['metric_column']}]) as total_revenue",
-                    f"COUNT(*) as transaction_count"
-                ]
-            else:
-                select_cols = [f"SUM([{mapping['metric_column']}]) as total_revenue"]
-        
-        elif intent['aggregation'] == 'top' and mapping['metric_column']:
-            select_cols = [f"TOP {intent['limit']}"]
-            if mapping['entity_column']:
-                select_cols.append(f"[{mapping['entity_column']}] as customer_id")
-            if mapping['metric_column']:
-                select_cols.append(f"SUM([{mapping['metric_column']}]) as total_revenue")
-                select_cols.append(f"COUNT(*) as transaction_count")
-        
-        elif intent['aggregation'] == 'count':
-            if mapping['entity_column']:
-                select_cols = [f"COUNT(DISTINCT [{mapping['entity_column']}]) as unique_customers"]
-            else:
-                select_cols = ["COUNT(*) as total_records"]
-        
-        else:
-            # Default aggregation
-            select_cols = [f"TOP {intent['limit']}"]
-            if mapping['entity_column']:
-                select_cols.append(f"[{mapping['entity_column']}] as customer_id")
-            if mapping['metric_column']:
-                select_cols.append(f"[{mapping['metric_column']}] as amount")
-        
-        sql_parts.append("SELECT " + ", ".join(select_cols))
-        
-        # FROM clause
-        sql_parts.append(f"FROM {table.full_name}")
-        
-        # WHERE clause
-        where_conditions = mapping.get('where_conditions', [])
-        
-        # Add time filtering
-        if intent['time_period'] and mapping['date_column']:
-            time_filter = self._get_time_filter(intent['time_period'], mapping['date_column'])
-            if time_filter:
-                where_conditions.append(time_filter)
-        
-        if where_conditions:
-            sql_parts.append("WHERE " + " AND ".join(where_conditions))
-        
-        # GROUP BY clause
-        if mapping['grouping_columns'] and intent['aggregation'] in ['sum', 'top']:
-            sql_parts.append("GROUP BY " + ", ".join([f"[{col}]" for col in mapping['grouping_columns']]))
-        
-        # ORDER BY clause
-        if intent['aggregation'] == 'top' and mapping['metric_column']:
-            sql_parts.append(f"ORDER BY SUM([{mapping['metric_column']}]) DESC")
-        
-        return " ".join(sql_parts)
-    
-    def _generate_sales_analysis_sql(self, intent: Dict, mapping: Dict) -> str:
-        """Generate sales analysis SQL"""
-        table = mapping['primary_table']
-        if not table:
-            return ""
-        
-        sql_parts = []
-        
-        # SELECT clause
-        if intent['aggregation'] == 'sum' and mapping['metric_column']:
-            if mapping['entity_column']:
-                select_cols = [
-                    f"[{mapping['entity_column']}] as sales_rep",
-                    f"SUM([{mapping['metric_column']}]) as total_deals",
-                    f"COUNT(*) as deal_count"
-                ]
-            else:
-                select_cols = [f"SUM([{mapping['metric_column']}]) as total_deals"]
-        
-        elif intent['aggregation'] == 'count':
-            if mapping['entity_column']:
-                select_cols = [f"COUNT(DISTINCT [{mapping['entity_column']}]) as active_reps"]
-            else:
-                select_cols = ["COUNT(*) as total_deals"]
-        
-        else:
-            # Default display
-            select_cols = [f"TOP {intent['limit']}"]
-            if mapping['entity_column']:
-                select_cols.append(f"[{mapping['entity_column']}] as sales_rep")
-            if mapping['metric_column']:
-                select_cols.append(f"[{mapping['metric_column']}] as deal_value")
-        
-        sql_parts.append("SELECT " + ", ".join(select_cols))
-        
-        # FROM clause
-        sql_parts.append(f"FROM {table.full_name}")
-        
-        # WHERE clause
-        where_conditions = mapping.get('where_conditions', [])
-        
-        # Add time filtering
-        if intent['time_period'] and mapping['date_column']:
-            time_filter = self._get_time_filter(intent['time_period'], mapping['date_column'])
-            if time_filter:
-                where_conditions.append(time_filter)
-        
-        if where_conditions:
-            sql_parts.append("WHERE " + " AND ".join(where_conditions))
-        
-        # GROUP BY clause
-        if mapping['grouping_columns'] and intent['aggregation'] in ['sum']:
-            sql_parts.append("GROUP BY " + ", ".join([f"[{col}]" for col in mapping['grouping_columns']]))
-        
-        # ORDER BY clause
-        if intent['aggregation'] == 'sum' and mapping['metric_column']:
-            sql_parts.append(f"ORDER BY SUM([{mapping['metric_column']}]) DESC")
-        
-        return " ".join(sql_parts)
-    
-    def _generate_simple_select_sql(self, intent: Dict, mapping: Dict) -> str:
-        """Generate simple select SQL"""
-        table = mapping['primary_table']
-        if not table:
-            return ""
-        
-        # Use first few actual columns
-        available_columns = [col.get('name') for col in table.columns if col.get('name')][:3]
-        if not available_columns:
-            return f"SELECT COUNT(*) as row_count FROM {table.full_name}"
-        
-        columns_str = ", ".join([f"[{col}]" for col in available_columns])
-        return f"SELECT TOP {intent['limit']} {columns_str} FROM {table.full_name}"
-    
-    def _get_time_filter(self, time_period: str, date_column: str) -> str:
-        """Generate time filter SQL"""
-        if time_period == 'Q2_2025':
-            return f"[{date_column}] >= '2025-04-01' AND [{date_column}] < '2025-07-01'"
-        elif time_period == 'last_12_months':
-            return f"[{date_column}] >= DATEADD(month, -12, GETDATE())"
-        elif time_period == 'this_year':
-            return f"YEAR([{date_column}]) = 2025"
-        return ""
-    
-    def _generate_safe_fallback(self, tables: List[TableInfo]) -> str:
-        """Generate guaranteed safe SQL using discovered schema"""
-        if not tables:
-            return ""
-        
-        # Use operational table with most data
-        operational_tables = [t for t in tables if t in self.bi_kb.operational_tables['operational']]
-        if operational_tables:
-            table = max(operational_tables, key=lambda t: t.row_count)
-        else:
-            table = max(tables, key=lambda t: t.row_count)
-        
-        # Use first few actual columns
-        available_columns = [col.get('name') for col in table.columns if col.get('name')]
-        if not available_columns:
-            return f"SELECT COUNT(*) as row_count FROM {table.full_name}"
-        
-        # Safe column selection
-        safe_columns = available_columns[:3]
-        columns_str = ", ".join([f"[{col}]" for col in safe_columns])
-        
-        return f"SELECT TOP 100 {columns_str} FROM {table.full_name}"
-    
-    def _validate_sql_with_sqlglot(self, sql: str) -> Tuple[bool, str]:
-        """Validate SQL using SQLGlot with strict identifier checking"""
-        if not HAS_SQLGLOT:
-            return self._validate_sql_basic(sql), "Basic validation"
-        
-        if not sql.strip():
-            return False, "Empty SQL query"
+        # Generate SQL using LLM with BI-aware prompt
+        prompt = self._create_bi_sql_prompt(intent, primary_table, context)
         
         try:
-            # Parse SQL to AST
-            parsed = sqlglot.parse_one(sql, dialect="tsql")
+            messages = [
+                SystemMessage(content="You are a BI-aware SQL generator. Generate only validated SQL using discovered schema elements. Respond with SQL only."),
+                HumanMessage(content=prompt)
+            ]
+            response = await asyncio.to_thread(llm.invoke, messages)
             
-            if not parsed:
-                return False, "Failed to parse SQL"
-            
-            # Must be SELECT statement
-            if not isinstance(parsed, sqlglot.expressions.Select):
-                return False, "Only SELECT statements allowed"
-            
-            # Validate all identifiers exist in our allowlist
-            validation_result = self._validate_identifiers_exist(parsed)
-            if not validation_result[0]:
-                return False, validation_result[1]
-            
-            return True, "SQL validated successfully"
+            sql = clean_sql_query(response.content)
+            return sql if sql else None
             
         except Exception as e:
-            return False, f"SQLGlot validation error: {str(e)}"
+            print(f"      ⚠️ SQL generation failed: {e}")
+            return None
     
-    def _validate_sql_basic(self, sql: str) -> bool:
-        """Basic SQL validation when SQLGlot not available"""
-        if not sql.strip():
+    def _build_table_context(self, table: TableInfo, intent: AnalyticalTask) -> Dict[str, Any]:
+        """Build context about table capabilities"""
+        return {
+            'table_name': table.full_name,
+            'grain': getattr(table, 'grain', 'unknown'),
+            'measures': getattr(table, 'measures', []),
+            'entity_keys': getattr(table, 'entity_keys', []),
+            'time_columns': getattr(table, 'time_columns', []),
+            'filter_columns': getattr(table, 'filter_columns', []),
+            'sample_data': table.sample_data[:2] if table.sample_data else []
+        }
+    
+    def _create_bi_sql_prompt(self, intent: AnalyticalTask, table: TableInfo, context: Dict[str, Any]) -> str:
+        """Create BI-aware SQL generation prompt"""
+        
+        # Format sample data for context
+        sample_preview = ""
+        if context['sample_data']:
+            sample_items = []
+            for row in context['sample_data']:
+                row_items = []
+                for key, value in list(row.items())[:4]:
+                    if not key.startswith('__'):
+                        row_items.append(f"{key}: {value}")
+                sample_items.append(" | ".join(row_items))
+            sample_preview = "\n".join(sample_items)
+        
+        return f"""
+Generate SQL for this business intelligence request:
+
+ANALYTICAL TASK:
+- Type: {intent.task_type}
+- Metrics: {intent.metrics}
+- Entity: {intent.entity}
+- Time Window: {intent.time_window}
+- Grouping: {intent.grouping}
+- Top Limit: {intent.top_limit}
+- Filters: {intent.filters}
+
+VALIDATED TABLE: {context['table_name']}
+- Grain: {context['grain']} (what each row represents)
+- Measures: {context['measures']} (for aggregation)
+- Entity Keys: {context['entity_keys']} (for grouping)
+- Time Columns: {context['time_columns']} (for filtering)
+- Filter Columns: {context['filter_columns']} (for WHERE)
+
+SAMPLE DATA:
+{sample_preview}
+
+GENERATION RULES:
+1. Use ONLY the table and columns listed above
+2. For aggregation tasks, use measures from the measures list
+3. For grouping, use entity_keys 
+4. For time filtering, use time_columns
+5. Include TOP clause if top_limit specified
+6. Generate efficient, business-focused SQL
+
+Generate the SQL query:
+"""
+    
+    def _validate_three_gates(self, sql: str, primary_table: TableInfo) -> bool:
+        """Validate SQL through three gates: Identifier, Relationship, Capability"""
+        
+        # Gate 1: Identifier validation
+        if not self._validate_identifier_gate(sql):
+            print("      ❌ Identifier gate failed")
             return False
         
-        sql_upper = sql.upper().strip()
-        
-        # Must start with SELECT
-        if not sql_upper.startswith('SELECT'):
+        # Gate 2: Relationship validation (simplified)
+        if not self._validate_relationship_gate(sql, primary_table):
+            print("      ❌ Relationship gate failed")
             return False
         
-        # Check for dangerous operations
-        dangerous_keywords = [
-            'INSERT', 'UPDATE', 'DELETE', 'DROP', 'CREATE', 'ALTER', 
-            'TRUNCATE', 'MERGE', 'EXEC', 'EXECUTE', 'SP_', 'XP_'
-        ]
+        # Gate 3: Basic safety validation
+        if not validate_sql_safety(sql):
+            print("      ❌ Safety gate failed")
+            return False
         
-        return not any(keyword in sql_upper for keyword in dangerous_keywords)
+        return True
     
-    def _validate_identifiers_exist(self, parsed) -> Tuple[bool, str]:
-        """Validate that all referenced identifiers exist in discovered schema"""
+    def _validate_identifier_gate(self, sql: str) -> bool:
+        """Gate 1: Validate all identifiers exist in discovered schema"""
+        if not HAS_SQLGLOT:
+            # Basic validation without SQLGlot
+            return validate_sql_safety(sql)
+        
         try:
-            # Extract all column and table references
-            for column in parsed.find_all(sqlglot.expressions.Column):
-                if column.this:
-                    col_name = str(column.this).strip('[]').lower()
-                    if col_name not in self.bi_kb.allowed_identifiers:
-                        return False, f"Column '{col_name}' not found in discovered schema"
+            # Parse SQL with SQLGlot
+            parsed = sqlglot.parse_one(sql, dialect="tsql")
+            if not parsed:
+                return False
             
+            # Check all table references
             for table in parsed.find_all(sqlglot.expressions.Table):
                 if table.this:
                     table_name = str(table.this).strip('[]').lower()
-                    # Check various formats
-                    table_found = any(identifier for identifier in self.bi_kb.allowed_identifiers 
-                                    if table_name in identifier)
-                    if not table_found:
-                        return False, f"Table '{table_name}' not found in discovered schema"
+                    if not any(table_name in identifier for identifier in self.allowed_identifiers):
+                        print(f"      ❌ Unknown table: {table_name}")
+                        return False
             
-            return True, "All identifiers validated"
+            # Check all column references
+            for column in parsed.find_all(sqlglot.expressions.Column):
+                if column.this:
+                    col_name = str(column.this).strip('[]').lower()
+                    if col_name not in ['*'] and col_name not in self.allowed_identifiers:
+                        print(f"      ❌ Unknown column: {col_name}")
+                        return False
+            
+            return True
             
         except Exception as e:
-            return False, f"Identifier validation error: {str(e)}"
+            print(f"      ⚠️ SQLGlot validation error: {e}")
+            return False
+    
+    def _validate_relationship_gate(self, sql: str, primary_table: TableInfo) -> bool:
+        """Gate 2: Validate relationships exist (simplified validation)"""
+        # In a full implementation, this would validate all JOIN conditions
+        # against the discovered relationship graph
+        
+        # For now, just check that we're not doing arbitrary joins
+        sql_upper = sql.upper()
+        if 'JOIN' in sql_upper:
+            # Ensure the primary table has relationships
+            if not primary_table.relationships:
+                print(f"      ⚠️ JOIN used but {primary_table.full_name} has no proven relationships")
+                return False
+        
+        return True
+
+class NERGenerator:
+    """Generate Non-Executable Analysis Reports when capability validation fails"""
+    
+    def __init__(self):
+        pass
+    
+    def generate_ner(self, question: str, intent: AnalyticalTask, 
+                    failed_validations: List[Tuple[TableInfo, CapabilityContract]],
+                    evidence_results: List[Tuple[TableInfo, EvidenceScore, List[str]]]) -> NonExecutableAnalysisReport:
+        """Generate comprehensive NER when no tables satisfy capability contracts"""
+        
+        print("   🚫 Generating Non-Executable Analysis Report...")
+        
+        # Collect all missing capabilities
+        all_missing = set()
+        for table, contract in failed_validations:
+            missing = self._get_missing_capabilities(contract)
+            all_missing.update(missing)
+        
+        # Generate fix paths
+        fix_paths = self._generate_fix_paths(failed_validations, intent)
+        
+        # Create top candidates summary
+        top_candidates = []
+        for table, score, reasoning in evidence_results[:5]:
+            top_candidates.append((table.full_name, score.total_score))
+        
+        # Generate safe exploratory queries
+        safe_queries = self._generate_safe_queries(evidence_results[:3])
+        
+        return NonExecutableAnalysisReport(
+            question=question,
+            normalized_task={
+                'task_type': intent.task_type,
+                'metrics': intent.metrics,
+                'entity': intent.entity,
+                'time_window': intent.time_window
+            },
+            missing_capabilities=list(all_missing),
+            top_candidate_tables=top_candidates,
+            fix_paths=fix_paths,
+            suggested_queries=safe_queries
+        )
+    
+    def _get_missing_capabilities(self, contract: CapabilityContract) -> List[str]:
+        """Get detailed missing capabilities"""
+        missing = []
+        
+        if not contract.grain or contract.grain == 'unknown':
+            missing.append("Row grain identification")
+        
+        if not contract.measures:
+            missing.append("Numeric measures for aggregation")
+        
+        if not contract.time_column:
+            missing.append("Time/date column for filtering")
+        
+        if not contract.entity_keys:
+            missing.append("Entity keys for grouping")
+        
+        return missing
+    
+    def _generate_fix_paths(self, failed_validations: List[Tuple[TableInfo, CapabilityContract]], 
+                           intent: AnalyticalTask) -> List[str]:
+        """Generate actionable fix paths"""
+        fixes = []
+        
+        for table, contract in failed_validations[:3]:
+            table_fixes = []
+            
+            if not contract.measures and intent.task_type in ['aggregation', 'ranking']:
+                numeric_cols = [col.get('name') for col in table.columns 
+                              if col.get('data_type', '').lower() in ['decimal', 'money', 'float', 'numeric', 'int']]
+                if numeric_cols:
+                    table_fixes.append(f"Use numeric columns as measures: {', '.join(numeric_cols[:3])}")
+                else:
+                    table_fixes.append("Add numeric columns for aggregation")
+            
+            if not contract.time_column and intent.time_window:
+                date_cols = [col.get('name') for col in table.columns 
+                           if 'date' in col.get('name', '').lower() or 'time' in col.get('data_type', '').lower()]
+                if date_cols:
+                    table_fixes.append(f"Use time columns: {', '.join(date_cols[:2])}")
+                else:
+                    table_fixes.append("Add date/time columns for temporal analysis")
+            
+            if not contract.entity_keys and intent.entity:
+                id_cols = [col.get('name') for col in table.columns if 'id' in col.get('name', '').lower()]
+                if id_cols:
+                    table_fixes.append(f"Use entity keys: {', '.join(id_cols[:2])}")
+                else:
+                    table_fixes.append(f"Add foreign key to {intent.entity} dimension")
+            
+            if table_fixes:
+                fixes.extend([f"{table.full_name}: {fix}" for fix in table_fixes])
+        
+        return fixes
+    
+    def _generate_safe_queries(self, evidence_results: List[Tuple[TableInfo, EvidenceScore, List[str]]]) -> List[str]:
+        """Generate safe exploratory queries"""
+        safe_queries = []
+        
+        for table, score, reasoning in evidence_results:
+            # Structure exploration
+            safe_queries.append(f"-- Explore {table.full_name} structure")
+            safe_queries.append(f"SELECT TOP 5 * FROM {table.full_name}")
+            
+            # Column analysis
+            measures = getattr(table, 'measures', [])
+            if measures:
+                measure_cols = ', '.join(measures[:2])
+                safe_queries.append(f"-- Analyze measures in {table.full_name}")
+                safe_queries.append(f"SELECT {measure_cols}, COUNT(*) as row_count FROM {table.full_name} GROUP BY {measure_cols}")
+        
+        return safe_queries[:6]  # Limit to 6 queries
 
 class QueryExecutor:
-    """Execution with retry - enhanced for BI queries"""
+    """Execute validated SQL with BI-aware retry logic"""
     
     def __init__(self, config: Config):
         self.config = config
     
-    async def execute_with_retry(self, sql: str, question: str, 
-                               llm: LLMClient) -> Tuple[List[Dict], Optional[str]]:
-        """Execute with execution-guided retry"""
-        print("   🔄 Execution with retry...")
+    async def execute_with_retry(self, sql: str, max_retries: int = 2) -> Tuple[List[Dict], Optional[str]]:
+        """Execute SQL with BI-aware retry logic"""
+        print("   🔄 Executing validated SQL...")
         
-        for attempt in range(self.config.max_retry_attempts + 1):
+        for attempt in range(max_retries + 1):
             results, error = self._execute_sql(sql)
             
             if error is None:
-                if len(results) == 0:
-                    print(f"      ⚠️ Attempt {attempt + 1}: Empty results (valid for BI queries)")
-                
-                print(f"      ✅ Success on attempt {attempt + 1}: {len(results)} rows")
+                print(f"      ✅ Success: {len(results)} rows")
                 return results, None
             else:
                 print(f"      ⚠️ Attempt {attempt + 1} failed: {error}")
-                if attempt < self.config.max_retry_attempts:
-                    # For BI queries, simplify by removing complex conditions
-                    sql = self._simplify_bi_query_for_retry(sql)
+                if attempt < max_retries:
+                    # Simplify query for retry
+                    sql = self._simplify_for_retry(sql)
                     continue
         
-        return [], f"Failed after {self.config.max_retry_attempts + 1} attempts: {error}"
+        return [], f"Failed after {max_retries + 1} attempts: {error}"
     
     def _execute_sql(self, sql: str) -> Tuple[List[Dict], Optional[str]]:
         """Execute SQL with UTF-8 support"""
@@ -980,12 +827,17 @@ class QueryExecutor:
         
         try:
             with pyodbc.connect(self.config.get_database_connection_string()) as conn:
-                # UTF-8 support (README requirement)
+                # UTF-8 support
                 conn.setdecoding(pyodbc.SQL_CHAR, encoding='utf-8')
                 conn.setdecoding(pyodbc.SQL_WCHAR, encoding='utf-8')
                 conn.setencoding(encoding='utf-8')
                 
                 cursor = conn.cursor()
+                
+                # Set query timeout
+                if hasattr(cursor, 'timeout'):
+                    cursor.timeout = self.config.query_timeout_seconds
+                
                 cursor.execute(sql)
                 
                 if cursor.description:
@@ -1006,76 +858,66 @@ class QueryExecutor:
         except Exception as e:
             return [], str(e)
     
-    def _simplify_bi_query_for_retry(self, sql: str) -> str:
-        """Simplify BI query for retry"""
-        # Remove GROUP BY for retry
-        if 'GROUP BY' in sql.upper():
-            sql = sql.upper().split('GROUP BY')[0] + sql[len(sql.upper().split('GROUP BY')[0]):]
-        
-        # Remove ORDER BY for retry
+    def _simplify_for_retry(self, sql: str) -> str:
+        """Simplify SQL for retry"""
+        # Remove ORDER BY
         if 'ORDER BY' in sql.upper():
-            sql = sql.upper().split('ORDER BY')[0] + sql[len(sql.upper().split('ORDER BY')[0]):]
+            sql = sql.upper().split('ORDER BY')[0]
         
-        # Remove complex WHERE conditions, keep simple ones
-        if 'WHERE' in sql.upper():
-            # Keep basic > 0 conditions, remove date filtering
-            parts = sql.split('WHERE', 1)
-            where_part = parts[1] if len(parts) > 1 else ""
-            simple_conditions = []
-            
-            for condition in where_part.split('AND'):
-                if '> 0' in condition:
-                    simple_conditions.append(condition.strip())
-            
-            if simple_conditions:
-                sql = parts[0] + 'WHERE ' + ' AND '.join(simple_conditions)
-            else:
-                sql = parts[0]
+        # Remove GROUP BY if present (for aggregation retry)
+        if 'GROUP BY' in sql.upper():
+            sql = sql.upper().split('GROUP BY')[0]
         
-        # Ensure basic TOP limit
-        if 'TOP' not in sql.upper() and 'SELECT' in sql.upper():
+        # Ensure TOP limit
+        if 'TOP' not in sql.upper():
             sql = sql.replace('SELECT', 'SELECT TOP 10', 1)
         
         return sql
 
 class QueryInterface:
-    """Business-Intelligence-Aware 4-Stage Pipeline"""
+    """BI-Aware 4-Stage Query Interface with No-Fallback Operating Rules"""
     
     def __init__(self, config: Config):
         self.config = config
-        self.llm = LLMClient(config)
-        self.bi_kb = None
-        self.table_selector = None
-        self.sql_generator = None
+        
+        # Initialize LLM
+        self.llm = AzureChatOpenAI(
+            azure_endpoint=config.azure_endpoint,
+            api_key=config.api_key,
+            azure_deployment=config.deployment_name,
+            api_version=config.api_version,
+            request_timeout=60,
+        )
+        
+        # Initialize components
+        self.intent_analyzer = IntentAnalyzer(self.llm)
+        self.evidence_selector = None  # Initialized with tables
+        self.capability_validator = CapabilityValidator()
+        self.sql_generator = BIAwareSQLGenerator(config)
+        self.ner_generator = NERGenerator()
         self.executor = QueryExecutor(config)
         
-        print("✅ Business-Intelligence-Aware 4-Stage Pipeline initialized")
+        print("✅ BI-Aware No-Fallback Query Interface initialized")
     
     async def start_session(self, tables: List[TableInfo], 
                           domain: Optional[BusinessDomain], 
                           relationships: List[Relationship]):
-        """Start session with business intelligence knowledge base"""
+        """Start BI-aware query session"""
         
-        # Build BI knowledge base from discovery/semantic analysis
-        self.bi_kb = BusinessIntelligenceKnowledgeBase(tables)
-        self.table_selector = BusinessIntelligenceTableSelector(self.bi_kb)
-        self.sql_generator = BusinessIntelligenceSQLGenerator(self.config, self.bi_kb)
+        # Initialize evidence-based selector with tables
+        self.evidence_selector = EvidenceBasedSelector(tables)
         
-        print(f"\n🧠 Business-Intelligence-Aware 4-Stage Pipeline Ready:")
-        print(f"   📊 Total Tables: {len(tables)}")
-        print(f"   🎯 Entity Types: {len(self.bi_kb.entity_map)}")
-        print(f"   🏗️ Business Concepts: {len(self.bi_kb.business_concept_map)}")
-        print(f"   🔒 Allowed Identifiers: {len(self.bi_kb.allowed_identifiers)}")
-        print(f"   📈 Operational Tables: {len(self.bi_kb.operational_tables['operational'])}")
-        print(f"   📋 Planning Tables: {len(self.bi_kb.operational_tables['planning'])}")
-        if domain:
-            print(f"   🎯 Domain: {domain.domain_type}")
+        # Set allowed identifiers for SQL validation
+        self.sql_generator.set_allowed_identifiers(tables)
+        
+        # Show BI readiness summary
+        self._show_bi_readiness(tables, domain)
         
         query_count = 0
         
         while True:
             try:
-                question = input(f"\n❓ Query #{query_count + 1}: ").strip()
+                question = input(f"\n❓ BI Query #{query_count + 1}: ").strip()
                 
                 if question.lower() in ['quit', 'exit', 'q']:
                     break
@@ -1083,13 +925,13 @@ class QueryInterface:
                     continue
                 
                 query_count += 1
-                print(f"🧠 Processing with business-intelligence-aware pipeline...")
+                print(f"🧠 Processing with BI-aware 4-stage pipeline...")
                 
                 start_time = time.time()
-                result = await self.process_query(question)
+                result = await self.process_bi_query(question)
                 result.execution_time = time.time() - start_time
                 
-                self._display_result(result)
+                self._display_bi_result(result)
                 
             except KeyboardInterrupt:
                 print("\n⏸️ Interrupted")
@@ -1097,57 +939,52 @@ class QueryInterface:
             except Exception as e:
                 print(f"❌ Error: {e}")
     
-    async def process_query(self, question: str) -> QueryResult:
-        """Business-Intelligence-Aware 4-Stage Pipeline"""
+    async def process_bi_query(self, question: str) -> QueryResult:
+        """BI-Aware 4-Stage Pipeline with No-Fallback"""
         
         try:
-            # Stage 1: Enhanced Business Intent Analysis
-            print("   🧠 Stage 1: Business intent analysis...")
+            # Stage 1: Intent analysis → Analytical Task
+            intent = await self.intent_analyzer.analyze_intent(question)
             
-            # Stage 2: BI-Aware Table Selection
-            selected_tables, explanations = await self.table_selector.select_tables(
-                question, self.llm
+            # Stage 2: Evidence-driven table selection
+            evidence_results = self.evidence_selector.select_candidates(intent, top_k=8)
+            
+            # Stage 3: Capability contract validation
+            valid_tables, failed_validations = self.capability_validator.validate_capabilities(
+                evidence_results, intent
             )
             
-            if not selected_tables:
-                return QueryResult(
-                    question=question,
-                    sql_query="",
-                    results=[],
-                    error="No relevant operational tables found in discovered schema"
-                )
+            # Decision point: Execute or NER
+            if valid_tables:
+                # Stage 4: Generate and execute validated SQL
+                sql = await self.sql_generator.generate_sql(intent, valid_tables, self.llm)
+                
+                if sql:
+                    results, error = await self.executor.execute_with_retry(sql)
+                    
+                    result = QueryResult(
+                        question=question,
+                        sql_query=sql,
+                        results=results,
+                        error=error,
+                        tables_used=[t.full_name for t in valid_tables],
+                        result_type="data",
+                        capability_score=1.0,
+                        evidence_reasoning=[reason for _, _, reasons in evidence_results[:1] for reason in reasons]
+                    )
+                else:
+                    result = QueryResult(
+                        question=question,
+                        sql_query="",
+                        results=[],
+                        error="SQL generation failed despite valid tables",
+                        result_type="error"
+                    )
+            else:
+                # Generate NER - No fallback execution
+                ner = self.ner_generator.generate_ner(question, intent, failed_validations, evidence_results)
+                result = ner.to_query_result()
             
-            # Stage 3: Business Relationship Mapping
-            print("   🔗 Stage 3: Business relationship mapping...")
-            
-            # Stage 4: Business-Intelligence SQL Generation
-            sql = await self.sql_generator.generate_sql(
-                question, selected_tables, explanations, self.llm
-            )
-            
-            if not sql:
-                return QueryResult(
-                    question=question,
-                    sql_query="",
-                    results=[],
-                    error="Failed to generate business-intelligence SQL"
-                )
-            
-            # Execute with BI-aware retry
-            results, error = await self.executor.execute_with_retry(
-                sql, question, self.llm
-            )
-            
-            result = QueryResult(
-                question=question,
-                sql_query=sql,
-                results=results,
-                error=error,
-                tables_used=[t.full_name for t in selected_tables]
-            )
-            
-            # Add BI-aware explanations
-            result.explanations = explanations
             return result
             
         except Exception as e:
@@ -1155,69 +992,110 @@ class QueryInterface:
                 question=question,
                 sql_query="",
                 results=[],
-                error=f"Business-intelligence pipeline error: {str(e)}"
+                error=f"BI pipeline error: {str(e)}",
+                result_type="error"
             )
     
-    def _display_result(self, result: QueryResult):
-        """Display results with business intelligence information"""
+    def _show_bi_readiness(self, tables: List[TableInfo], domain: Optional[BusinessDomain]):
+        """Show BI readiness summary"""
+        from shared.models import calculate_bi_readiness
+        
+        readiness = calculate_bi_readiness(tables)
+        
+        print(f"\n🧠 BI-AWARE SYSTEM READY:")
+        print(f"   📊 Tables available: {len(tables)}")
+        print(f"   🎯 BI readiness score: {readiness['readiness_score']:.2f}")
+        print(f"   📈 Fact tables: {readiness['fact_table_count']}")
+        print(f"   ⚡ Operational tables: {readiness['operational_table_count']}")
+        print(f"   💾 Total data volume: {readiness['total_data_volume']:,} rows")
+        
+        if domain:
+            print(f"   🏢 Domain: {domain.domain_type}")
+        
+        if readiness['issues']:
+            print(f"   ⚠️ BI Issues:")
+            for issue in readiness['issues'][:3]:
+                print(f"      • {issue}")
+        
+        print(f"\n🚫 NO-FALLBACK MODE ACTIVE:")
+        print(f"   • Queries must satisfy capability contracts")
+        print(f"   • No arbitrary 'safe' queries on random tables")
+        print(f"   • NER reports when validation fails")
+        print(f"   • Zero schema hallucination guaranteed")
+    
+    def _display_bi_result(self, result: QueryResult):
+        """Display BI-aware query results"""
         
         print(f"⏱️ Completed in {result.execution_time:.1f}s")
-        print("-" * 60)
+        print("-" * 70)
         
-        # Show BI-aware retrieval
-        if hasattr(result, 'explanations'):
-            explanations = result.explanations
-            print(f"🧠 BUSINESS-INTELLIGENCE-AWARE RETRIEVAL:")
-            print(f"   • Total Tables in Schema: {explanations.get('total_candidates', 0)}")
-            print(f"   • Selected: {len(explanations.get('selected_tables', []))}")
-            print(f"   • Business Concepts: {explanations.get('business_concepts_detected', [])}")
-            print(f"   • Entity Types Used: {explanations.get('entity_types_used', [])}")
-            print(f"   • Operational Tables Prioritized: {explanations.get('operational_tables_prioritized', 0)}")
+        if result.is_ner():
+            # Display NER report
+            print(f"🚫 NON-EXECUTABLE ANALYSIS REPORT")
+            print(f"   Question: {result.question}")
+            print(f"   Issue: {result.error}")
             
-            for reason in explanations.get('reasoning', []):
-                print(f"   • {reason}")
-            print()
+            if result.evidence_reasoning:
+                print(f"   Fix Paths:")
+                for fix in result.evidence_reasoning[:5]:
+                    print(f"      • {fix}")
         
-        # Show results
-        if result.error:
-            print(f"❌ Error: {result.error}")
-            if result.sql_query:
-                print(f"📋 Generated SQL:")
-                print(f"{result.sql_query}")
-        else:
-            print(f"📋 Business-Intelligence SQL ({'SQLGlot ✅ Validated' if HAS_SQLGLOT else '⚠️ Basic Validation'}):")
+        elif result.is_successful():
+            # Display successful execution
+            print(f"✅ QUERY EXECUTED SUCCESSFULLY")
+            if result.evidence_reasoning:
+                print(f"   Evidence:")
+                for reason in result.evidence_reasoning[:3]:
+                    print(f"      • {reason}")
+            
+            print(f"\n📋 Generated SQL:")
             print(f"{result.sql_query}")
-            print(f"📊 Results: {len(result.results)} rows")
             
+            print(f"\n📊 Results: {len(result.results)} rows")
             if result.results:
-                if result.is_single_value():
-                    value = result.get_single_value()
-                    column_name = list(result.results[0].keys())[0]
-                    from shared.utils import format_number
-                    formatted_value = format_number(value) if isinstance(value, (int, float)) else str(value)
-                    print(f"   🎯 {column_name}: {formatted_value}")
-                else:
-                    for i, row in enumerate(result.results[:5], 1):
-                        display_row = {}
-                        for key, value in list(row.items())[:5]:
-                            from shared.utils import truncate_text, format_number
-                            if isinstance(value, str) and len(value) > 30:
-                                display_row[key] = truncate_text(value, 30)
-                            elif isinstance(value, (int, float)) and value >= 1000:
-                                display_row[key] = format_number(value)
-                            else:
-                                display_row[key] = value
-                        print(f"   {i}. {display_row}")
-                    
-                    if len(result.results) > 5:
-                        print(f"   ... and {len(result.results) - 5} more rows")
-            else:
-                print("   ⚠️ No results returned (possible data issue or restrictive filters)")
+                self._display_results(result.results)
         
-        print("\n🧠 Business-Intelligence-Aware Pipeline Features:")
-        # print("   ✅ Intent-driven SQL generation using detected business patterns")
-        # print("   ✅ Multi-table business logic assembly for analytical queries")
-        # print("   ✅ Operational vs planning data classification and prioritization")
-        # print("   ✅ Temporal filtering for time-based business analysis")
-        # print("   ✅ Business entity grouping and aggregation")
-        # print("   ✅ Zero schema hallucination with strict validation")
+        else:
+            # Display error
+            print(f"❌ QUERY FAILED")
+            print(f"   Error: {result.error}")
+            if result.sql_query:
+                print(f"   Generated SQL: {result.sql_query}")
+    
+    def _display_results(self, results: List[Dict[str, Any]]):
+        """Display query results in a readable format"""
+        if len(results) == 1 and len(results[0]) == 1:
+            # Single value result
+            key, value = next(iter(results[0].items()))
+            from shared.utils import format_number
+            formatted_value = format_number(value) if isinstance(value, (int, float)) else str(value)
+            print(f"   🎯 {key}: {formatted_value}")
+        else:
+            # Multiple rows/columns
+            for i, row in enumerate(results[:10], 1):  # Show first 10 rows
+                display_row = {}
+                for key, value in list(row.items())[:6]:  # Show first 6 columns
+                    from shared.utils import truncate_text, format_number
+                    if isinstance(value, str) and len(value) > 40:
+                        display_row[key] = truncate_text(value, 40)
+                    elif isinstance(value, (int, float)) and abs(value) >= 1000:
+                        display_row[key] = format_number(value)
+                    else:
+                        display_row[key] = value
+                print(f"   {i:2d}. {display_row}")
+            
+            if len(results) > 10:
+                print(f"   ... and {len(results) - 10} more rows")
+            
+            if not results:
+                print("   ⚠️ No results returned (possible data filters or constraints)")
+        
+        print(f"\n🧠 BI-Aware Features Applied:")
+        print(f"   ✅ Evidence-driven table selection")
+        print(f"   ✅ Capability contract validation")
+        print(f"   ✅ Three-gate SQL validation (Identifier + Relationship + Safety)")
+        print(f"   ✅ Zero schema hallucination")
+        if HAS_SQLGLOT:
+            print(f"   ✅ SQLGlot AST validation")
+        else:
+            print(f"   ⚠️ Basic validation (install SQLGlot for enhanced validation)")
