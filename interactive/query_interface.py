@@ -37,7 +37,7 @@ class LLMClient:
             azure_deployment=config.deployment_name,
             api_version=config.api_version,
             request_timeout=60,
-            temperature=1.0  # Use default temperature (README note about API errors)
+            # Do not set temperature - use default (README note about API errors)
         )
     
     async def analyze(self, system_prompt: str, user_prompt: str) -> str:
@@ -162,7 +162,7 @@ class TableSelector:
                 first_row = table.sample_data[0]
                 sample_items = []
                 for key, value in list(first_row.items())[:3]:
-                    if key != "__edge":
+                    if key != "__ordering":  # Skip our metadata
                         sample_items.append(f"{key}={value}")
                 sample_preview = ", ".join(sample_items)
             
@@ -426,86 +426,99 @@ Generate SQL using the proven business logic:
     
     async def _generate_from_tables(self, question: str, tables: List[TableInfo], 
                                   intent: Dict, llm: LLMClient) -> str:
-        """Generate SQL from table analysis"""
+        """Generate SQL from table analysis with strict column enforcement"""
         
         context = self._build_context(tables, intent)
         
-        system_prompt = f"""You are an expert SQL generator.
+        system_prompt = f"""You are an expert SQL generator with STRICT COLUMN ENFORCEMENT.
 
 CRITICAL REQUIREMENTS:
-1. Use EXACT table and column names from the context
-2. Return only SELECT statements with appropriate TOP limits
-3. Include proper date filtering when specified
+1. Use ONLY the exact column names shown in brackets: [ColumnName]
+2. NEVER invent or guess column names - only use what's provided
+3. Return only SELECT statements with proper TOP limits
+4. If you cannot find suitable columns, use simple COUNT(*) queries
 
-AVAILABLE TABLES:
+AVAILABLE TABLES WITH EXACT COLUMNS:
 {context}"""
         
         user_prompt = f"""
 QUESTION: "{question}"
 
-INTENT:
-- Aggregation: {intent.get('aggregation', 'none')}
-- Date Filter: {intent.get('date_year', 'none')}
-- Entity Focus: {intent.get('entity_focus', 'general')}
+REQUIREMENTS:
+- Use ONLY the exact column names provided in brackets [ColumnName]
+- Do NOT use generic names like Amount, CustomerID, etc.
+- Look at the actual column names and sample data
+- If looking for revenue/amounts, find columns with money/numeric values
+- If looking for customers, find columns that appear to be customer identifiers
+- Use TOP 10 for top queries
+- Use date columns for time filtering (last 12 months = WHERE YEAR(DateColumn) >= 2024)
 
-Generate SQL that answers the question precisely.
-If date filtering is needed, use: WHERE YEAR(date_column) = {intent.get('date_year', 2025)}
-
-Return only the SQL query:
+Generate SQL using ONLY the provided column names:
 """
         
         response = await llm.analyze(system_prompt, user_prompt)
         return clean_sql_query(response)
     
     def _build_context(self, tables: List[TableInfo], intent: Dict) -> str:
-        """Build context for SQL generation (DRY principle)"""
+        """Build strict context with ONLY actual columns (No-Hallucination Rule)"""
         context = []
         
+        context.append("STRICT COLUMN ENFORCEMENT - USE ONLY THESE EXACT NAMES:")
+        context.append("=" * 60)
+        
         for table in tables:
-            context.append(f"TABLE: {table.full_name}")
+            context.append(f"\nTABLE: {table.full_name}")
             context.append(f"  Entity: {getattr(table, 'entity_type', 'Unknown')}")
             context.append(f"  Rows: {table.row_count:,}")
             
-            # Show key columns
-            columns = []
-            for col in table.columns[:6]:
+            # Show ALL columns with exact names and types
+            context.append(f"  EXACT COLUMNS (use these names exactly):")
+            for col in table.columns:
                 col_name = col.get('name', '')
                 col_type = col.get('data_type', '')
-                columns.append(f"{col_name} ({col_type})")
+                is_nullable = col.get('is_nullable', True)
+                nullable_str = "NULL" if is_nullable else "NOT NULL"
+                context.append(f"    - [{col_name}] ({col_type}, {nullable_str})")
             
-            context.append(f"  Columns: {', '.join(columns)}")
-            
-            # Show sample data
+            # Show actual sample values with real column names
             if table.sample_data:
+                context.append(f"  ACTUAL SAMPLE DATA:")
                 sample = table.sample_data[0]
-                sample_preview = ', '.join([f"{k}: {v}" for k, v in list(sample.items())[:3] 
-                                          if k != "__edge"])
-                context.append(f"  Sample: {sample_preview}")
+                for key, value in sample.items():
+                    if key != "__ordering":
+                        context.append(f"    - [{key}]: {repr(value)}")
         
+        context.append(f"\nCRITICAL: Only use column names listed above with exact brackets: [ColumnName]")
         return '\n'.join(context)
     
     def _enhance_sql_with_intent(self, sql: str, intent: Dict, tables: List[TableInfo]) -> str:
-        """Enhance SQL to match intent"""
+        """Enhance SQL to match intent using only actual discovered columns"""
         if not sql:
             return sql
         
-        # Add missing date filtering
+        # Add missing date filtering using actual column names only
         if intent.get('has_date_filter') and intent.get('date_year'):
             year = intent['date_year']
             
             if f'YEAR(' not in sql.upper() and str(year) not in sql:
-                # Find date columns
-                date_columns = []
+                # Find actual date columns from discovered schema
+                actual_date_columns = []
                 for table in tables:
                     for col in table.columns:
-                        col_name = col.get('name', '').lower()
-                        if any(d in col_name for d in ['date', 'time', 'created']):
-                            date_columns.append(col.get('name'))
+                        col_name = col.get('name', '')
+                        col_type = col.get('data_type', '').lower()
+                        
+                        # Check if it's actually a date/datetime column by type
+                        if any(date_type in col_type for date_type in ['date', 'time', 'timestamp']):
+                            actual_date_columns.append(col_name)
+                        # Or if column name suggests it's a date
+                        elif any(pattern in col_name.lower() for pattern in ['date', 'time', 'created', 'modified', 'timestamp']):
+                            actual_date_columns.append(col_name)
                 
-                if date_columns:
-                    date_col = date_columns[0]
+                if actual_date_columns:
+                    date_col = actual_date_columns[0]
                     if 'WHERE' in sql.upper():
-                        sql = sql.replace('WHERE', f'WHERE YEAR({date_col}) = {year} AND ', 1)
+                        sql = sql.replace('WHERE', f'WHERE YEAR([{date_col}]) >= {year - 1} AND ', 1)
                     else:
                         # Insert before ORDER BY or at end
                         insert_pos = len(sql)
@@ -514,9 +527,9 @@ Return only the SQL query:
                             if pos != -1:
                                 insert_pos = min(insert_pos, pos)
                         
-                        sql = sql[:insert_pos].rstrip() + f' WHERE YEAR({date_col}) = {year}' + sql[insert_pos:]
+                        sql = sql[:insert_pos].rstrip() + f' WHERE YEAR([{date_col}]) >= {year - 1}' + sql[insert_pos:]
         
-        # Ensure TOP limit for non-aggregation queries
+        # Ensure TOP limit for non-aggregation queries (but don't modify if already present)
         if intent.get('aggregation') != 'count' and 'TOP' not in sql.upper():
             limit = intent.get('limit', 100)
             if sql.upper().startswith('SELECT'):
@@ -525,9 +538,9 @@ Return only the SQL query:
         return sql
     
     def _validate_sql_with_sqlglot(self, sql: str) -> Tuple[bool, str]:
-        """Validate SQL using SQLGlot AST (README requirement)"""
+        """Validate SQL using SQLGlot AST with strict column checking (README requirement)"""
         if not HAS_SQLGLOT:
-            return validate_sql_safety(sql), "Basic validation (SQLGlot not available)"
+            return self._validate_sql_basic(sql), "Basic validation (SQLGlot not available)"
         
         if not sql.strip():
             return False, "Empty SQL query"
@@ -557,35 +570,91 @@ Return only the SQL query:
             if not isinstance(parsed, sqlglot.expressions.Select):
                 return False, "Only SELECT statements allowed"
             
+            # CRITICAL: Validate all columns exist in discovered schema
+            column_validation = self._validate_columns_exist(parsed)
+            if not column_validation[0]:
+                return False, f"Column validation failed: {column_validation[1]}"
+            
             return True, "SQL validated successfully"
             
         except Exception as e:
             return False, f"SQLGlot validation error: {str(e)}"
     
+    def _validate_sql_basic(self, sql: str) -> bool:
+        """Basic SQL validation when SQLGlot not available"""
+        if not sql.strip():
+            return False
+        
+        sql_upper = sql.upper().strip()
+        
+        # Must start with SELECT
+        if not sql_upper.startswith('SELECT'):
+            return False
+        
+        # Check for dangerous operations
+        dangerous_keywords = [
+            'INSERT', 'UPDATE', 'DELETE', 'DROP', 'CREATE', 'ALTER', 
+            'TRUNCATE', 'MERGE', 'EXEC', 'EXECUTE', 'SP_', 'XP_'
+        ]
+        
+        return not any(keyword in sql_upper for keyword in dangerous_keywords)
+    
+    def _validate_columns_exist(self, parsed) -> Tuple[bool, str]:
+        """Validate that all referenced columns exist in discovered tables"""
+        try:
+            # Extract all column references
+            referenced_columns = set()
+            referenced_tables = set()
+            
+            for column in parsed.find_all(sqlglot.expressions.Column):
+                if column.this:
+                    col_name = str(column.this).strip('[]')
+                    referenced_columns.add(col_name.lower())
+                    
+                    if column.table:
+                        table_name = str(column.table).strip('[]')
+                        referenced_tables.add(table_name.lower())
+            
+            # Extract table references
+            for table in parsed.find_all(sqlglot.expressions.Table):
+                if table.this:
+                    table_name = str(table.this).strip('[]')
+                    referenced_tables.add(table_name.lower())
+            
+            # Check if referenced columns exist in our allowed identifiers
+            for col_name in referenced_columns:
+                if col_name not in self.allowed_identifiers:
+                    return False, f"Column '{col_name}' not found in discovered schema"
+            
+            return True, "All columns validated"
+            
+        except Exception as e:
+            return False, f"Column validation error: {str(e)}"
+    
     def _generate_safe_fallback_sql(self, tables: List[TableInfo], intent: Dict) -> str:
-        """Generate guaranteed safe SQL (YAGNI - simple fallback)"""
+        """Generate guaranteed safe SQL using only actual discovered columns"""
         if not tables:
             return ""
         
         # Use table with most data
         table = max(tables, key=lambda t: t.row_count)
         
-        # Find safe columns
-        safe_columns = []
-        for col in table.columns:
-            col_type = col.get('data_type', '').lower()
-            if any(safe_type in col_type for safe_type in ['int', 'varchar', 'nvarchar', 'datetime']):
-                safe_columns.append(col.get('name'))
+        # Get actual columns from the discovered schema
+        actual_columns = [col.get('name') for col in table.columns if col.get('name')]
+        
+        if not actual_columns:
+            return f"SELECT COUNT(*) as total_count FROM {table.full_name}"
         
         if intent.get('aggregation') == 'count':
             return f"SELECT COUNT(*) as total_count FROM {table.full_name}"
         else:
             limit = min(intent.get('limit', 100), 1000)
-            if safe_columns:
-                columns_str = ', '.join([f"[{col}]" for col in safe_columns[:5]])
-                return f"SELECT TOP {limit} {columns_str} FROM {table.full_name}"
-            else:
-                return f"SELECT TOP {limit} * FROM {table.full_name}"
+            
+            # Use only the first few actual columns (avoid SELECT *)
+            safe_columns = actual_columns[:5]
+            columns_str = ', '.join([f"[{col}]" for col in safe_columns])
+            
+            return f"SELECT TOP {limit} {columns_str} FROM {table.full_name}"
 
 class QueryExecutor:
     """Execution with retry (README Pattern A - Execution-Guided)"""

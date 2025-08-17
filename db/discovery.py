@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-4-Stage Query Pipeline - Simple, Readable, Maintainable
-Following README: Constrained + EG Text-to-SQL, Schema-first retrieval, Enterprise guardrails
+Database Discovery - Simple, Readable, Maintainable
+Following README: Schema + samples + view/SP analysis with SQLGlot
 DRY, SOLID, YAGNI principles
 """
 
@@ -11,625 +11,43 @@ import json
 import pyodbc
 import time
 from typing import List, Dict, Any, Optional, Tuple
+from datetime import datetime
+from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# SQLGlot for AST validation (README requirement)
+# SQLGlot for SQL parsing (README requirement)
 try:
     import sqlglot
     HAS_SQLGLOT = True
 except ImportError:
     HAS_SQLGLOT = False
 
-from langchain_openai import AzureChatOpenAI
-from langchain.schema import HumanMessage, SystemMessage
-
 from shared.config import Config
-from shared.models import TableInfo, BusinessDomain, Relationship, QueryResult
-from shared.utils import parse_json_response, clean_sql_query, safe_database_value, validate_sql_safety
+from shared.models import TableInfo, DatabaseObject, Relationship
+from shared.utils import safe_database_value, should_exclude_table, normalize_table_name
 
-class LLMClient:
-    """LLM communication - Single responsibility (SOLID)"""
-    
-    def __init__(self, config: Config):
-        self.config = config
-        self.llm = AzureChatOpenAI(
-            azure_endpoint=config.azure_endpoint,
-            api_key=config.api_key,
-            azure_deployment=config.deployment_name,
-            api_version=config.api_version,
-            request_timeout=60,
-            # temperature=1.0  # Use default temperature (README note about API errors)
-        )
-    
-    async def analyze(self, system_prompt: str, user_prompt: str) -> str:
-        """Send analysis request to LLM"""
-        try:
-            messages = [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=user_prompt)
-            ]
-            response = await asyncio.to_thread(self.llm.invoke, messages)
-            return response.content
-        except Exception as e:
-            print(f"   ⚠️ LLM error: {e}")
-            return ""
-
-class TableSelector:
-    """Stage 2: Table selection with explainable reasoning (README Pattern B)"""
-    
-    def __init__(self, tables: List[TableInfo]):
-        self.tables = tables
-    
-    async def select_tables(self, question: str, llm: LLMClient) -> Tuple[List[TableInfo], Dict]:
-        """Select relevant tables with explanations"""
-        print("   📋 Stage 2: Table selection with explanations...")
-        
-        explanations = {
-            'total_candidates': len(self.tables),
-            'selected_tables': [],
-            'reasoning': []
-        }
-        
-        # Lexical filtering first
-        candidates = self._lexical_filter(question, explanations)
-        
-        # LLM selection if too many candidates
-        if len(candidates) > 8:
-            selected = await self._llm_selection(question, candidates, llm, explanations)
-        else:
-            selected = candidates
-            explanations['reasoning'].append(f"Used all {len(candidates)} lexically matched tables")
-        
-        explanations['selected_tables'] = [t.full_name for t in selected]
-        
-        print(f"      ✅ Selected {len(selected)} tables from {len(candidates)} candidates")
-        return selected, explanations
-    
-    def _lexical_filter(self, question: str, explanations: Dict) -> List[TableInfo]:
-        """Filter tables using lexical matching"""
-        q_lower = question.lower()
-        question_words = [w for w in q_lower.split() if len(w) > 2]
-        
-        scored_tables = []
-        
-        for table in self.tables:
-            score = self._calculate_table_score(table, question_words, q_lower)
-            
-            if score > 0:
-                scored_tables.append((table, score))
-        
-        # Sort by score and return top candidates
-        scored_tables.sort(key=lambda x: x[1], reverse=True)
-        
-        # Dynamic selection based on score distribution
-        if len(scored_tables) > 15:
-            candidates = [table for table, score in scored_tables if score > 2.0][:12]
-        else:
-            candidates = [table for table, _ in scored_tables[:12]]
-        
-        explanations['reasoning'].append(f"Lexical filtering: {len(candidates)} relevant tables")
-        return candidates
-    
-    def _calculate_table_score(self, table: TableInfo, question_words: List[str], q_lower: str) -> float:
-        """Calculate relevance score for table (DRY principle)"""
-        score = 0.0
-        
-        # Table name matching
-        table_name_lower = table.name.lower()
-        name_matches = [w for w in question_words if w in table_name_lower]
-        if name_matches:
-            score += len(name_matches) * 3.0
-        
-        # Entity type matching
-        entity_type = getattr(table, 'entity_type', '').lower()
-        if entity_type != 'unknown':
-            entity_keywords = {
-                'customer': ['customer', 'client', 'user'],
-                'payment': ['payment', 'paid', 'revenue', 'financial'],
-                'order': ['order', 'sale', 'purchase'],
-                'product': ['product', 'item', 'inventory']
-            }
-            
-            for entity, keywords in entity_keywords.items():
-                if entity in entity_type and any(kw in q_lower for kw in keywords):
-                    score += 2.0
-        
-        # Column matching
-        column_names = [col.get('name', '').lower() for col in table.columns]
-        for word in question_words:
-            matching_cols = [col for col in column_names if word in col]
-            if matching_cols:
-                score += len(matching_cols) * 1.0
-        
-        # Business role bonus
-        if getattr(table, 'business_role', '') == 'Core':
-            score += 1.0
-        
-        # Data availability bonus
-        if table.row_count > 0:
-            score += 0.5
-        
-        return score
-    
-    async def _llm_selection(self, question: str, candidates: List[TableInfo], 
-                           llm: LLMClient, explanations: Dict) -> List[TableInfo]:
-        """Use LLM for table selection when needed"""
-        
-        # Prepare summaries
-        table_summaries = []
-        for table in candidates:
-            sample_preview = ""
-            if table.sample_data:
-                first_row = table.sample_data[0]
-                sample_items = []
-                for key, value in list(first_row.items())[:3]:
-                    if key != "__edge":
-                        sample_items.append(f"{key}={value}")
-                sample_preview = ", ".join(sample_items)
-            
-            table_summaries.append({
-                'table_name': table.full_name,
-                'entity_type': getattr(table, 'entity_type', 'Unknown'),
-                'business_role': getattr(table, 'business_role', 'Unknown'),
-                'row_count': table.row_count,
-                'key_columns': [col.get('name') for col in table.columns[:4]],
-                'sample_data': sample_preview
-            })
-        
-        system_prompt = """You are a database analyst. Select the most relevant tables for the user question.
-Focus on tables that directly relate to what the user is asking about."""
-        
-        user_prompt = f"""
-QUESTION: "{question}"
-
-CANDIDATE TABLES:
-{json.dumps(table_summaries, indent=2)}
-
-Select the 6 most relevant tables for answering this question.
-Look at entity types, sample data, and column names.
-
-Respond with JSON:
-{{
-  "selected_tables": ["[schema].[table1]", "[schema].[table2]"],
-  "reasoning": "Why these tables are most relevant"
-}}
-"""
-        
-        response = await llm.analyze(system_prompt, user_prompt)
-        result = parse_json_response(response)
-        
-        if result and 'selected_tables' in result:
-            selected_names = result['selected_tables']
-            selected = [t for t in candidates if t.full_name in selected_names]
-            explanations['reasoning'].append(f"LLM selection: {result.get('reasoning', 'Semantic relevance')}")
-            return selected
-        
-        # Fallback
-        explanations['reasoning'].append("LLM selection failed, using top scored tables")
-        return candidates[:6]
-
-class SQLGenerator:
-    """Stage 4: Constrained SQL generation (README Pattern A)"""
-    
-    def __init__(self, config: Config):
-        self.config = config
-        self.view_patterns = self._load_view_patterns()
-        self.allowed_identifiers = self._build_allowed_identifiers()
-    
-    def _load_view_patterns(self) -> List[Dict]:
-        """Load proven view patterns for business logic"""
-        try:
-            structure_file = self.config.get_cache_path("database_structure.json")
-            if structure_file.exists():
-                with open(structure_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                
-                patterns = []
-                view_info = data.get('view_info', {})
-                
-                for view_name, view_data in view_info.items():
-                    if view_data.get('execution_success') and view_data.get('definition'):
-                        patterns.append({
-                            'view_name': view_name,
-                            'definition': view_data['definition'],
-                            'sample_data': view_data.get('sample_data', []),
-                            'proven_working': True
-                        })
-                
-                return patterns
-        except Exception:
-            pass
-        return []
-    
-    def _build_allowed_identifiers(self) -> set:
-        """Build allowed identifiers from database structure"""
-        identifiers = set()
-        
-        try:
-            structure_file = self.config.get_cache_path("database_structure.json")
-            if structure_file.exists():
-                with open(structure_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                
-                # Add table and column names
-                for table_data in data.get('tables', []):
-                    full_name = table_data.get('full_name', '')
-                    name = table_data.get('name', '')
-                    schema = table_data.get('schema', '')
-                    
-                    if full_name:
-                        identifiers.add(full_name.lower())
-                    if schema and name:
-                        identifiers.add(f"{schema}.{name}".lower())
-                        identifiers.add(f"[{schema}].[{name}]".lower())
-                    if name:
-                        identifiers.add(name.lower())
-                    
-                    # Add column names
-                    for column in table_data.get('columns', []):
-                        col_name = column.get('name', '')
-                        if col_name:
-                            identifiers.add(col_name.lower())
-                            identifiers.add(f"[{col_name}]".lower())
-        except Exception:
-            pass
-        
-        return identifiers
-    
-    async def generate_sql(self, question: str, tables: List[TableInfo], 
-                          explanations: Dict, llm: LLMClient) -> str:
-        """Generate constrained SQL with validation"""
-        print("   ⚡ Stage 4: Constrained SQL generation...")
-        
-        # Analyze intent
-        intent = self._analyze_intent(question)
-        
-        # Find relevant view patterns
-        relevant_patterns = self._find_relevant_view_patterns(question, tables)
-        
-        # Generate SQL
-        if relevant_patterns:
-            print(f"      📋 Using {len(relevant_patterns)} proven view patterns")
-            sql = await self._generate_with_view_patterns(question, tables, relevant_patterns, intent, llm)
-        else:
-            sql = await self._generate_from_tables(question, tables, intent, llm)
-        
-        # Enhance with intent
-        sql = self._enhance_sql_with_intent(sql, intent, tables)
-        
-        # SQLGlot validation (README requirement)
-        is_valid, validation_msg = self._validate_sql_with_sqlglot(sql)
-        
-        if not is_valid:
-            print(f"      ⚠️ SQLGlot validation failed: {validation_msg}")
-            sql = self._generate_safe_fallback_sql(tables, intent)
-            print(f"      ✅ Using safe fallback SQL")
-        else:
-            print(f"      ✅ SQL passed SQLGlot validation")
-        
-        return sql
-    
-    def _analyze_intent(self, question: str) -> Dict:
-        """Analyze query intent (YAGNI - simple analysis)"""
-        q_lower = question.lower()
-        
-        intent = {
-            'aggregation': None,
-            'limit': 100,
-            'has_date_filter': False,
-            'date_year': None,
-            'entity_focus': None
-        }
-        
-        # Detect aggregation
-        if any(w in q_lower for w in ['how many', 'count', 'number of']):
-            intent['aggregation'] = 'count'
-        elif any(w in q_lower for w in ['total', 'sum']):
-            intent['aggregation'] = 'sum'
-        elif any(w in q_lower for w in ['average', 'avg']):
-            intent['aggregation'] = 'avg'
-        
-        # Extract limits
-        import re
-        limit_match = re.search(r'top\s+(\d+)|first\s+(\d+)|(\d+)\s+most', q_lower)
-        if limit_match:
-            intent['limit'] = int(limit_match.group(1) or limit_match.group(2) or limit_match.group(3))
-        
-        # Detect date filtering
-        year_match = re.search(r'(20\d{2})', question)
-        if year_match:
-            intent['has_date_filter'] = True
-            intent['date_year'] = int(year_match.group(1))
-        elif any(w in q_lower for w in ['this year', 'current year', '2025']):
-            intent['has_date_filter'] = True
-            intent['date_year'] = 2025
-        
-        # Entity focus
-        if any(w in q_lower for w in ['customer', 'client']):
-            intent['entity_focus'] = 'customer'
-        elif any(w in q_lower for w in ['payment', 'paid', 'revenue']):
-            intent['entity_focus'] = 'payment'
-        elif any(w in q_lower for w in ['order', 'sale']):
-            intent['entity_focus'] = 'order'
-        
-        return intent
-    
-    def _find_relevant_view_patterns(self, question: str, tables: List[TableInfo]) -> List[Dict]:
-        """Find relevant view patterns"""
-        if not self.view_patterns:
-            return []
-        
-        q_lower = question.lower()
-        table_names = [t.full_name.lower() for t in tables]
-        relevant = []
-        
-        for pattern in self.view_patterns:
-            relevance_score = 0.0
-            
-            # Check if pattern uses our selected tables
-            definition = pattern.get('definition', '').lower()
-            table_overlap = sum(1 for table_name in table_names 
-                              if any(part in definition for part in table_name.split('.')))
-            relevance_score += table_overlap * 2.0
-            
-            # Business keyword matching
-            if any(keyword in q_lower for keyword in ['customer', 'payment', 'revenue']):
-                if any(keyword in definition for keyword in ['customer', 'payment', 'revenue']):
-                    relevance_score += 1.0
-            
-            if relevance_score > 1.0:
-                pattern['relevance_score'] = relevance_score
-                relevant.append(pattern)
-        
-        relevant.sort(key=lambda x: x['relevance_score'], reverse=True)
-        return relevant[:2]  # Top 2 patterns
-    
-    async def _generate_with_view_patterns(self, question: str, tables: List[TableInfo], 
-                                         patterns: List[Dict], intent: Dict, llm: LLMClient) -> str:
-        """Generate SQL using proven view patterns"""
-        
-        best_pattern = patterns[0]
-        view_definition = best_pattern['definition']
-        
-        # Build context
-        context = self._build_context(tables, intent)
-        
-        system_prompt = f"""You are an expert SQL generator using PROVEN business patterns from database views.
-
-CRITICAL: Adapt the proven view pattern below to answer the user's question.
-
-PROVEN VIEW PATTERN:
-{view_definition[:500]}...
-
-AVAILABLE TABLES:
-{context}
-
-CONSTRAINTS:
-1. Use the PROVEN join logic from the view definition
-2. Adapt SELECT and WHERE clauses for the user's question  
-3. Use EXACT table and column names from available tables
-4. Return only SELECT statements"""
-        
-        user_prompt = f"""
-USER QUESTION: "{question}"
-
-INTENT:
-- Aggregation: {intent.get('aggregation', 'none')}
-- Date Filter: {intent.get('date_year', 'none')}
-- Entity Focus: {intent.get('entity_focus', 'general')}
-
-Adapt the proven view pattern to answer this question.
-Generate SQL using the proven business logic:
-"""
-        
-        response = await llm.analyze(system_prompt, user_prompt)
-        return clean_sql_query(response)
-    
-    async def _generate_from_tables(self, question: str, tables: List[TableInfo], 
-                                  intent: Dict, llm: LLMClient) -> str:
-        """Generate SQL from table analysis"""
-        
-        context = self._build_context(tables, intent)
-        
-        system_prompt = f"""You are an expert SQL generator.
-
-CRITICAL REQUIREMENTS:
-1. Use EXACT table and column names from the context
-2. Return only SELECT statements with appropriate TOP limits
-3. Include proper date filtering when specified
-
-AVAILABLE TABLES:
-{context}"""
-        
-        user_prompt = f"""
-QUESTION: "{question}"
-
-INTENT:
-- Aggregation: {intent.get('aggregation', 'none')}
-- Date Filter: {intent.get('date_year', 'none')}
-- Entity Focus: {intent.get('entity_focus', 'general')}
-
-Generate SQL that answers the question precisely.
-If date filtering is needed, use: WHERE YEAR(date_column) = {intent.get('date_year', 2025)}
-
-Return only the SQL query:
-"""
-        
-        response = await llm.analyze(system_prompt, user_prompt)
-        return clean_sql_query(response)
-    
-    def _build_context(self, tables: List[TableInfo], intent: Dict) -> str:
-        """Build context for SQL generation (DRY principle)"""
-        context = []
-        
-        for table in tables:
-            context.append(f"TABLE: {table.full_name}")
-            context.append(f"  Entity: {getattr(table, 'entity_type', 'Unknown')}")
-            context.append(f"  Rows: {table.row_count:,}")
-            
-            # Show key columns
-            columns = []
-            for col in table.columns[:6]:
-                col_name = col.get('name', '')
-                col_type = col.get('data_type', '')
-                columns.append(f"{col_name} ({col_type})")
-            
-            context.append(f"  Columns: {', '.join(columns)}")
-            
-            # Show sample data
-            if table.sample_data:
-                sample = table.sample_data[0]
-                sample_preview = ', '.join([f"{k}: {v}" for k, v in list(sample.items())[:3] 
-                                          if k != "__edge"])
-                context.append(f"  Sample: {sample_preview}")
-        
-        return '\n'.join(context)
-    
-    def _enhance_sql_with_intent(self, sql: str, intent: Dict, tables: List[TableInfo]) -> str:
-        """Enhance SQL to match intent"""
-        if not sql:
-            return sql
-        
-        # Add missing date filtering
-        if intent.get('has_date_filter') and intent.get('date_year'):
-            year = intent['date_year']
-            
-            if f'YEAR(' not in sql.upper() and str(year) not in sql:
-                # Find date columns
-                date_columns = []
-                for table in tables:
-                    for col in table.columns:
-                        col_name = col.get('name', '').lower()
-                        if any(d in col_name for d in ['date', 'time', 'created']):
-                            date_columns.append(col.get('name'))
-                
-                if date_columns:
-                    date_col = date_columns[0]
-                    if 'WHERE' in sql.upper():
-                        sql = sql.replace('WHERE', f'WHERE YEAR({date_col}) = {year} AND ', 1)
-                    else:
-                        # Insert before ORDER BY or at end
-                        insert_pos = len(sql)
-                        for keyword in ['ORDER BY', 'GROUP BY']:
-                            pos = sql.upper().find(keyword)
-                            if pos != -1:
-                                insert_pos = min(insert_pos, pos)
-                        
-                        sql = sql[:insert_pos].rstrip() + f' WHERE YEAR({date_col}) = {year}' + sql[insert_pos:]
-        
-        # Ensure TOP limit for non-aggregation queries
-        if intent.get('aggregation') != 'count' and 'TOP' not in sql.upper():
-            limit = intent.get('limit', 100)
-            if sql.upper().startswith('SELECT'):
-                sql = sql.replace('SELECT', f'SELECT TOP {limit}', 1)
-        
-        return sql
-    
-    def _validate_sql_with_sqlglot(self, sql: str) -> Tuple[bool, str]:
-        """Validate SQL using SQLGlot AST (README requirement)"""
-        if not HAS_SQLGLOT:
-            return validate_sql_safety(sql), "Basic validation (SQLGlot not available)"
-        
-        if not sql.strip():
-            return False, "Empty SQL query"
-        
-        try:
-            # Parse SQL to AST
-            parsed = sqlglot.parse_one(sql, dialect="tsql")
-            
-            if not parsed:
-                return False, "Failed to parse SQL"
-            
-            # Check for dangerous operations
-            dangerous_nodes = [
-                sqlglot.expressions.Insert,
-                sqlglot.expressions.Update, 
-                sqlglot.expressions.Delete,
-                sqlglot.expressions.Drop,
-                sqlglot.expressions.Create,
-                sqlglot.expressions.Alter
-            ]
-            
-            for dangerous_node in dangerous_nodes:
-                if parsed.find(dangerous_node):
-                    return False, "Dangerous SQL operations detected"
-            
-            # Must be SELECT statement
-            if not isinstance(parsed, sqlglot.expressions.Select):
-                return False, "Only SELECT statements allowed"
-            
-            return True, "SQL validated successfully"
-            
-        except Exception as e:
-            return False, f"SQLGlot validation error: {str(e)}"
-    
-    def _generate_safe_fallback_sql(self, tables: List[TableInfo], intent: Dict) -> str:
-        """Generate guaranteed safe SQL (YAGNI - simple fallback)"""
-        if not tables:
-            return ""
-        
-        # Use table with most data
-        table = max(tables, key=lambda t: t.row_count)
-        
-        # Find safe columns
-        safe_columns = []
-        for col in table.columns:
-            col_type = col.get('data_type', '').lower()
-            if any(safe_type in col_type for safe_type in ['int', 'varchar', 'nvarchar', 'datetime']):
-                safe_columns.append(col.get('name'))
-        
-        if intent.get('aggregation') == 'count':
-            return f"SELECT COUNT(*) as total_count FROM {table.full_name}"
-        else:
-            limit = min(intent.get('limit', 100), 1000)
-            if safe_columns:
-                columns_str = ', '.join([f"[{col}]" for col in safe_columns[:5]])
-                return f"SELECT TOP {limit} {columns_str} FROM {table.full_name}"
-            else:
-                return f"SELECT TOP {limit} * FROM {table.full_name}"
-
-class QueryExecutor:
-    """Execution with retry (README Pattern A - Execution-Guided)"""
+class DatabaseConnector:
+    """Database connection management - Single responsibility (SOLID)"""
     
     def __init__(self, config: Config):
         self.config = config
     
-    async def execute_with_retry(self, sql: str, question: str, 
-                               llm: LLMClient) -> Tuple[List[Dict], Optional[str]]:
-        """Execute with execution-guided retry"""
-        print("   🔄 Execution with retry...")
+    def get_connection(self):
+        """Get database connection with UTF-8 support"""
+        conn = pyodbc.connect(self.config.get_database_connection_string())
         
-        for attempt in range(self.config.max_retry_attempts + 1):
-            results, error = self._execute_sql(sql)
-            
-            if error is None:
-                if len(results) == 0:
-                    print(f"      ⚠️ Attempt {attempt + 1}: Empty results")
-                    if attempt < self.config.max_retry_attempts:
-                        sql = await self._retry_for_empty_results(sql, question, llm)
-                        continue
-                
-                print(f"      ✅ Success on attempt {attempt + 1}: {len(results)} rows")
-                return results, None
-            else:
-                print(f"      ⚠️ Attempt {attempt + 1} failed: {error}")
-                if attempt < self.config.max_retry_attempts:
-                    sql = await self._retry_for_error(sql, error, question, llm)
-                    continue
+        # UTF-8 support for international characters (README requirement)
+        if self.config.utf8_encoding:
+            conn.setdecoding(pyodbc.SQL_CHAR, encoding='utf-8')
+            conn.setdecoding(pyodbc.SQL_WCHAR, encoding='utf-8')
+            conn.setencoding(encoding='utf-8')
         
-        return [], f"Failed after {self.config.max_retry_attempts + 1} attempts: {error}"
+        return conn
     
-    def _execute_sql(self, sql: str) -> Tuple[List[Dict], Optional[str]]:
-        """Execute SQL with UTF-8 support"""
-        if not sql.strip():
-            return [], "Empty SQL query"
-        
+    def execute_query(self, sql: str) -> List[Dict[str, Any]]:
+        """Execute query and return results"""
         try:
-            with pyodbc.connect(self.config.get_database_connection_string()) as conn:
-                # UTF-8 support (README requirement)
-                conn.setdecoding(pyodbc.SQL_CHAR, encoding='utf-8')
-                conn.setdecoding(pyodbc.SQL_WCHAR, encoding='utf-8')
-                conn.setencoding(encoding='utf-8')
-                
+            with self.get_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(sql)
                 
@@ -644,237 +62,768 @@ class QueryExecutor:
                                 row_dict[columns[i]] = safe_database_value(value)
                         results.append(row_dict)
                     
-                    return results, None
+                    return results
                 else:
-                    return [], None
+                    return []
                     
         except Exception as e:
-            return [], str(e)
+            print(f"   ⚠️ Query failed: {e}")
+            return []
+
+class SchemaAnalyzer:
+    """Schema analysis with SQLGlot integration - Single responsibility (SOLID)"""
     
-    async def _retry_for_error(self, failed_sql: str, error: str, 
-                             question: str, llm: LLMClient) -> str:
-        """Retry with error feedback (Execution-guided)"""
-        
-        system_prompt = "You are an SQL error correction expert. Fix the SQL based on the error message."
-        
-        user_prompt = f"""
-Previous SQL failed with error: {error}
-
-FAILED SQL:
-{failed_sql}
-
-QUESTION: "{question}"
-
-Generate corrected SQL that fixes the error.
-Common fixes:
-- Check column names exist
-- Fix table names  
-- Correct JOIN syntax
-- Fix WHERE conditions
-
-Return only corrected SQL:
-"""
-        
-        response = await llm.analyze(system_prompt, user_prompt)
-        return clean_sql_query(response)
+    def __init__(self, connector: DatabaseConnector):
+        self.connector = connector
     
-    async def _retry_for_empty_results(self, sql: str, question: str, llm: LLMClient) -> str:
-        """Retry for empty results"""
+    def discover_objects(self, exclusion_patterns: List[str]) -> List[DatabaseObject]:
+        """Discover database objects (tables, views)"""
+        print("🔍 Discovering database objects...")
         
-        system_prompt = "You are an SQL optimization expert. Modify SQL to return meaningful results."
+        sql = """
+        SELECT 
+            s.name as schema_name,
+            t.name as table_name,
+            t.type_desc as object_type,
+            ISNULL(p.rows, 0) as estimated_rows
+        FROM sys.tables t
+        INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
+        LEFT JOIN sys.partitions p ON t.object_id = p.object_id AND p.index_id IN (0,1)
         
-        user_prompt = f"""
-Previous SQL returned 0 rows:
-
-{sql}
-
-QUESTION: "{question}"
-
-Modify the SQL to be less restrictive:
-- Remove strict WHERE conditions
-- Use LEFT JOINs instead of INNER JOINs
-- Check if date ranges are reasonable
-- Consider broader criteria
-
-Return modified SQL:
-"""
+        UNION ALL
         
-        response = await llm.analyze(system_prompt, user_prompt)
-        return clean_sql_query(response)
+        SELECT 
+            s.name as schema_name,
+            v.name as table_name,
+            'VIEW' as object_type,
+            0 as estimated_rows
+        FROM sys.views v
+        INNER JOIN sys.schemas s ON v.schema_id = s.schema_id
+        
+        ORDER BY schema_name, table_name
+        """
+        
+        results = self.connector.execute_query(sql)
+        objects = []
+        
+        for row in results:
+            schema = row['schema_name']
+            name = row['table_name']
+            
+            # Apply exclusions
+            if should_exclude_table(name, schema, exclusion_patterns):
+                continue
+            
+            objects.append(DatabaseObject(
+                schema=schema,
+                name=name,
+                object_type=row['object_type'],
+                estimated_rows=row['estimated_rows']
+            ))
+        
+        print(f"   ✅ Found {len(objects)} objects")
+        return objects
+    
+    def get_table_columns(self, schema: str, table: str) -> List[Dict[str, Any]]:
+        """Get column information for table"""
+        sql = """
+        SELECT 
+            c.COLUMN_NAME as name,
+            c.DATA_TYPE as data_type,
+            c.IS_NULLABLE as is_nullable,
+            c.CHARACTER_MAXIMUM_LENGTH as max_length,
+            c.NUMERIC_PRECISION as precision,
+            c.NUMERIC_SCALE as scale
+        FROM INFORMATION_SCHEMA.COLUMNS c
+        WHERE c.TABLE_SCHEMA = ? AND c.TABLE_NAME = ?
+        ORDER BY c.ORDINAL_POSITION
+        """
+        
+        try:
+            with self.connector.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(sql, schema, table)
+                
+                columns = []
+                for row in cursor:
+                    columns.append({
+                        'name': row.name,
+                        'data_type': row.data_type,
+                        'is_nullable': row.is_nullable == 'YES',
+                        'max_length': row.max_length,
+                        'precision': row.precision,
+                        'scale': row.scale
+                    })
+                
+                return columns
+        except Exception:
+            return []
+    
+    def get_table_relationships(self, schema: str, table: str) -> List[str]:
+        """Get foreign key relationships"""
+        sql = """
+        SELECT 
+            kcu.COLUMN_NAME as column_name,
+            kcu.REFERENCED_TABLE_SCHEMA as ref_schema,
+            kcu.REFERENCED_TABLE_NAME as ref_table,
+            kcu.REFERENCED_COLUMN_NAME as ref_column
+        FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu
+        WHERE kcu.TABLE_SCHEMA = ? 
+          AND kcu.TABLE_NAME = ?
+          AND kcu.REFERENCED_TABLE_NAME IS NOT NULL
+        """
+        
+        try:
+            with self.connector.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(sql, schema, table)
+                
+                relationships = []
+                for row in cursor:
+                    ref = f"{row.column_name} -> [{row.ref_schema}].[{row.ref_table}].{row.ref_column}"
+                    relationships.append(ref)
+                
+                return relationships
+        except Exception:
+            return []
 
-class QueryInterface:
-    """4-Stage Pipeline Implementation - Clean interface (README compliant)"""
+class SampleCollector:
+    """Sample data collection following README policy - Single responsibility (SOLID)"""
+    
+    def __init__(self, connector: DatabaseConnector):
+        self.connector = connector
+    
+    def collect_samples(self, table_info: TableInfo) -> List[Dict[str, Any]]:
+        """Collect first 3 and last 3 rows (README requirement)"""
+        try:
+            # Get primary key for ordering
+            pk_column = self._get_primary_key(table_info.schema, table_info.name)
+            
+            if pk_column:
+                return self._collect_ordered_samples(table_info.full_name, pk_column)
+            else:
+                return self._collect_arbitrary_samples(table_info.full_name)
+                
+        except Exception as e:
+            print(f"   ⚠️ Sample collection failed for {table_info.full_name}: {e}")
+            return []
+    
+    def _get_primary_key(self, schema: str, table: str) -> Optional[str]:
+        """Get primary key column for ordering"""
+        sql = """
+        SELECT c.COLUMN_NAME
+        FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS tc
+        JOIN INFORMATION_SCHEMA.KEY_COLUMN_USAGE kcu 
+          ON tc.CONSTRAINT_NAME = kcu.CONSTRAINT_NAME
+         AND tc.TABLE_SCHEMA = kcu.TABLE_SCHEMA
+         AND tc.TABLE_NAME = kcu.TABLE_NAME
+        WHERE tc.TABLE_SCHEMA = ? 
+          AND tc.TABLE_NAME = ?
+          AND tc.CONSTRAINT_TYPE = 'PRIMARY KEY'
+        ORDER BY kcu.ORDINAL_POSITION
+        """
+        
+        try:
+            with self.connector.get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(sql, schema, table)
+                row = cursor.fetchone()
+                return row[0] if row else None
+        except Exception:
+            return None
+    
+    def _collect_ordered_samples(self, full_name: str, pk_column: str) -> List[Dict[str, Any]]:
+        """Collect samples with deterministic ordering (README policy)"""
+        samples = []
+        
+        # First 3 rows (ORDER BY PK ASC)
+        sql_first = f"SELECT TOP (3) * FROM {full_name} ORDER BY [{pk_column}] ASC"
+        first_rows = self.connector.execute_query(sql_first)
+        samples.extend(first_rows)
+        
+        # Last 3 rows (ORDER BY PK DESC, then reverse)
+        sql_last = f"""
+        SELECT * FROM (
+          SELECT TOP (3) * FROM {full_name} ORDER BY [{pk_column}] DESC
+        ) t ORDER BY [{pk_column}] ASC
+        """
+        last_rows = self.connector.execute_query(sql_last)
+        
+        # Avoid duplicates
+        first_pks = {row.get(pk_column) for row in first_rows}
+        for row in last_rows:
+            if row.get(pk_column) not in first_pks:
+                samples.append(row)
+        
+        # Add metadata about ordering
+        for sample in samples:
+            sample['__ordering'] = {
+                'column': pk_column,
+                'deterministic': True
+            }
+        
+        return samples[:6]  # Limit to 6 total
+    
+    def _collect_arbitrary_samples(self, full_name: str) -> List[Dict[str, Any]]:
+        """Collect arbitrary samples when no PK available"""
+        sql = f"SELECT TOP (6) * FROM {full_name}"
+        samples = self.connector.execute_query(sql)
+        
+        # Add metadata about ordering
+        for sample in samples:
+            sample['__ordering'] = {
+                'column': None,
+                'deterministic': False
+            }
+        
+        return samples
+
+class ViewAnalyzer:
+    """View definition analysis with SQLGlot parsing - Single responsibility (SOLID)"""
+    
+    def __init__(self, connector: DatabaseConnector):
+        self.connector = connector
+    
+    def analyze_views(self) -> Dict[str, Dict[str, Any]]:
+        """Analyze views and extract business logic (README requirement)"""
+        if not HAS_SQLGLOT:
+            print("   ⚠️ SQLGlot not available - basic view analysis only")
+            return self._basic_view_analysis()
+        
+        print("🔍 Analyzing views with SQLGlot...")
+        
+        sql = """
+        SELECT 
+            s.name as schema_name,
+            v.name as view_name,
+            m.definition as view_definition
+        FROM sys.views v
+        INNER JOIN sys.schemas s ON v.schema_id = s.schema_id
+        INNER JOIN sys.sql_modules m ON v.object_id = m.object_id
+        WHERE s.name NOT IN ('sys', 'information_schema')
+        ORDER BY s.name, v.name
+        """
+        
+        results = self.connector.execute_query(sql)
+        view_info = {}
+        
+        for row in results:
+            schema = row['schema_name']
+            name = row['view_name']
+            definition = row['view_definition']
+            full_name = f"[{schema}].[{name}]"
+            
+            view_info[full_name] = {
+                'definition': definition,
+                'referenced_objects': [],
+                'parsed_joins': [],
+                'execution_success': False
+            }
+            
+            # Parse with SQLGlot
+            try:
+                parsed = sqlglot.parse_one(definition, dialect="tsql")
+                if parsed:
+                    # Extract referenced tables
+                    tables = self._extract_tables(parsed)
+                    view_info[full_name]['referenced_objects'] = tables
+                    
+                    # Extract joins
+                    joins = self._extract_joins(parsed)
+                    view_info[full_name]['parsed_joins'] = joins
+                    
+                    view_info[full_name]['execution_success'] = True
+            except Exception as e:
+                print(f"   ⚠️ Failed to parse view {full_name}: {e}")
+        
+        print(f"   ✅ Analyzed {len(view_info)} views")
+        return view_info
+    
+    def _basic_view_analysis(self) -> Dict[str, Dict[str, Any]]:
+        """Basic view analysis without SQLGlot"""
+        sql = """
+        SELECT 
+            s.name as schema_name,
+            v.name as view_name,
+            m.definition as view_definition
+        FROM sys.views v
+        INNER JOIN sys.schemas s ON v.schema_id = s.schema_id
+        INNER JOIN sys.sql_modules m ON v.object_id = m.object_id
+        WHERE s.name NOT IN ('sys', 'information_schema')
+        """
+        
+        results = self.connector.execute_query(sql)
+        view_info = {}
+        
+        for row in results:
+            schema = row['schema_name']
+            name = row['view_name']
+            full_name = f"[{schema}].[{name}]"
+            
+            view_info[full_name] = {
+                'definition': row['view_definition'],
+                'referenced_objects': [],
+                'parsed_joins': [],
+                'execution_success': True
+            }
+        
+        return view_info
+    
+    def _extract_tables(self, parsed) -> List[str]:
+        """Extract referenced tables from parsed SQL"""
+        tables = []
+        
+        for table in parsed.find_all(sqlglot.expressions.Table):
+            if table.this:
+                table_name = str(table.this)
+                if table.db:
+                    table_name = f"[{table.db}].[{table_name}]"
+                tables.append(table_name)
+        
+        return list(set(tables))
+    
+    def _extract_joins(self, parsed) -> List[Dict[str, str]]:
+        """Extract JOIN patterns from parsed SQL"""
+        joins = []
+        
+        for join in parsed.find_all(sqlglot.expressions.Join):
+            join_info = {
+                'type': join.side or 'INNER',
+                'condition': str(join.on) if join.on else ''
+            }
+            joins.append(join_info)
+        
+        return joins
+
+class StoredProcedureAnalyzer:
+    """Stored procedure analysis - Single responsibility (SOLID)"""
+    
+    def __init__(self, connector: DatabaseConnector):
+        self.connector = connector
+    
+    def analyze_procedures(self) -> Dict[str, Dict[str, Any]]:
+        """Analyze stored procedures for SELECT statements (README requirement)"""
+        print("🔍 Analyzing stored procedures...")
+        
+        sql = """
+        SELECT 
+            s.name as schema_name,
+            p.name as procedure_name,
+            m.definition as procedure_definition
+        FROM sys.procedures p
+        INNER JOIN sys.schemas s ON p.schema_id = s.schema_id
+        INNER JOIN sys.sql_modules m ON p.object_id = m.object_id
+        WHERE s.name NOT IN ('sys', 'information_schema')
+          AND p.name NOT LIKE 'sp_%'
+          AND p.name NOT LIKE 'xp_%'
+        ORDER BY s.name, p.name
+        """
+        
+        results = self.connector.execute_query(sql)
+        procedure_info = {}
+        
+        for row in results:
+            schema = row['schema_name']
+            name = row['procedure_name']
+            definition = row['procedure_definition']
+            full_name = f"[{schema}].[{name}]"
+            
+            # Analyze procedure text
+            analysis = self._analyze_procedure_text(definition)
+            
+            procedure_info[full_name] = {
+                'has_dynamic_sql': analysis['has_dynamic_sql'],
+                'select_statements': analysis['select_statements'],
+                'parsed_joins': analysis['parsed_joins'],
+                'referenced_objects': analysis['referenced_objects']
+            }
+        
+        print(f"   ✅ Analyzed {len(procedure_info)} procedures")
+        return procedure_info
+    
+    def _analyze_procedure_text(self, definition: str) -> Dict[str, Any]:
+        """Analyze procedure text for SELECT statements (static only)"""
+        analysis = {
+            'has_dynamic_sql': False,
+            'select_statements': [],
+            'parsed_joins': [],
+            'referenced_objects': []
+        }
+        
+        # Check for dynamic SQL
+        definition_lower = definition.lower()
+        if any(pattern in definition_lower for pattern in ['exec(', 'execute(', 'sp_executesql']):
+            analysis['has_dynamic_sql'] = True
+            return analysis  # Skip dynamic SQL as per README
+        
+        # Extract SELECT statements using regex (simple approach)
+        import re
+        select_pattern = r'SELECT\s+.*?(?=;|\bFROM\s+\(|\bUNION\b|\bEXCEPT\b|\bINTERSECT\b|$)'
+        matches = re.findall(select_pattern, definition, re.IGNORECASE | re.DOTALL)
+        
+        for match in matches:
+            clean_select = match.strip()
+            if len(clean_select) > 20:  # Filter out trivial selects
+                analysis['select_statements'].append(clean_select)
+                
+                # Try SQLGlot parsing if available
+                if HAS_SQLGLOT:
+                    try:
+                        parsed = sqlglot.parse_one(clean_select, dialect="tsql")
+                        if parsed:
+                            # Extract joins and tables
+                            joins = self._extract_procedure_joins(parsed)
+                            tables = self._extract_procedure_tables(parsed)
+                            
+                            analysis['parsed_joins'].extend(joins)
+                            analysis['referenced_objects'].extend(tables)
+                    except Exception:
+                        continue
+        
+        return analysis
+    
+    def _extract_procedure_joins(self, parsed) -> List[Dict[str, str]]:
+        """Extract joins from procedure SELECT"""
+        joins = []
+        
+        for join in parsed.find_all(sqlglot.expressions.Join):
+            join_info = {
+                'left': str(join.this) if join.this else '',
+                'right': str(join.expression) if join.expression else '',
+                'type': join.side or 'INNER'
+            }
+            joins.append(join_info)
+        
+        return joins
+    
+    def _extract_procedure_tables(self, parsed) -> List[str]:
+        """Extract tables from procedure SELECT"""
+        tables = []
+        
+        for table in parsed.find_all(sqlglot.expressions.Table):
+            if table.this:
+                table_name = str(table.this)
+                if table.db:
+                    table_name = f"[{table.db}].[{table_name}]"
+                tables.append(table_name)
+        
+        return list(set(tables))
+
+class CacheManager:
+    """Cache management for discovery results - Single responsibility (SOLID)"""
     
     def __init__(self, config: Config):
         self.config = config
-        self.llm = LLMClient(config)
-        self.sql_generator = SQLGenerator(config)
-        self.executor = QueryExecutor(config)
-        
-        print("✅ 4-Stage Pipeline initialized with README compliance:")
-        print(f"   🔒 SQLGlot AST Validation: {'✅ Available' if HAS_SQLGLOT else '❌ Not Available'}")
-        print(f"   📋 View Patterns: {len(self.sql_generator.view_patterns)}")
-        print(f"   🛡️ Identifier Allowlist: {len(self.sql_generator.allowed_identifiers)} objects")
-        print(f"   ⚡ Constrained Generation: ✅ Enabled")
-        print(f"   🔄 Execution-Guided Retry: ✅ Enabled")
     
-    async def start_session(self, tables: List[TableInfo], 
-                          domain: Optional[BusinessDomain], 
-                          relationships: List[Relationship]):
-        """Start interactive session with 4-stage pipeline"""
+    def save_discovery_cache(self, tables: List[TableInfo], view_info: Dict, sp_info: Dict):
+        """Save discovery results to cache"""
+        cache_file = self.config.get_cache_path("database_structure.json")
         
-        self.table_selector = TableSelector(tables)
-        
-        print(f"\n🚀 4-Stage Pipeline Ready:")
-        print(f"   📊 Tables: {len(tables)}")
-        print(f"   🎯 View Patterns: {len(self.sql_generator.view_patterns)}")
-        if domain:
-            print(f"   🏢 Domain: {domain.domain_type}")
-        
-        query_count = 0
-        
-        while True:
-            try:
-                question = input(f"\n❓ Query #{query_count + 1}: ").strip()
-                
-                if question.lower() in ['quit', 'exit', 'q']:
-                    break
-                if not question:
-                    continue
-                
-                query_count += 1
-                print(f"🔄 Processing with 4-stage pipeline...")
-                
-                start_time = time.time()
-                result = await self.process_query(question)
-                result.execution_time = time.time() - start_time
-                
-                self._display_result(result)
-                
-            except KeyboardInterrupt:
-                print("\n⏸️ Interrupted")
-                break
-            except Exception as e:
-                print(f"❌ Error: {e}")
-    
-    async def process_query(self, question: str) -> QueryResult:
-        """4-Stage Pipeline Implementation (README structure)"""
+        data = {
+            'tables': [self._table_to_dict(t) for t in tables],
+            'view_info': view_info,
+            'procedure_info': sp_info,
+            'discovered': datetime.now().isoformat(),
+            'version': '2.0-simple-improved'
+        }
         
         try:
-            # Stage 1: Intent Analysis (implicit)
-            print("   🧠 Stage 1: Intent analysis...")
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False, default=str)
+            print(f"   💾 Saved to cache: {cache_file}")
+        except Exception as e:
+            print(f"   ⚠️ Failed to save cache: {e}")
+    
+    def load_discovery_cache(self) -> Tuple[List[TableInfo], Dict, Dict]:
+        """Load discovery results from cache if fresh"""
+        cache_file = self.config.get_cache_path("database_structure.json")
+        
+        if not cache_file.exists():
+            return [], {}, {}
+        
+        try:
+            # Check cache age
+            cache_age = time.time() - cache_file.stat().st_mtime
+            if cache_age > (self.config.discovery_cache_hours * 3600):
+                return [], {}, {}
             
-            # Stage 2: Explainable Table Selection
-            selected_tables, explanations = await self.table_selector.select_tables(
-                question, self.llm
-            )
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
             
-            if not selected_tables:
-                return QueryResult(
-                    question=question,
-                    sql_query="",
-                    results=[],
-                    error="No relevant tables found"
-                )
+            tables = [self._dict_to_table(t) for t in data.get('tables', [])]
+            view_info = data.get('view_info', {})
+            sp_info = data.get('procedure_info', {})
             
-            # Stage 3: Relationship Resolution (embedded in SQL generation)
-            print("   🔗 Stage 3: Relationship resolution...")
+            return tables, view_info, sp_info
             
-            # Stage 4: Validated SQL Generation + Execution
-            sql = await self.sql_generator.generate_sql(
-                question, selected_tables, explanations, self.llm
-            )
+        except Exception:
+            return [], {}, {}
+    
+    def _table_to_dict(self, table: TableInfo) -> Dict:
+        """Convert TableInfo to dictionary"""
+        return {
+            'name': table.name,
+            'schema': table.schema,
+            'full_name': table.full_name,
+            'object_type': table.object_type,
+            'row_count': table.row_count,
+            'columns': table.columns,
+            'sample_data': table.sample_data,
+            'relationships': table.relationships
+        }
+    
+    def _dict_to_table(self, data: Dict) -> TableInfo:
+        """Convert dictionary to TableInfo"""
+        return TableInfo(
+            name=data['name'],
+            schema=data['schema'],
+            full_name=data['full_name'],
+            object_type=data['object_type'],
+            row_count=data['row_count'],
+            columns=data['columns'],
+            sample_data=data['sample_data'],
+            relationships=data.get('relationships', [])
+        )
+
+class DatabaseDiscovery:
+    """Main database discovery orchestrator - Clean interface (README compliant)"""
+    
+    def __init__(self, config: Config):
+        self.config = config
+        
+        # Initialize components (SOLID principle)
+        self.connector = DatabaseConnector(config)
+        self.schema_analyzer = SchemaAnalyzer(self.connector)
+        self.sample_collector = SampleCollector(self.connector)
+        self.view_analyzer = ViewAnalyzer(self.connector)
+        self.sp_analyzer = StoredProcedureAnalyzer(self.connector)
+        self.cache_manager = CacheManager(config)
+        
+        # Data storage
+        self.tables: List[TableInfo] = []
+        self.view_info: Dict = {}
+        self.sp_info: Dict = {}
+        self.relationships: List[Relationship] = []
+    
+    async def discover_database(self) -> bool:
+        """Main discovery method following README structure"""
+        print("🔍 ADVANCED DATABASE DISCOVERY")
+        print("Following README: Schema + samples + views/SPs with SQLGlot")
+        print("=" * 70)
+        
+        # Check cache first
+        cached_tables, cached_views, cached_sp = self.cache_manager.load_discovery_cache()
+        if cached_tables:
+            self.tables = cached_tables
+            self.view_info = cached_views
+            self.sp_info = cached_sp
+            print(f"✅ Loaded from cache: {len(self.tables)} tables, {len(cached_views)} views")
+            return True
+        
+        try:
+            start_time = time.time()
             
-            if not sql:
-                return QueryResult(
-                    question=question,
-                    sql_query="",
-                    results=[],
-                    error="Failed to generate SQL"
-                )
+            # Step 1: Discover database objects
+            exclusion_patterns = self.config.get_exclusion_patterns()
+            objects = self.schema_analyzer.discover_objects(exclusion_patterns)
             
-            # Execute with retry (Execution-guided)
-            results, error = await self.executor.execute_with_retry(
-                sql, question, self.llm
-            )
+            if not objects:
+                print("❌ No database objects found")
+                return False
             
-            result = QueryResult(
-                question=question,
-                sql_query=sql,
-                results=results,
-                error=error,
-                tables_used=[t.full_name for t in selected_tables]
-            )
+            # Step 2: Analyze tables and views
+            await self._analyze_objects(objects)
             
-            # Add explanations
-            result.explanations = explanations
-            return result
+            # Step 3: Analyze views (if enabled)
+            if self.config.is_view_analysis_enabled():
+                self.view_info = self.view_analyzer.analyze_views()
+            
+            # Step 4: Analyze stored procedures (if enabled)
+            if self.config.enable_sproc_analysis:
+                self.sp_info = self.sp_analyzer.analyze_procedures()
+            
+            # Step 5: Extract relationships
+            self._extract_relationships()
+            
+            # Step 6: Save to cache
+            self.cache_manager.save_discovery_cache(self.tables, self.view_info, self.sp_info)
+            
+            # Show summary
+            self._show_discovery_summary(time.time() - start_time)
+            return True
             
         except Exception as e:
-            return QueryResult(
-                question=question,
-                sql_query="",
-                results=[],
-                error=f"Pipeline error: {str(e)}"
-            )
+            print(f"❌ Discovery failed: {e}")
+            return False
     
-    def _display_result(self, result: QueryResult):
-        """Display results with explanations (README Pattern B)"""
+    async def _analyze_objects(self, objects: List[DatabaseObject]):
+        """Analyze discovered objects in parallel"""
+        print(f"📊 Analyzing {len(objects)} objects...")
         
-        print(f"⏱️ Completed in {result.execution_time:.1f}s")
-        print("-" * 60)
-        
-        # Show explainable retrieval
-        if hasattr(result, 'explanations'):
-            explanations = result.explanations
-            print(f"📋 EXPLAINABLE RETRIEVAL:")
-            print(f"   • Candidates: {explanations.get('total_candidates', 0)}")
-            print(f"   • Selected: {len(explanations.get('selected_tables', []))}")
-            
-            for reason in explanations.get('reasoning', []):
-                print(f"   • {reason}")
-            print()
-        
-        # Show results
-        if result.error:
-            print(f"❌ Error: {result.error}")
-            if result.sql_query:
-                print(f"📋 Generated SQL:")
-                print(f"{result.sql_query}")
+        if self.config.use_fast_queries and len(objects) > 10:
+            await self._parallel_analysis(objects)
         else:
-            print(f"📋 SQL Query ({'SQLGlot ✅ Validated' if HAS_SQLGLOT else '⚠️ Basic Validation'}):")
-            print(f"{result.sql_query}")
-            print(f"📊 Results: {len(result.results)} rows")
+            await self._sequential_analysis(objects)
+    
+    async def _parallel_analysis(self, objects: List[DatabaseObject]):
+        """Parallel analysis for better performance"""
+        with ThreadPoolExecutor(max_workers=self.config.max_parallel_workers) as executor:
+            futures = []
             
-            if result.results:
-                if result.is_single_value():
-                    value = result.get_single_value()
-                    column_name = list(result.results[0].keys())[0]
-                    from shared.utils import format_number
-                    formatted_value = format_number(value) if isinstance(value, (int, float)) else str(value)
-                    print(f"   🎯 {column_name}: {formatted_value}")
-                else:
-                    for i, row in enumerate(result.results[:5], 1):
-                        display_row = {}
-                        for key, value in list(row.items())[:5]:
-                            from shared.utils import truncate_text, format_number
-                            if isinstance(value, str) and len(value) > 30:
-                                display_row[key] = truncate_text(value, 30)
-                            elif isinstance(value, (int, float)) and value >= 1000:
-                                display_row[key] = format_number(value)
-                            else:
-                                display_row[key] = value
-                        print(f"   {i}. {display_row}")
-                    
-                    if len(result.results) > 5:
-                        print(f"   ... and {len(result.results) - 5} more rows")
-            else:
-                print("   ⚠️ No results returned")
+            for obj in objects:
+                future = executor.submit(self._analyze_single_object, obj)
+                futures.append(future)
+            
+            for future in as_completed(futures):
+                try:
+                    table_info = future.result()
+                    if table_info:
+                        self.tables.append(table_info)
+                except Exception as e:
+                    print(f"   ⚠️ Object analysis failed: {e}")
+    
+    async def _sequential_analysis(self, objects: List[DatabaseObject]):
+        """Sequential analysis for smaller datasets"""
+        for i, obj in enumerate(objects, 1):
+            print(f"   📋 {i}/{len(objects)}: {obj.full_name}")
+            
+            table_info = self._analyze_single_object(obj)
+            if table_info:
+                self.tables.append(table_info)
+    
+    def _analyze_single_object(self, obj: DatabaseObject) -> Optional[TableInfo]:
+        """Analyze single database object"""
+        try:
+            # Get columns
+            columns = self.schema_analyzer.get_table_columns(obj.schema, obj.name)
+            if not columns:
+                return None
+            
+            # Get relationships
+            relationships = self.schema_analyzer.get_table_relationships(obj.schema, obj.name)
+            
+            # Create table info
+            table_info = TableInfo(
+                name=obj.name,
+                schema=obj.schema,
+                full_name=obj.full_name,
+                object_type=obj.object_type,
+                row_count=obj.estimated_rows,
+                columns=columns,
+                sample_data=[],
+                relationships=relationships
+            )
+            
+            # Collect samples (README policy: first 3 + last 3)
+            if obj.estimated_rows > 0:
+                samples = self.sample_collector.collect_samples(table_info)
+                table_info.sample_data = samples
+            
+            return table_info
+            
+        except Exception as e:
+            print(f"   ⚠️ Failed to analyze {obj.full_name}: {e}")
+            return None
+    
+    def _extract_relationships(self):
+        """Extract relationships from foreign keys and views"""
+        self.relationships = []
         
-        print("\n💡 4-Stage Pipeline Features (README Compliant):")
-        print("   ✅ Explainable table retrieval with business context")
-        print("   ✅ View-pattern analysis with proven business logic")
-        print(f"   ✅ {'SQLGlot AST validation' if HAS_SQLGLOT else 'Basic SQL validation'} with identifier allowlists")
-        print("   ✅ Constrained SQL generation with intent enhancement")
-        print("   ✅ Execution-guided retry with error recovery")
-        print("   ✅ UTF-8 international support")
+        # Extract FK relationships
+        for table in self.tables:
+            for rel_info in table.relationships:
+                if '->' in rel_info:
+                    try:
+                        parts = rel_info.split('->', 1)
+                        from_col = parts[0].strip()
+                        to_ref = parts[1].strip()
+                        
+                        self.relationships.append(Relationship(
+                            from_table=table.full_name,
+                            to_table=to_ref.split('.')[0] if '.' in to_ref else to_ref,
+                            relationship_type='foreign_key',
+                            confidence=0.95,
+                            description=f"FK: {from_col} -> {to_ref}"
+                        ))
+                    except Exception:
+                        continue
+        
+        # Extract view-based relationships
+        for view_name, view_data in self.view_info.items():
+            for join in view_data.get('parsed_joins', []):
+                if 'condition' in join:
+                    self.relationships.append(Relationship(
+                        from_table=view_name,
+                        to_table='',  # Would need more parsing
+                        relationship_type='view_join',
+                        confidence=0.8,
+                        description=f"View join: {join['condition']}"
+                    ))
+    
+    def _show_discovery_summary(self, elapsed_time: float):
+        """Show discovery summary"""
+        table_count = sum(1 for t in self.tables if t.object_type in ['BASE TABLE', 'TABLE'])
+        view_count = sum(1 for t in self.tables if t.object_type == 'VIEW')
+        
+        print(f"\n📊 DISCOVERY COMPLETED:")
+        print(f"   ⏱️ Time: {elapsed_time:.1f}s")
+        print(f"   📊 Tables: {table_count}")
+        print(f"   👁️ Views: {view_count} (definitions: {len(self.view_info)})")
+        print(f"   ⚙️ Stored Procedures: {len(self.sp_info)}")
+        print(f"   🔗 Relationships: {len(self.relationships)}")
+        print(f"   📋 Total objects: {len(self.tables)}")
+        
+        # Show SQLGlot status
+        if HAS_SQLGLOT:
+            parsed_views = sum(1 for v in self.view_info.values() if v.get('execution_success'))
+            print(f"   ✅ SQLGlot parsing: {parsed_views}/{len(self.view_info)} views parsed")
+        else:
+            print(f"   ⚠️ SQLGlot not available - basic analysis only")
+        
+        # Show sample statistics
+        with_samples = sum(1 for t in self.tables if t.sample_data)
+        print(f"   📈 Sample data: {with_samples}/{len(self.tables)} objects")
+    
+    def load_from_cache(self) -> bool:
+        """Load from cache (public interface)"""
+        cached_tables, cached_views, cached_sp = self.cache_manager.load_discovery_cache()
+        if cached_tables:
+            self.tables = cached_tables
+            self.view_info = cached_views
+            self.sp_info = cached_sp
+            return True
+        return False
+    
+    # Public interface methods - Clean API (YAGNI principle)
+    def get_tables(self) -> List[TableInfo]:
+        """Get discovered tables"""
+        return self.tables
+    
+    def get_relationships(self) -> List[Relationship]:
+        """Get discovered relationships"""
+        return self.relationships
+    
+    def get_view_info(self) -> Dict:
+        """Get view analysis results"""
+        return self.view_info
+    
+    def get_stored_procedure_info(self) -> Dict:
+        """Get stored procedure analysis results"""
+        return self.sp_info
+    
+    def get_discovery_stats(self) -> Dict[str, Any]:
+        """Get discovery statistics"""
+        table_count = sum(1 for t in self.tables if t.object_type in ['BASE TABLE', 'TABLE'])
+        view_count = sum(1 for t in self.tables if t.object_type == 'VIEW')
+        with_samples = sum(1 for t in self.tables if t.sample_data)
+        
+        return {
+            'total_objects': len(self.tables),
+            'tables': table_count,
+            'views': view_count,
+            'stored_procedures': len(self.sp_info),
+            'relationships': len(self.relationships),
+            'objects_with_samples': with_samples,
+            'sqlglot_available': HAS_SQLGLOT,
+            'view_definitions_captured': len(self.view_info)
+        }
