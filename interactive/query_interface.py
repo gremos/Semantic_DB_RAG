@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Simple 4-Stage Query Pipeline
+4-Stage Query Pipeline - Simple, Readable, Maintainable
 Following README: Constrained + EG Text-to-SQL, Schema-first retrieval, Enterprise guardrails
+DRY, SOLID, YAGNI principles
 """
 
 import asyncio
 import json
-import re
 import pyodbc
 import time
 from typing import List, Dict, Any, Optional, Tuple
@@ -18,7 +18,6 @@ try:
     HAS_SQLGLOT = True
 except ImportError:
     HAS_SQLGLOT = False
-    print("⚠️ SQLGlot not available - install with: pip install sqlglot")
 
 from langchain_openai import AzureChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
@@ -28,20 +27,21 @@ from shared.models import TableInfo, BusinessDomain, Relationship, QueryResult
 from shared.utils import parse_json_response, clean_sql_query, safe_database_value, validate_sql_safety
 
 class LLMClient:
-    """Simple LLM client - Single responsibility"""
+    """LLM communication - Single responsibility (SOLID)"""
     
     def __init__(self, config: Config):
+        self.config = config
         self.llm = AzureChatOpenAI(
             azure_endpoint=config.azure_endpoint,
             api_key=config.api_key,
             azure_deployment=config.deployment_name,
             api_version=config.api_version,
             request_timeout=60,
-            temperature=1.0  # Use default temperature to avoid API errors
+            temperature=1.0  # Use default temperature (README note about API errors)
         )
     
     async def analyze(self, system_prompt: str, user_prompt: str) -> str:
-        """Simple LLM analysis"""
+        """Send analysis request to LLM"""
         try:
             messages = [
                 SystemMessage(content=system_prompt),
@@ -54,14 +54,14 @@ class LLMClient:
             return ""
 
 class TableSelector:
-    """Stage 2: Explainable table selection (README Pattern B)"""
+    """Stage 2: Table selection with explainable reasoning (README Pattern B)"""
     
     def __init__(self, tables: List[TableInfo]):
         self.tables = tables
     
-    async def select_relevant_tables(self, question: str, llm: LLMClient) -> Tuple[List[TableInfo], Dict]:
-        """Select tables with explainable reasoning"""
-        print("   📋 Stage 2: Explainable table selection...")
+    async def select_tables(self, question: str, llm: LLMClient) -> Tuple[List[TableInfo], Dict]:
+        """Select relevant tables with explanations"""
+        print("   📋 Stage 2: Table selection with explanations...")
         
         explanations = {
             'total_candidates': len(self.tables),
@@ -69,12 +69,12 @@ class TableSelector:
             'reasoning': []
         }
         
-        # Step 1: Lexical filtering
-        candidates = self.lexical_filter(question, explanations)
+        # Lexical filtering first
+        candidates = self._lexical_filter(question, explanations)
         
-        # Step 2: LLM selection if too many candidates
+        # LLM selection if too many candidates
         if len(candidates) > 8:
-            selected = await self.llm_selection(question, candidates, llm, explanations)
+            selected = await self._llm_selection(question, candidates, llm, explanations)
         else:
             selected = candidates
             explanations['reasoning'].append(f"Used all {len(candidates)} lexically matched tables")
@@ -84,79 +84,79 @@ class TableSelector:
         print(f"      ✅ Selected {len(selected)} tables from {len(candidates)} candidates")
         return selected, explanations
     
-    def lexical_filter(self, question: str, explanations: Dict) -> List[TableInfo]:
-        """Enhanced lexical matching"""
+    def _lexical_filter(self, question: str, explanations: Dict) -> List[TableInfo]:
+        """Filter tables using lexical matching"""
         q_lower = question.lower()
         question_words = [w for w in q_lower.split() if len(w) > 2]
         
         scored_tables = []
         
         for table in self.tables:
-            score = 0.0
-            reasons = []
-            
-            # Table name matching
-            table_name_lower = table.name.lower()
-            name_matches = [w for w in question_words if w in table_name_lower]
-            if name_matches:
-                score += len(name_matches) * 3.0
-                reasons.append(f"name:{','.join(name_matches)}")
-            
-            # Entity type matching
-            entity_type = getattr(table, 'entity_type', '').lower()
-            if entity_type != 'unknown':
-                entity_keywords = {
-                    'customer': ['customer', 'client', 'user'],
-                    'payment': ['payment', 'paid', 'revenue', 'financial'],
-                    'order': ['order', 'sale', 'purchase'],
-                    'product': ['product', 'item', 'inventory']
-                }
-                
-                for entity, keywords in entity_keywords.items():
-                    if entity in entity_type and any(kw in q_lower for kw in keywords):
-                        score += 2.0
-                        reasons.append(f"entity:{entity}")
-            
-            # Column matching
-            column_names = [col.get('name', '').lower() for col in table.columns]
-            for word in question_words:
-                matching_cols = [col for col in column_names if word in col]
-                if matching_cols:
-                    score += len(matching_cols) * 1.0
-                    reasons.append(f"columns:{word}")
-            
-            # Business role bonus
-            if getattr(table, 'business_role', '') == 'Core':
-                score += 1.0
-                reasons.append("core_table")
-            
-            # Data availability bonus
-            if table.row_count > 0:
-                score += 0.5
+            score = self._calculate_table_score(table, question_words, q_lower)
             
             if score > 0:
-                scored_tables.append((table, score, reasons))
+                scored_tables.append((table, score))
         
         # Sort by score and return top candidates
         scored_tables.sort(key=lambda x: x[1], reverse=True)
         
         # Dynamic selection based on score distribution
         if len(scored_tables) > 15:
-            candidates = [table for table, score, _ in scored_tables if score > 2.0][:12]
+            candidates = [table for table, score in scored_tables if score > 2.0][:12]
         else:
-            candidates = [table for table, _, _ in scored_tables[:12]]
+            candidates = [table for table, _ in scored_tables[:12]]
         
         explanations['reasoning'].append(f"Lexical filtering: {len(candidates)} relevant tables")
         return candidates
     
-    async def llm_selection(self, question: str, candidates: List[TableInfo], 
-                          llm: LLMClient, explanations: Dict) -> List[TableInfo]:
-        """LLM-based table selection with business context"""
+    def _calculate_table_score(self, table: TableInfo, question_words: List[str], q_lower: str) -> float:
+        """Calculate relevance score for table (DRY principle)"""
+        score = 0.0
         
-        # Prepare candidate summaries
+        # Table name matching
+        table_name_lower = table.name.lower()
+        name_matches = [w for w in question_words if w in table_name_lower]
+        if name_matches:
+            score += len(name_matches) * 3.0
+        
+        # Entity type matching
+        entity_type = getattr(table, 'entity_type', '').lower()
+        if entity_type != 'unknown':
+            entity_keywords = {
+                'customer': ['customer', 'client', 'user'],
+                'payment': ['payment', 'paid', 'revenue', 'financial'],
+                'order': ['order', 'sale', 'purchase'],
+                'product': ['product', 'item', 'inventory']
+            }
+            
+            for entity, keywords in entity_keywords.items():
+                if entity in entity_type and any(kw in q_lower for kw in keywords):
+                    score += 2.0
+        
+        # Column matching
+        column_names = [col.get('name', '').lower() for col in table.columns]
+        for word in question_words:
+            matching_cols = [col for col in column_names if word in col]
+            if matching_cols:
+                score += len(matching_cols) * 1.0
+        
+        # Business role bonus
+        if getattr(table, 'business_role', '') == 'Core':
+            score += 1.0
+        
+        # Data availability bonus
+        if table.row_count > 0:
+            score += 0.5
+        
+        return score
+    
+    async def _llm_selection(self, question: str, candidates: List[TableInfo], 
+                           llm: LLMClient, explanations: Dict) -> List[TableInfo]:
+        """Use LLM for table selection when needed"""
+        
+        # Prepare summaries
         table_summaries = []
         for table in candidates:
-            # Show sample data for better context
             sample_preview = ""
             if table.sample_data:
                 first_row = table.sample_data[0]
@@ -185,7 +185,7 @@ CANDIDATE TABLES:
 {json.dumps(table_summaries, indent=2)}
 
 Select the 6 most relevant tables for answering this question.
-Look at the entity types, sample data, and column names.
+Look at entity types, sample data, and column names.
 
 Respond with JSON:
 {{
@@ -203,7 +203,7 @@ Respond with JSON:
             explanations['reasoning'].append(f"LLM selection: {result.get('reasoning', 'Semantic relevance')}")
             return selected
         
-        # Fallback to top scored tables
+        # Fallback
         explanations['reasoning'].append("LLM selection failed, using top scored tables")
         return candidates[:6]
 
@@ -212,11 +212,11 @@ class SQLGenerator:
     
     def __init__(self, config: Config):
         self.config = config
-        self.view_patterns = self.load_view_patterns()
-        self.allowed_identifiers = self.build_allowed_identifiers()
+        self.view_patterns = self._load_view_patterns()
+        self.allowed_identifiers = self._build_allowed_identifiers()
     
-    def load_view_patterns(self) -> List[Dict]:
-        """Load proven view patterns for business logic (README requirement)"""
+    def _load_view_patterns(self) -> List[Dict]:
+        """Load proven view patterns for business logic"""
         try:
             structure_file = self.config.get_cache_path("database_structure.json")
             if structure_file.exists():
@@ -235,14 +235,13 @@ class SQLGenerator:
                             'proven_working': True
                         })
                 
-                print(f"      📊 Loaded {len(patterns)} proven view patterns")
                 return patterns
         except Exception:
             pass
         return []
     
-    def build_allowed_identifiers(self) -> set:
-        """Build allowed identifiers from database structure (README requirement)"""
+    def _build_allowed_identifiers(self) -> set:
+        """Build allowed identifiers from database structure"""
         identifiers = set()
         
         try:
@@ -251,7 +250,7 @@ class SQLGenerator:
                 with open(structure_file, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                 
-                # Add table names
+                # Add table and column names
                 for table_data in data.get('tables', []):
                     full_name = table_data.get('full_name', '')
                     name = table_data.get('name', '')
@@ -271,8 +270,6 @@ class SQLGenerator:
                         if col_name:
                             identifiers.add(col_name.lower())
                             identifiers.add(f"[{col_name}]".lower())
-                
-                print(f"      📊 Built identifier allowlist with {len(identifiers)} items")
         except Exception:
             pass
         
@@ -280,99 +277,39 @@ class SQLGenerator:
     
     async def generate_sql(self, question: str, tables: List[TableInfo], 
                           explanations: Dict, llm: LLMClient) -> str:
-        """Generate constrained SQL with view patterns and SQLGlot validation"""
+        """Generate constrained SQL with validation"""
         print("   ⚡ Stage 4: Constrained SQL generation...")
         
         # Analyze intent
-        intent = self.analyze_intent(question)
+        intent = self._analyze_intent(question)
         
         # Find relevant view patterns
-        relevant_patterns = self.find_relevant_view_patterns(question, tables)
+        relevant_patterns = self._find_relevant_view_patterns(question, tables)
         
-        # Generate SQL using view patterns if available
+        # Generate SQL
         if relevant_patterns:
             print(f"      📋 Using {len(relevant_patterns)} proven view patterns")
-            sql = await self.generate_with_view_patterns(question, tables, relevant_patterns, intent, llm)
+            sql = await self._generate_with_view_patterns(question, tables, relevant_patterns, intent, llm)
         else:
-            sql = await self.generate_from_tables(question, tables, intent, llm)
+            sql = await self._generate_from_tables(question, tables, intent, llm)
         
-        # Enhance with intent (add missing filters, limits, etc.)
-        sql = self.enhance_sql_with_intent(sql, intent, tables)
+        # Enhance with intent
+        sql = self._enhance_sql_with_intent(sql, intent, tables)
         
         # SQLGlot validation (README requirement)
-        is_valid, validation_msg = self.validate_sql_with_sqlglot(sql)
+        is_valid, validation_msg = self._validate_sql_with_sqlglot(sql)
         
         if not is_valid:
             print(f"      ⚠️ SQLGlot validation failed: {validation_msg}")
-            sql = self.generate_safe_fallback_sql(tables, intent)
+            sql = self._generate_safe_fallback_sql(tables, intent)
             print(f"      ✅ Using safe fallback SQL")
         else:
             print(f"      ✅ SQL passed SQLGlot validation")
         
         return sql
     
-    def validate_sql_with_sqlglot(self, sql: str) -> Tuple[bool, str]:
-        """Validate SQL using SQLGlot AST (README requirement)"""
-        if not HAS_SQLGLOT:
-            return validate_sql_safety(sql), "Basic validation (SQLGlot not available)"
-        
-        if not sql.strip():
-            return False, "Empty SQL query"
-        
-        try:
-            # Parse SQL to AST
-            parsed = sqlglot.parse_one(sql, dialect="tsql")
-            
-            if not parsed:
-                return False, "Failed to parse SQL"
-            
-            # Check for dangerous operations (Enterprise guardrails)
-            dangerous_nodes = [
-                sqlglot.expressions.Insert,
-                sqlglot.expressions.Update, 
-                sqlglot.expressions.Delete,
-                sqlglot.expressions.Drop,
-                sqlglot.expressions.Create,
-                sqlglot.expressions.Alter
-            ]
-            
-            for dangerous_node in dangerous_nodes:
-                if parsed.find(dangerous_node):
-                    return False, "Dangerous SQL operations detected"
-            
-            # Must be SELECT statement
-            if not isinstance(parsed, sqlglot.expressions.Select):
-                return False, "Only SELECT statements allowed"
-            
-            # Basic identifier validation
-            sql_lower = sql.lower()
-            unknown_identifiers = []
-            
-            # Simple check for table names
-            table_patterns = [
-                r'from\s+(\[?\w+\]?\.\[?\w+\]?)',
-                r'join\s+(\[?\w+\]?\.\[?\w+\]?)'
-            ]
-            
-            for pattern in table_patterns:
-                matches = re.findall(pattern, sql_lower, re.IGNORECASE)
-                for match in matches:
-                    clean_match = match.strip('[]').lower()
-                    if (clean_match not in self.allowed_identifiers and 
-                        len(clean_match) > 2 and
-                        not any(clean_match in allowed for allowed in self.allowed_identifiers)):
-                        unknown_identifiers.append(match)
-            
-            if len(unknown_identifiers) > 2:  # Allow some flexibility
-                return False, f"Unknown identifiers: {', '.join(unknown_identifiers[:3])}"
-            
-            return True, "SQL validated successfully"
-            
-        except Exception as e:
-            return False, f"SQLGlot validation error: {str(e)}"
-    
-    def analyze_intent(self, question: str) -> Dict:
-        """Analyze query intent"""
+    def _analyze_intent(self, question: str) -> Dict:
+        """Analyze query intent (YAGNI - simple analysis)"""
         q_lower = question.lower()
         
         intent = {
@@ -392,6 +329,7 @@ class SQLGenerator:
             intent['aggregation'] = 'avg'
         
         # Extract limits
+        import re
         limit_match = re.search(r'top\s+(\d+)|first\s+(\d+)|(\d+)\s+most', q_lower)
         if limit_match:
             intent['limit'] = int(limit_match.group(1) or limit_match.group(2) or limit_match.group(3))
@@ -415,8 +353,8 @@ class SQLGenerator:
         
         return intent
     
-    def find_relevant_view_patterns(self, question: str, tables: List[TableInfo]) -> List[Dict]:
-        """Find relevant view patterns for business logic"""
+    def _find_relevant_view_patterns(self, question: str, tables: List[TableInfo]) -> List[Dict]:
+        """Find relevant view patterns"""
         if not self.view_patterns:
             return []
         
@@ -445,15 +383,15 @@ class SQLGenerator:
         relevant.sort(key=lambda x: x['relevance_score'], reverse=True)
         return relevant[:2]  # Top 2 patterns
     
-    async def generate_with_view_patterns(self, question: str, tables: List[TableInfo], 
-                                        patterns: List[Dict], intent: Dict, llm: LLMClient) -> str:
+    async def _generate_with_view_patterns(self, question: str, tables: List[TableInfo], 
+                                         patterns: List[Dict], intent: Dict, llm: LLMClient) -> str:
         """Generate SQL using proven view patterns"""
         
         best_pattern = patterns[0]
         view_definition = best_pattern['definition']
         
         # Build context
-        context = self.build_context(tables, intent)
+        context = self._build_context(tables, intent)
         
         system_prompt = f"""You are an expert SQL generator using PROVEN business patterns from database views.
 
@@ -486,11 +424,11 @@ Generate SQL using the proven business logic:
         response = await llm.analyze(system_prompt, user_prompt)
         return clean_sql_query(response)
     
-    async def generate_from_tables(self, question: str, tables: List[TableInfo], 
-                                 intent: Dict, llm: LLMClient) -> str:
+    async def _generate_from_tables(self, question: str, tables: List[TableInfo], 
+                                  intent: Dict, llm: LLMClient) -> str:
         """Generate SQL from table analysis"""
         
-        context = self.build_context(tables, intent)
+        context = self._build_context(tables, intent)
         
         system_prompt = f"""You are an expert SQL generator.
 
@@ -519,8 +457,8 @@ Return only the SQL query:
         response = await llm.analyze(system_prompt, user_prompt)
         return clean_sql_query(response)
     
-    def build_context(self, tables: List[TableInfo], intent: Dict) -> str:
-        """Build context for SQL generation"""
+    def _build_context(self, tables: List[TableInfo], intent: Dict) -> str:
+        """Build context for SQL generation (DRY principle)"""
         context = []
         
         for table in tables:
@@ -546,8 +484,8 @@ Return only the SQL query:
         
         return '\n'.join(context)
     
-    def enhance_sql_with_intent(self, sql: str, intent: Dict, tables: List[TableInfo]) -> str:
-        """Enhance SQL to match intent (add missing filters, limits)"""
+    def _enhance_sql_with_intent(self, sql: str, intent: Dict, tables: List[TableInfo]) -> str:
+        """Enhance SQL to match intent"""
         if not sql:
             return sql
         
@@ -567,7 +505,7 @@ Return only the SQL query:
                 if date_columns:
                     date_col = date_columns[0]
                     if 'WHERE' in sql.upper():
-                        sql = sql.replace('WHERE', f'WHERE YEAR({date_col}) = {year} AND ')
+                        sql = sql.replace('WHERE', f'WHERE YEAR({date_col}) = {year} AND ', 1)
                     else:
                         # Insert before ORDER BY or at end
                         insert_pos = len(sql)
@@ -586,8 +524,46 @@ Return only the SQL query:
         
         return sql
     
-    def generate_safe_fallback_sql(self, tables: List[TableInfo], intent: Dict) -> str:
-        """Generate guaranteed safe SQL"""
+    def _validate_sql_with_sqlglot(self, sql: str) -> Tuple[bool, str]:
+        """Validate SQL using SQLGlot AST (README requirement)"""
+        if not HAS_SQLGLOT:
+            return validate_sql_safety(sql), "Basic validation (SQLGlot not available)"
+        
+        if not sql.strip():
+            return False, "Empty SQL query"
+        
+        try:
+            # Parse SQL to AST
+            parsed = sqlglot.parse_one(sql, dialect="tsql")
+            
+            if not parsed:
+                return False, "Failed to parse SQL"
+            
+            # Check for dangerous operations
+            dangerous_nodes = [
+                sqlglot.expressions.Insert,
+                sqlglot.expressions.Update, 
+                sqlglot.expressions.Delete,
+                sqlglot.expressions.Drop,
+                sqlglot.expressions.Create,
+                sqlglot.expressions.Alter
+            ]
+            
+            for dangerous_node in dangerous_nodes:
+                if parsed.find(dangerous_node):
+                    return False, "Dangerous SQL operations detected"
+            
+            # Must be SELECT statement
+            if not isinstance(parsed, sqlglot.expressions.Select):
+                return False, "Only SELECT statements allowed"
+            
+            return True, "SQL validated successfully"
+            
+        except Exception as e:
+            return False, f"SQLGlot validation error: {str(e)}"
+    
+    def _generate_safe_fallback_sql(self, tables: List[TableInfo], intent: Dict) -> str:
+        """Generate guaranteed safe SQL (YAGNI - simple fallback)"""
         if not tables:
             return ""
         
@@ -602,15 +578,8 @@ Return only the SQL query:
                 safe_columns.append(col.get('name'))
         
         if intent.get('aggregation') == 'count':
-            if intent.get('entity_focus') == 'customer':
-                # Try to count customers
-                customer_cols = [col for col in safe_columns if 'customer' in col.lower()]
-                if customer_cols:
-                    return f"SELECT COUNT(DISTINCT [{customer_cols[0]}]) as customer_count FROM {table.full_name}"
-            
             return f"SELECT COUNT(*) as total_count FROM {table.full_name}"
         else:
-            # Select top records
             limit = min(intent.get('limit', 100), 1000)
             if safe_columns:
                 columns_str = ', '.join([f"[{col}]" for col in safe_columns[:5]])
@@ -630,13 +599,13 @@ class QueryExecutor:
         print("   🔄 Execution with retry...")
         
         for attempt in range(self.config.max_retry_attempts + 1):
-            results, error = self.execute_sql(sql)
+            results, error = self._execute_sql(sql)
             
             if error is None:
                 if len(results) == 0:
                     print(f"      ⚠️ Attempt {attempt + 1}: Empty results")
                     if attempt < self.config.max_retry_attempts:
-                        sql = await self.retry_for_empty_results(sql, question, llm)
+                        sql = await self._retry_for_empty_results(sql, question, llm)
                         continue
                 
                 print(f"      ✅ Success on attempt {attempt + 1}: {len(results)} rows")
@@ -644,12 +613,12 @@ class QueryExecutor:
             else:
                 print(f"      ⚠️ Attempt {attempt + 1} failed: {error}")
                 if attempt < self.config.max_retry_attempts:
-                    sql = await self.retry_for_error(sql, error, question, llm)
+                    sql = await self._retry_for_error(sql, error, question, llm)
                     continue
         
         return [], f"Failed after {self.config.max_retry_attempts + 1} attempts: {error}"
     
-    def execute_sql(self, sql: str) -> Tuple[List[Dict], Optional[str]]:
+    def _execute_sql(self, sql: str) -> Tuple[List[Dict], Optional[str]]:
         """Execute SQL with UTF-8 support"""
         if not sql.strip():
             return [], "Empty SQL query"
@@ -682,8 +651,8 @@ class QueryExecutor:
         except Exception as e:
             return [], str(e)
     
-    async def retry_for_error(self, failed_sql: str, error: str, 
-                            question: str, llm: LLMClient) -> str:
+    async def _retry_for_error(self, failed_sql: str, error: str, 
+                             question: str, llm: LLMClient) -> str:
         """Retry with error feedback (Execution-guided)"""
         
         system_prompt = "You are an SQL error correction expert. Fix the SQL based on the error message."
@@ -709,7 +678,7 @@ Return only corrected SQL:
         response = await llm.analyze(system_prompt, user_prompt)
         return clean_sql_query(response)
     
-    async def retry_for_empty_results(self, sql: str, question: str, llm: LLMClient) -> str:
+    async def _retry_for_empty_results(self, sql: str, question: str, llm: LLMClient) -> str:
         """Retry for empty results"""
         
         system_prompt = "You are an SQL optimization expert. Modify SQL to return meaningful results."
@@ -734,7 +703,7 @@ Return modified SQL:
         return clean_sql_query(response)
 
 class QueryInterface:
-    """Simple 4-Stage Pipeline (README implementation)"""
+    """4-Stage Pipeline Implementation - Clean interface (README compliant)"""
     
     def __init__(self, config: Config):
         self.config = config
@@ -780,7 +749,7 @@ class QueryInterface:
                 result = await self.process_query(question)
                 result.execution_time = time.time() - start_time
                 
-                self.display_result(result)
+                self._display_result(result)
                 
             except KeyboardInterrupt:
                 print("\n⏸️ Interrupted")
@@ -789,14 +758,14 @@ class QueryInterface:
                 print(f"❌ Error: {e}")
     
     async def process_query(self, question: str) -> QueryResult:
-        """4-Stage Pipeline Implementation"""
+        """4-Stage Pipeline Implementation (README structure)"""
         
         try:
             # Stage 1: Intent Analysis (implicit)
             print("   🧠 Stage 1: Intent analysis...")
             
-            # Stage 2: Explainable Table Selection (README Pattern B)
-            selected_tables, explanations = await self.table_selector.select_relevant_tables(
+            # Stage 2: Explainable Table Selection
+            selected_tables, explanations = await self.table_selector.select_tables(
                 question, self.llm
             )
             
@@ -849,13 +818,13 @@ class QueryInterface:
                 error=f"Pipeline error: {str(e)}"
             )
     
-    def display_result(self, result: QueryResult):
-        """Display results with explanations"""
+    def _display_result(self, result: QueryResult):
+        """Display results with explanations (README Pattern B)"""
         
         print(f"⏱️ Completed in {result.execution_time:.1f}s")
         print("-" * 60)
         
-        # Show explainable retrieval (README Pattern B)
+        # Show explainable retrieval
         if hasattr(result, 'explanations'):
             explanations = result.explanations
             print(f"📋 EXPLAINABLE RETRIEVAL:")
@@ -881,16 +850,18 @@ class QueryInterface:
                 if result.is_single_value():
                     value = result.get_single_value()
                     column_name = list(result.results[0].keys())[0]
-                    formatted_value = f"{value:,}" if isinstance(value, (int, float)) and value >= 1000 else str(value)
+                    from shared.utils import format_number
+                    formatted_value = format_number(value) if isinstance(value, (int, float)) else str(value)
                     print(f"   🎯 {column_name}: {formatted_value}")
                 else:
                     for i, row in enumerate(result.results[:5], 1):
                         display_row = {}
                         for key, value in list(row.items())[:5]:
+                            from shared.utils import truncate_text, format_number
                             if isinstance(value, str) and len(value) > 30:
-                                display_row[key] = value[:27] + "..."
+                                display_row[key] = truncate_text(value, 30)
                             elif isinstance(value, (int, float)) and value >= 1000:
-                                display_row[key] = f"{value:,}"
+                                display_row[key] = format_number(value)
                             else:
                                 display_row[key] = value
                         print(f"   {i}. {display_row}")

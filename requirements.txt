@@ -1,0 +1,40 @@
+# Semantic Database RAG System - Python Dependencies
+# Simple, Readable, Maintainable - Following README requirements
+# Install with: pip install -r requirements.txt
+
+# Core database connectivity
+pyodbc>=4.0.35
+# For SQL Server connections with UTF-8 support (international characters)
+
+# SQLGlot for SQL parsing and AST validation (README requirement)
+sqlglot>=20.0.0
+# Enhanced SQL parsing, validation, and relationship extraction from views
+
+# LangChain for LLM integration
+langchain-openai>=0.1.0
+# Azure OpenAI integration for 4-stage pipeline
+
+# Core Python libraries (usually included, but specified for clarity)
+typing-extensions>=4.0.0
+pathlib2>=2.3.7; python_version < "3.4"
+
+# Optional but recommended for enhanced features
+tqdm>=4.65.0
+# Progress bars for discovery and analysis operations
+
+# Development and testing (optional)
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+# For running tests if you add them
+
+# Performance monitoring (optional)
+psutil>=5.9.0
+# System resource monitoring
+
+# Logging enhancements (optional)
+colorlog>=6.7.0
+# Colored console output for better developer experience
+
+# Note: The system is designed to work with minimal dependencies
+# Only pyodbc, sqlglot, and langchain-openai are strictly required
+# All other dependencies are optional enhancements
