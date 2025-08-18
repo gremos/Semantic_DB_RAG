@@ -4,6 +4,7 @@
 BI-Aware Query Interface - Simple, Readable, Maintainable
 Following README: 4-stage pipeline with capability contracts
 DRY, SOLID, YAGNI principles with clean implementation
+Fixed SQL generation and validation
 """
 
 import asyncio
@@ -30,8 +31,8 @@ class IntentAnalyzer:
         """Analyze user question and normalize to analytical task"""
         print("   🧠 Stage 1: Intent analysis...")
         
-        # Quick pattern matching first
-        intent = self._quick_pattern_match(question)
+        # Quick pattern matching first (YAGNI - what works)
+        intent = self._pattern_match(question)
         if intent:
             print(f"      ✅ Pattern matched: {intent.task_type}")
             return intent
@@ -39,15 +40,15 @@ class IntentAnalyzer:
         # LLM analysis for complex cases
         return await self._llm_intent_analysis(question)
     
-    def _quick_pattern_match(self, question: str) -> Optional[AnalyticalTask]:
-        """Quick pattern matching for common patterns"""
+    def _pattern_match(self, question: str) -> Optional[AnalyticalTask]:
+        """Simple pattern matching for common patterns"""
         q_lower = question.lower()
         
-        # Detect task type
-        if any(word in q_lower for word in ['how many', 'count', 'number of']):
+        # Detect task type and metrics
+        if any(word in q_lower for word in ['count', 'how many', 'number of']):
             task_type = 'aggregation'
             metrics = ['count']
-        elif any(word in q_lower for word in ['total', 'sum', 'how much']):
+        elif any(word in q_lower for word in ['total', 'sum', 'amount']):
             task_type = 'aggregation'  
             metrics = ['sum']
         elif any(word in q_lower for word in ['top', 'highest', 'best', 'worst']):
@@ -63,51 +64,45 @@ class IntentAnalyzer:
         entity = None
         if any(word in q_lower for word in ['customer', 'client', 'user']):
             entity = 'customer'
-        elif any(word in q_lower for word in ['revenue', 'sales', 'payment', 'money']):
-            entity = 'revenue'
-        elif any(word in q_lower for word in ['product', 'item']):
-            entity = 'product'
+        elif any(word in q_lower for word in ['payment', 'revenue', 'sales']):
+            entity = 'payment'
         
-        # Extract top limit
-        import re
-        top_match = re.search(r'top\s+(\d+)', q_lower)
-        top_limit = int(top_match.group(1)) if top_match else None
+        # Extract year for time filtering
+        time_window = None
+        if '2025' in q_lower:
+            time_window = '2025'
+        elif '2024' in q_lower:
+            time_window = '2024'
         
         return AnalyticalTask(
             task_type=task_type,
             metrics=metrics,
             entity=entity,
-            top_limit=top_limit
+            time_window=time_window
         )
     
     async def _llm_intent_analysis(self, question: str) -> AnalyticalTask:
-        """LLM-based intent analysis"""
-        prompt = f"""
-Analyze this business question and extract the analytical intent:
-
-QUESTION: "{question}"
-
-Determine:
-1. Task type: aggregation, ranking, trend, count, distribution
-2. Metrics: revenue, count, average, etc.
-3. Entity: customer, product, order, etc.
-4. Time window: current_quarter, last_month, this_year
-5. Top limit: if asking for "top N"
-
-Respond with JSON only:
-{{
-  "task_type": "ranking",
-  "metrics": ["revenue"],
-  "entity": "customer",
-  "time_window": "current_quarter",
-  "top_limit": 10
-}}
-"""
-        
+        """LLM-based intent analysis with error handling"""
         try:
             messages = [
-                SystemMessage(content="Extract analytical intent from questions. Respond with valid JSON only."),
-                HumanMessage(content=prompt)
+                SystemMessage(content="Extract analytical intent. Respond with JSON only."),
+                HumanMessage(content=f"""
+Analyze: "{question}"
+
+Extract:
+1. Task type: aggregation, ranking, trend, count
+2. Metrics: count, sum, revenue, etc.
+3. Entity: customer, payment, order
+4. Time window: 2025, 2024, etc.
+
+JSON only:
+{{
+  "task_type": "aggregation",
+  "metrics": ["count"],
+  "entity": "customer",
+  "time_window": "2025"
+}}
+""")
             ]
             response = await asyncio.to_thread(self.llm.invoke, messages)
             
@@ -117,28 +112,27 @@ Respond with JSON only:
                     task_type=data.get('task_type', 'aggregation'),
                     metrics=data.get('metrics', ['count']),
                     entity=data.get('entity'),
-                    time_window=data.get('time_window'),
-                    top_limit=data.get('top_limit')
+                    time_window=data.get('time_window')
                 )
         except Exception as e:
             print(f"      ⚠️ LLM intent analysis failed: {e}")
         
-        # Fallback
+        # Simple fallback
         return AnalyticalTask(task_type='aggregation', metrics=['count'])
 
 class EvidenceSelector:
-    """Stage 2: Evidence-driven table selection"""
+    """Stage 2: Improved Evidence-driven table selection"""
     
     def __init__(self, tables: List[TableInfo]):
         self.tables = tables
     
     def select_candidates(self, intent: AnalyticalTask, top_k: int = 5) -> List[Tuple[TableInfo, EvidenceScore, List[str]]]:
-        """Select candidate tables using evidence scoring"""
+        """Select candidate tables using improved evidence scoring"""
         print("   📋 Stage 2: Evidence-driven table selection...")
         
         scored_tables = []
         for table in self.tables:
-            score = self._calculate_evidence_score(table, intent)
+            score = self._calculate_improved_evidence(table, intent)
             reasoning = self._generate_reasoning(table, score, intent)
             scored_tables.append((table, score, reasoning))
         
@@ -148,13 +142,18 @@ class EvidenceSelector:
         selected = scored_tables[:top_k]
         print(f"      ✅ Selected {len(selected)} candidates")
         
+        # Debug: Show why tables were selected
+        print(f"      🔍 Top candidates:")
+        for i, (table, score, reasoning) in enumerate(selected[:3], 1):
+            print(f"         {i}. {table.name} (score: {score.total_score:.2f})")
+        
         return selected
     
-    def _calculate_evidence_score(self, table: TableInfo, intent: AnalyticalTask) -> EvidenceScore:
-        """Calculate evidence score for table"""
+    def _calculate_improved_evidence(self, table: TableInfo, intent: AnalyticalTask) -> EvidenceScore:
+        """Calculate evidence score with improved logic"""
         score = EvidenceScore()
         
-        # Role match - prefer fact tables for aggregation
+        # 1. Role match - prefer fact tables for aggregation
         bi_role = getattr(table, 'bi_role', 'dimension')
         data_type = getattr(table, 'data_type', 'reference')
         
@@ -165,30 +164,91 @@ class EvidenceSelector:
         else:
             score.role_match = 0.3
         
-        # Join evidence - connectivity
+        # 2. Join evidence - table connectivity
         score.join_evidence = min(1.0, len(table.relationships) / 3.0)
         
-        # Lexical match - name similarity
-        table_name = table.name.lower()
-        entity_type = table.entity_type.lower()
+        # 3. Lexical match - name similarity with intent
+        score.lexical_match = self._calculate_lexical_match(table, intent)
         
-        if intent.entity and intent.entity.lower() in table_name:
-            score.lexical_match = 1.0
-        elif intent.entity and intent.entity.lower() in entity_type:
-            score.lexical_match = 0.8
-        elif any(metric.lower() in table_name for metric in intent.metrics):
-            score.lexical_match = 0.7
-        else:
-            score.lexical_match = 0.2
+        # 4. NEW: Table quality score - prefer main tables over temp/dated tables
+        score.graph_proximity = self._calculate_table_quality(table)
         
-        # Operational preference
+        # 5. Operational preference
         score.operational_tag = 1.0 if data_type == 'operational' else 0.5
         
-        # Row count
+        # 6. Row count - but not too heavily weighted
         score.row_count = min(1.0, table.row_count / 10000.0) if table.row_count > 0 else 0.0
+        
+        # 7. Freshness/recency
         score.freshness = 1.0
         
         return score
+    
+    def _calculate_lexical_match(self, table: TableInfo, intent: AnalyticalTask) -> float:
+        """Calculate lexical match score"""
+        table_name = table.name.lower()
+        entity_type = getattr(table, 'entity_type', '').lower()
+        
+        # Perfect match
+        if intent.entity and intent.entity.lower() in table_name:
+            return 1.0
+        
+        # Good match with entity type
+        elif intent.entity and intent.entity.lower() in entity_type:
+            return 0.8
+        
+        # Match with metrics
+        elif any(metric.lower() in table_name for metric in intent.metrics):
+            return 0.7
+        
+        # Partial matches
+        elif intent.entity == 'payment' and any(word in table_name for word in ['payment', 'invoice', 'billing']):
+            return 0.6
+        elif intent.entity == 'customer' and any(word in table_name for word in ['customer', 'client', 'account']):
+            return 0.6
+        elif intent.entity == 'sales_rep' and any(word in table_name for word in ['sales', 'rep', 'agent']):
+            return 0.6
+        
+        else:
+            return 0.2
+    
+    def _calculate_table_quality(self, table: TableInfo) -> float:
+        """NEW: Calculate table quality score - prefer main tables over temp/dated tables"""
+        table_name = table.name.lower()
+        quality_score = 1.0  # Start with perfect score
+        
+        # Penalty for dated table names (like table20230517)
+        import re
+        if re.search(r'\d{8}', table_name):  # 8 digits (YYYYMMDD)
+            quality_score -= 0.4
+            print(f"      ⚠️ {table.name}: Dated table detected (8 digits)")
+        elif re.search(r'\d{6}', table_name):  # 6 digits (YYYYMM) 
+            quality_score -= 0.3
+            print(f"      ⚠️ {table.name}: Dated table detected (6 digits)")
+        elif re.search(r'\d{4}', table_name):  # 4 digits (YYYY)
+            quality_score -= 0.2
+            print(f"      ⚠️ {table.name}: Dated table detected (4 digits)")
+        
+        # Penalty for temp/backup indicators
+        temp_indicators = ['temp', 'tmp', 'backup', 'bak', 'old', 'archive', 'test', 'staging']
+        for indicator in temp_indicators:
+            if indicator in table_name:
+                quality_score -= 0.3
+                print(f"      ⚠️ {table.name}: Temp table indicator '{indicator}' detected")
+                break
+        
+        # Penalty for bridge/buffer tables (unless specifically needed)
+        if any(word in table_name for word in ['bridge', 'buffer']) and not any(word in table_name for word in ['customer', 'payment']):
+            quality_score -= 0.2
+            print(f"      ⚠️ {table.name}: Bridge/buffer table detected")
+        
+        # Bonus for clean, simple names
+        if not re.search(r'\d', table_name) and len(table_name.split()) <= 2:
+            quality_score += 0.1
+            print(f"      ✅ {table.name}: Clean table name bonus")
+        
+        # Ensure score stays within bounds
+        return max(0.0, min(1.0, quality_score))
     
     def _generate_reasoning(self, table: TableInfo, score: EvidenceScore, intent: AnalyticalTask) -> List[str]:
         """Generate reasoning for evidence score"""
@@ -203,6 +263,12 @@ class EvidenceSelector:
         
         if score.operational_tag > 0.8:
             reasoning.append("Contains operational data")
+        
+        # NEW: Quality indicators
+        if score.graph_proximity < 0.7:
+            reasoning.append("⚠️ Possible temp/dated table")
+        elif score.graph_proximity >= 0.9:
+            reasoning.append("✅ Clean main table")
         
         measures = getattr(table, 'measures', [])
         if measures:
@@ -258,7 +324,7 @@ class CapabilityValidator:
         return contract
 
 class SQLGenerator:
-    """Stage 4: SQL generation with validation"""
+    """Stage 4: SQL generation with validation - Fixed and simplified"""
     
     def __init__(self, config: Config):
         self.config = config
@@ -270,7 +336,7 @@ class SQLGenerator:
     
     async def generate_sql(self, intent: AnalyticalTask, valid_tables: List[TableInfo], 
                           llm: AzureChatOpenAI) -> Optional[str]:
-        """Generate validated SQL"""
+        """Generate validated SQL - Fixed implementation"""
         print("   ⚡ Stage 4: SQL generation...")
         
         if not valid_tables:
@@ -279,14 +345,21 @@ class SQLGenerator:
         # Select primary table
         primary_table = self._select_primary_table(valid_tables, intent)
         
-        # Generate SQL
-        sql = await self._generate_sql_for_intent(intent, primary_table, llm)
+        # Try template-based generation first (simpler, more reliable)
+        sql = self._generate_template_sql(intent, primary_table)
         
         if sql and self._validate_sql(sql):
-            print("      ✅ SQL generated and validated")
+            print("      ✅ Template SQL generated and validated")
             return sql
         
-        print("      ❌ SQL validation failed")
+        # Fallback to LLM generation
+        sql = await self._generate_llm_sql(intent, primary_table, llm)
+        
+        if sql and self._validate_sql(sql):
+            print("      ✅ LLM SQL generated and validated")
+            return sql
+        
+        print("      ❌ SQL generation failed")
         return None
     
     def _select_primary_table(self, tables: List[TableInfo], intent: AnalyticalTask) -> TableInfo:
@@ -300,16 +373,70 @@ class SQLGenerator:
         # Select table with best capabilities
         return max(tables, key=lambda t: t.get_capability_score())
     
-    async def _generate_sql_for_intent(self, intent: AnalyticalTask, table: TableInfo, 
-                                     llm: AzureChatOpenAI) -> Optional[str]:
-        """Generate SQL for analytical intent"""
+    def _generate_template_sql(self, intent: AnalyticalTask, table: TableInfo) -> Optional[str]:
+        """Generate SQL using simple templates - More reliable"""
+        
+        measures = getattr(table, 'measures', [])
+        entity_keys = getattr(table, 'entity_keys', [])
+        time_columns = getattr(table, 'time_columns', [])
+        
+        # Choose appropriate column for counting
+        count_column = None
+        if entity_keys:
+            count_column = entity_keys[0]
+        elif measures:
+            count_column = measures[0]
+        else:
+            count_column = "*"
+        
+        # Build WHERE clause for time filtering
+        where_clause = "1=1"
+        if intent.time_window and time_columns:
+            time_col = time_columns[0]
+            if intent.time_window == "2025":
+                where_clause = f"YEAR([{time_col}]) = 2025"
+            elif intent.time_window == "2024":
+                where_clause = f"YEAR([{time_col}]) = 2024"
+        
+        # Generate appropriate SQL based on task type
+        if intent.task_type == 'aggregation':
+            if 'count' in intent.metrics:
+                if count_column == "*":
+                    sql = f"SELECT COUNT(*) as total_count FROM {table.full_name} WHERE {where_clause}"
+                else:
+                    sql = f"SELECT COUNT(DISTINCT [{count_column}]) as total_count FROM {table.full_name} WHERE {where_clause}"
+            else:
+                # Sum aggregation
+                if measures:
+                    measure_col = measures[0]
+                    sql = f"SELECT SUM([{measure_col}]) as total_amount FROM {table.full_name} WHERE {where_clause}"
+                else:
+                    sql = f"SELECT COUNT(*) as total_count FROM {table.full_name} WHERE {where_clause}"
+        elif intent.task_type == 'ranking':
+            limit = intent.top_limit or 10
+            if measures and entity_keys:
+                measure_col = measures[0]
+                entity_col = entity_keys[0]
+                sql = f"SELECT TOP {limit} [{entity_col}], [{measure_col}] FROM {table.full_name} WHERE {where_clause} ORDER BY [{measure_col}] DESC"
+            else:
+                sql = f"SELECT TOP {limit} * FROM {table.full_name} WHERE {where_clause}"
+        else:
+            # Default to count
+            sql = f"SELECT COUNT(*) as total_count FROM {table.full_name} WHERE {where_clause}"
+        
+        return sql
+    
+    async def _generate_llm_sql(self, intent: AnalyticalTask, table: TableInfo, 
+                               llm: AzureChatOpenAI) -> Optional[str]:
+        """Generate SQL using LLM with improved prompting"""
         
         # Build table context
         measures = getattr(table, 'measures', [])
         entity_keys = getattr(table, 'entity_keys', [])
         time_columns = getattr(table, 'time_columns', [])
         
-        sample_preview = ""
+        # Sample data preview
+        sample_preview = "No sample data"
         if table.sample_data:
             first_row = table.sample_data[0]
             sample_items = []
@@ -321,31 +448,28 @@ class SQLGenerator:
         prompt = f"""
 Generate SQL for this business request:
 
-TASK: {intent.task_type}
-METRICS: {intent.metrics}
-ENTITY: {intent.entity}
-TOP LIMIT: {intent.top_limit}
+QUESTION: {intent.task_type} - {intent.metrics} for {intent.entity} in {intent.time_window}
 
 TABLE: {table.full_name}
-MEASURES: {measures}
-ENTITY KEYS: {entity_keys}
-TIME COLUMNS: {time_columns}
-SAMPLE DATA: {sample_preview}
+AVAILABLE COLUMNS:
+- Measures (for aggregation): {measures}
+- Entity Keys (for grouping): {entity_keys}  
+- Time Columns (for filtering): {time_columns}
+- Sample Data: {sample_preview}
 
-RULES:
-1. Use only the table and columns listed above
-2. For aggregation: use measures from the list
-3. For ranking: use ORDER BY with measures
-4. For count: use COUNT(*)
-5. Include TOP clause if limit specified
-6. Generate clean, efficient SQL
+REQUIREMENTS:
+1. Use only the table {table.full_name}
+2. For count: use COUNT(*) or COUNT(DISTINCT column)
+3. For time filtering: use YEAR(column) = {intent.time_window}
+4. Generate clean, simple SQL
+5. Start with SELECT
 
-Generate SQL only:
+Generate SQL only, no explanation:
 """
         
         try:
             messages = [
-                SystemMessage(content="Generate SQL for business intelligence queries. Respond with SQL only."),
+                SystemMessage(content="Generate clean SQL queries. Respond with SQL only."),
                 HumanMessage(content=prompt)
             ]
             response = await asyncio.to_thread(llm.invoke, messages)
@@ -353,24 +477,48 @@ Generate SQL only:
             return clean_sql_query(response.content)
             
         except Exception as e:
-            print(f"      ⚠️ SQL generation failed: {e}")
+            print(f"      ⚠️ LLM SQL generation failed: {e}")
             return None
     
     def _validate_sql(self, sql: str) -> bool:
-        """Validate SQL safety and table references"""
-        if not validate_sql_safety(sql):
+        """Validate SQL safety and table references - Fixed validation"""
+        if not sql or not sql.strip():
+            print("      ❌ Empty SQL")
             return False
         
-        # Check table references
-        sql_lower = sql.lower()
-        for table_name in self.allowed_tables:
-            if table_name in sql_lower:
-                return True
+        # SQL safety check
+        if not validate_sql_safety(sql):
+            print("      ❌ SQL safety check failed")
+            return False
         
-        return False
+        # Check table references - More flexible matching
+        sql_lower = sql.lower()
+        
+        # Extract table references from SQL
+        import re
+        table_pattern = r'\[([^\]]+)\]\.\[([^\]]+)\]'
+        matches = re.findall(table_pattern, sql)
+        
+        if matches:
+            # Check if any matched table is in allowed tables
+            for schema, table in matches:
+                full_name = f"[{schema}].[{table}]".lower()
+                if full_name in self.allowed_tables:
+                    print(f"      ✅ Valid table reference: {full_name}")
+                    return True
+            print(f"      ❌ No valid table references found in SQL")
+            return False
+        else:
+            # Fallback: check if any allowed table name appears in SQL
+            for table_name in self.allowed_tables:
+                if table_name in sql_lower:
+                    print(f"      ✅ Table reference found: {table_name}")
+                    return True
+            print(f"      ❌ No table references found")
+            return False
 
 class QueryExecutor:
-    """Execute SQL with retry logic"""
+    """Execute SQL with error handling"""
     
     def __init__(self, config: Config):
         self.config = config
@@ -388,6 +536,11 @@ class QueryExecutor:
                     conn.setencoding(encoding='utf-8')
                 
                 cursor = conn.cursor()
+                
+                # Set query timeout if available
+                if hasattr(cursor, 'timeout'):
+                    cursor.timeout = self.config.query_timeout_seconds
+                
                 cursor.execute(sql)
                 
                 if cursor.description:
@@ -459,7 +612,7 @@ class NERGenerator:
         )
 
 class QueryInterface:
-    """BI-Aware 4-Stage Query Interface - Simple and effective"""
+    """BI-Aware 4-Stage Query Interface - Simple and effective (Fixed)"""
     
     def __init__(self, config: Config):
         self.config = config
@@ -522,7 +675,7 @@ class QueryInterface:
                 print(f"❌ Error: {e}")
     
     async def process_query(self, question: str) -> QueryResult:
-        """BI-Aware 4-Stage Pipeline"""
+        """BI-Aware 4-Stage Pipeline - Fixed implementation"""
         
         try:
             # Stage 1: Intent analysis
@@ -557,7 +710,7 @@ class QueryInterface:
                         question=question,
                         sql_query="",
                         results=[],
-                        error="SQL generation failed",
+                        error="SQL generation failed - no valid SQL could be created",
                         result_type="error"
                     )
             else:

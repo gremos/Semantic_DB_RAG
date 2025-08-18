@@ -235,34 +235,34 @@ class AnalyticalTask:
 
 @dataclass
 class EvidenceScore:
-    """Evidence-based scoring for table selection"""
+    """Enhanced Evidence-based scoring for table selection"""
     role_match: float = 0.0
     join_evidence: float = 0.0
     lexical_match: float = 0.0
-    graph_proximity: float = 0.0
+    graph_proximity: float = 0.0  # Now used for table quality
     operational_tag: float = 0.0
     row_count: float = 0.0
     freshness: float = 0.0
     
     @property
     def total_score(self) -> float:
-        """Calculate weighted total evidence score"""
+        """Calculate weighted total evidence score - Updated weights"""
         weights = {
-            'role_match': 4.0,
-            'join_evidence': 4.0,
-            'lexical_match': 2.0,
-            'graph_proximity': 2.0,
-            'operational_tag': 2.0,
-            'row_count': 1.0,
-            'freshness': 1.0
+            'role_match': 3.0,        # BI role importance
+            'lexical_match': 4.0,     # Name matching (high priority)
+            'graph_proximity': 5.0,   # NEW: Table quality (highest priority)
+            'operational_tag': 2.0,   # Operational data preference
+            'join_evidence': 2.0,     # Relationship connectivity
+            'row_count': 1.0,         # Data volume (low priority)
+            'freshness': 1.0          # Recency (low priority)
         }
         
         total = (
             self.role_match * weights['role_match'] +
-            self.join_evidence * weights['join_evidence'] +
             self.lexical_match * weights['lexical_match'] +
             self.graph_proximity * weights['graph_proximity'] +
             self.operational_tag * weights['operational_tag'] +
+            self.join_evidence * weights['join_evidence'] +
             self.row_count * weights['row_count'] +
             self.freshness * weights['freshness']
         )
@@ -276,10 +276,12 @@ class EvidenceScore:
         
         if self.role_match > 0.7:
             explanations.append("Strong BI role match (fact/operational table)")
-        if self.join_evidence > 0.7:
-            explanations.append("Well-connected with proven relationships")
         if self.lexical_match > 0.7:
             explanations.append("Strong semantic match to query intent")
+        if self.graph_proximity > 0.8:
+            explanations.append("High-quality main table (not temp/dated)")
+        elif self.graph_proximity < 0.6:
+            explanations.append("⚠️ Lower quality table (temp/dated/bridge)")
         if self.operational_tag > 0.8:
             explanations.append("Contains operational (non-planning) data")
         if self.row_count > 0.5:

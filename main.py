@@ -4,6 +4,7 @@
 Semantic Database RAG System - Simple, Readable, Maintainable
 Following README exactly with DRY, SOLID, YAGNI principles
 Clean function names: SemanticRAG not SimplifiedSemanticRAG
+Fixed for proper error handling and troubleshooting
 """
 
 import asyncio
@@ -53,10 +54,27 @@ class SystemChecker:
             for issue in issues:
                 print(f"   - {issue}")
             print("\n💡 Check your .env file settings")
+            print("💡 Copy env_example.txt to .env and configure")
             return False
         
         print("✅ Configuration validated")
         return True
+    
+    @staticmethod
+    def test_database_connection(config) -> bool:
+        """Test database connection"""
+        try:
+            import pyodbc
+            with pyodbc.connect(config.get_database_connection_string()) as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+            print("✅ Database connection successful")
+            return True
+        except Exception as e:
+            print(f"❌ Database connection failed: {e}")
+            print("💡 Check your DATABASE_CONNECTION_STRING")
+            return False
 
 class ComponentLoader:
     """Component initialization - Single responsibility"""
@@ -83,6 +101,7 @@ class ComponentLoader:
             
         except Exception as e:
             print(f"❌ Component loading failed: {e}")
+            print("💡 Check that all modules are available")
             return False
     
     def get(self, name: str):
@@ -115,10 +134,15 @@ class MenuHandler:
                 return True
             else:
                 print("❌ Discovery failed")
+                print("💡 Check database connection and permissions")
                 return False
                 
         except Exception as e:
             print(f"❌ Discovery error: {e}")
+            print("💡 Troubleshooting:")
+            print("   - Check database connection string")
+            print("   - Verify database permissions")
+            print("   - Check if database is accessible")
             return False
     
     async def run_analysis(self) -> bool:
@@ -139,6 +163,7 @@ class MenuHandler:
                     print(f"   📊 Loaded {len(tables)} tables from discovery cache")
                 else:
                     print("❌ No tables found. Run Discovery first.")
+                    print("💡 Please run Option 1: Database Discovery first")
                     return False
             
             print(f"🧠 Analyzing {len(tables)} tables...")
@@ -160,10 +185,15 @@ class MenuHandler:
                 return True
             else:
                 print("❌ Analysis failed")
+                print("💡 Check LLM configuration and API key")
                 return False
                 
         except Exception as e:
             print(f"❌ Analysis error: {e}")
+            print("💡 Troubleshooting:")
+            print("   - Check Azure OpenAI configuration")
+            print("   - Verify API key and endpoint")
+            print("   - Check internet connectivity")
             return False
     
     async def run_queries(self) -> bool:
@@ -209,6 +239,7 @@ class MenuHandler:
                 print("❌ No data available. Please run:")
                 print("   1. Database Discovery")
                 print("   2. Semantic Analysis")
+                print("💡 Complete the setup process first")
                 return False
             
             print(f"🚀 Starting BI-aware pipeline:")
@@ -221,6 +252,10 @@ class MenuHandler:
             
         except Exception as e:
             print(f"❌ Query interface error: {e}")
+            print("💡 Troubleshooting:")
+            print("   - Check if discovery and analysis completed successfully")
+            print("   - Verify LLM configuration")
+            print("   - Check cache files in data/ directory")
             return False
     
     def show_status(self) -> None:
@@ -278,6 +313,16 @@ class MenuHandler:
             print(f"   ✅ DRY, SOLID, YAGNI principles")
             print(f"   ✅ Function names: SemanticRAG (not SimplifiedSemanticRAG)")
             print(f"   ✅ All features preserved")
+            
+            # System health
+            print(f"\n🏥 System Health:")
+            cache_dir = Path('data')
+            if cache_dir.exists():
+                print(f"   ✅ Cache directory exists")
+                cache_files = list(cache_dir.glob('*.json'))
+                print(f"   📁 Cache files: {len(cache_files)}")
+            else:
+                print(f"   ⚠️ Cache directory missing")
                     
         except Exception as e:
             print(f"⚠️ Status check error: {e}")
@@ -295,7 +340,7 @@ class SemanticRAG:
     def _initialize(self):
         """Initialize system components"""
         try:
-            # Check dependencies
+            # Check dependencies first
             if not SystemChecker.check_dependencies():
                 raise RuntimeError("Missing required dependencies")
             
@@ -306,6 +351,11 @@ class SemanticRAG:
             # Validate configuration
             if not SystemChecker.check_config(self.config):
                 raise RuntimeError("Configuration validation failed")
+            
+            # Test database connection
+            if not SystemChecker.test_database_connection(self.config):
+                print("⚠️ Database connection failed, but continuing...")
+                print("💡 Some features may not work without database access")
             
             # Load components
             self.components = ComponentLoader(self.config)
@@ -326,6 +376,10 @@ class SemanticRAG:
             print("   3. Set DATABASE_CONNECTION_STRING")
             print("   4. Set AZURE_ENDPOINT")
             print("   5. Install: pip install pyodbc langchain-openai")
+            print("\n💡 Troubleshooting:")
+            print("   - Check .env file exists and has correct format")
+            print("   - Verify Azure OpenAI settings")
+            print("   - Test database connectivity")
             raise
     
     async def run_discovery(self) -> bool:
@@ -358,18 +412,26 @@ def show_main_menu() -> None:
     print("="*60)
 
 async def handle_menu_choice(system: SemanticRAG, choice: str) -> bool:
-    """Handle menu choice"""
-    if choice == '1':
-        return await system.run_discovery()
-    elif choice == '2':
-        return await system.run_analysis()
-    elif choice == '3':
-        return await system.run_queries()
-    elif choice == '4':
-        system.show_status()
+    """Handle menu choice with improved error handling"""
+    try:
+        if choice == '1':
+            return await system.run_discovery()
+        elif choice == '2':
+            return await system.run_analysis()
+        elif choice == '3':
+            return await system.run_queries()
+        elif choice == '4':
+            system.show_status()
+            return True
+        else:
+            print(f"❌ Invalid choice: '{choice}'. Please enter 0-4.")
+            return True
+    except KeyboardInterrupt:
+        print("\n⏸️ Operation interrupted by user")
         return True
-    else:
-        print(f"❌ Invalid choice: '{choice}'. Please enter 0-4.")
+    except Exception as e:
+        print(f"❌ Operation failed: {e}")
+        print("💡 Check system status for troubleshooting")
         return True
 
 def main():
@@ -383,6 +445,8 @@ def main():
     try:
         system = SemanticRAG()
     except Exception:
+        print("\n❌ System initialization failed")
+        print("💡 Please fix configuration issues and try again")
         return  # Error already printed in __init__
     
     # Main menu loop
@@ -405,6 +469,7 @@ def main():
             break
         except Exception as e:
             print(f"❌ Error: {e}")
+            print("💡 Try Option 4 (System Status) for troubleshooting")
 
 if __name__ == "__main__":
     main()
