@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-BI-Aware Data Models - Enhanced for Business Intelligence
-Following README: Simple, Readable, Maintainable with BI capabilities
+BI-Aware Data Models - Simple, Readable, Maintainable
+Following README: Enhanced for Business Intelligence with clean methods
 """
 
 from dataclasses import dataclass, field
@@ -134,27 +134,6 @@ class QueryResult:
         return self.result_type == "ner"
 
 @dataclass
-class NonExecutableAnalysisReport:
-    """NER - Report when capability contracts fail"""
-    question: str
-    normalized_task: Dict[str, Any]  # AnalyticalTask as dict
-    missing_capabilities: List[str]
-    top_candidate_tables: List[Tuple[str, float]]  # (table_name, evidence_score)
-    fix_paths: List[str]
-    suggested_queries: List[str] = field(default_factory=list)
-    
-    def to_query_result(self) -> QueryResult:
-        """Convert NER to QueryResult format"""
-        return QueryResult(
-            question=self.question,
-            sql_query="-- NER: No executable SQL generated",
-            results=[],
-            error=f"Capability check failed: {', '.join(self.missing_capabilities[:3])}",
-            result_type="ner",
-            evidence_reasoning=self.fix_paths
-        )
-
-@dataclass
 class CapabilityContract:
     """BI capability contract for query validation"""
     grain: Optional[str] = None
@@ -167,22 +146,47 @@ class CapabilityContract:
     
     def is_complete(self) -> bool:
         """Check if contract meets minimal BI requirements"""
-        return bool(
-            self.grain and 
-            (self.measures or self.entity_keys) and
-            self.time_column
-        )
+        # Basic completeness: has grain and either measures or entity keys
+        has_grain = bool(self.grain and self.grain != 'unknown')
+        has_capabilities = bool(self.measures or self.entity_keys)
+        has_data = self.quality_checks.get('row_count', 0) > 0
+        
+        return has_grain and has_capabilities and has_data
     
     def get_completeness_score(self) -> float:
         """Get contract completeness as percentage"""
         checks = [
-            bool(self.grain),
+            bool(self.grain and self.grain != 'unknown'),
             bool(self.measures or self.entity_keys),
             bool(self.time_column),
             bool(self.entity_keys),
             bool(self.quality_checks.get('row_count', 0) > 0)
         ]
         return sum(checks) / len(checks)
+    
+    def get_missing_capabilities(self) -> List[str]:
+        """Get list of missing capabilities"""
+        missing = []
+        
+        if not self.grain or self.grain == 'unknown':
+            missing.append("Row grain identification")
+        
+        if not self.measures and not self.entity_keys:
+            missing.append("Numeric measures or entity keys")
+        elif not self.measures:
+            missing.append("Numeric measures for aggregation")
+        
+        if not self.time_column:
+            missing.append("Time/date column for filtering")
+        
+        if not self.entity_keys:
+            missing.append("Entity keys for grouping")
+        
+        quality = self.quality_checks
+        if quality.get('row_count', 0) == 0:
+            missing.append("Data availability (zero rows)")
+        
+        return missing
 
 @dataclass
 class AnalyticalTask:
@@ -283,6 +287,27 @@ class EvidenceScore:
         
         return explanations
 
+@dataclass
+class NonExecutableAnalysisReport:
+    """NER - Report when capability contracts fail"""
+    question: str
+    normalized_task: Dict[str, Any]  # AnalyticalTask as dict
+    missing_capabilities: List[str]
+    top_candidate_tables: List[Tuple[str, float]]  # (table_name, evidence_score)
+    fix_paths: List[str]
+    suggested_queries: List[str] = field(default_factory=list)
+    
+    def to_query_result(self) -> QueryResult:
+        """Convert NER to QueryResult format"""
+        return QueryResult(
+            question=self.question,
+            sql_query="-- NER: No executable SQL generated",
+            results=[],
+            error=f"Capability check failed: {', '.join(self.missing_capabilities[:3])}",
+            result_type="ner",
+            evidence_reasoning=self.fix_paths
+        )
+
 # Type aliases for better code readability
 TableList = List[TableInfo]
 RelationshipList = List[Relationship]
@@ -335,10 +360,10 @@ def calculate_bi_readiness(tables: TableList) -> Dict[str, Any]:
     if not tables:
         return {'readiness_score': 0.0, 'issues': ['No tables available']}
     
-    fact_tables = [t for t in tables if t.bi_role == 'fact']
-    operational_tables = [t for t in tables if t.data_type == 'operational']
-    tables_with_measures = [t for t in tables if t.measures]
-    tables_with_time = [t for t in tables if t.time_columns]
+    fact_tables = [t for t in tables if getattr(t, 'bi_role', '') == 'fact']
+    operational_tables = [t for t in tables if getattr(t, 'data_type', '') == 'operational']
+    tables_with_measures = [t for t in tables if getattr(t, 'measures', [])]
+    tables_with_time = [t for t in tables if getattr(t, 'time_columns', [])]
     
     # Calculate readiness factors
     factors = {

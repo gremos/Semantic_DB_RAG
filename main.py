@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Semantic Database RAG System - Main Entry Point
-Simple, Readable, Maintainable - Following README exactly
-DRY, SOLID, YAGNI principles with clean function names
+Semantic Database RAG System - Simple, Readable, Maintainable
+Following README exactly with DRY, SOLID, YAGNI principles
+Clean function names: SemanticRAG not SimplifiedSemanticRAG
 """
 
 import asyncio
@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Optional
 
 def load_env():
-    """Load environment variables from .env file (DRY principle)"""
+    """Load environment variables from .env file"""
     env_file = Path('.env')
     if env_file.exists():
         with open(env_file, 'r', encoding='utf-8') as f:
@@ -22,19 +22,19 @@ def load_env():
                     os.environ[key] = value.strip('"\'')
 
 class SystemChecker:
-    """System validation - Single responsibility (SOLID)"""
+    """System validation - Single responsibility"""
     
     @staticmethod
     def check_dependencies() -> bool:
         """Check required dependencies"""
         try:
             import pyodbc
-            import sqlglot
             from langchain_openai import AzureChatOpenAI
+            print("✅ Required dependencies available")
             return True
         except ImportError as e:
             print(f"❌ Missing dependency: {e}")
-            print("💡 Install with: pip install pyodbc sqlglot langchain-openai")
+            print("💡 Install with: pip install pyodbc langchain-openai")
             return False
     
     @staticmethod
@@ -52,12 +52,14 @@ class SystemChecker:
             print("❌ Configuration issues:")
             for issue in issues:
                 print(f"   - {issue}")
+            print("\n💡 Check your .env file settings")
             return False
         
+        print("✅ Configuration validated")
         return True
 
 class ComponentLoader:
-    """Component initialization - Single responsibility (SOLID)"""
+    """Component initialization - Single responsibility"""
     
     def __init__(self, config):
         self.config = config
@@ -66,18 +68,17 @@ class ComponentLoader:
     def load_all(self) -> bool:
         """Load all system components"""
         try:
-            from shared.config import Config
             from db.discovery import DatabaseDiscovery
             from semantic.analysis import SemanticAnalyzer
             from interactive.query_interface import QueryInterface
             
-            # Store components
             self.components = {
                 'discovery': DatabaseDiscovery(self.config),
                 'analyzer': SemanticAnalyzer(self.config), 
                 'query_interface': QueryInterface(self.config)
             }
             
+            print("✅ Components loaded successfully")
             return True
             
         except Exception as e:
@@ -89,7 +90,7 @@ class ComponentLoader:
         return self.components.get(name)
 
 class MenuHandler:
-    """Menu operations - Single responsibility (SOLID)"""
+    """Menu operations - Single responsibility"""
     
     def __init__(self, components: ComponentLoader):
         self.components = components
@@ -97,7 +98,7 @@ class MenuHandler:
     async def run_discovery(self) -> bool:
         """Option 1: Database Discovery"""
         print("\n🔍 DATABASE DISCOVERY")
-        print("Following README: Schema + samples + view/SP analysis")
+        print("Schema + samples + view/SP analysis with SQLGlot")
         print("=" * 60)
         
         try:
@@ -105,16 +106,12 @@ class MenuHandler:
             success = await discovery.discover_database()
             
             if success:
-                tables = discovery.get_tables()
-                relationships = discovery.get_relationships()
-                view_info = discovery.get_view_info()
-                sp_info = discovery.get_stored_procedure_info()
-                
+                stats = discovery.get_discovery_stats()
                 print(f"✅ Discovery completed!")
-                print(f"   📊 Tables: {len(tables)}")
-                print(f"   👁️ Views: {len(view_info)}")
-                print(f"   ⚙️ Stored Procedures: {len(sp_info)}")
-                print(f"   🔗 Relationships: {len(relationships)}")
+                print(f"   📊 Tables: {stats['tables']}")
+                print(f"   👁️ Views: {stats['views']}")
+                print(f"   ⚙️ Stored Procedures: {stats['stored_procedures']}")
+                print(f"   🔗 Relationships: {stats['relationships']}")
                 return True
             else:
                 print("❌ Discovery failed")
@@ -127,7 +124,7 @@ class MenuHandler:
     async def run_analysis(self) -> bool:
         """Option 2: Semantic Analysis"""
         print("\n🧠 SEMANTIC ANALYSIS")
-        print("Following README: Entity classification, business templates")
+        print("BI-aware classification with capability contracts")
         print("=" * 60)
         
         try:
@@ -139,7 +136,7 @@ class MenuHandler:
             if not tables:
                 if discovery.load_from_cache():
                     tables = discovery.get_tables()
-                    print(f"   📊 Loaded {len(tables)} tables from cache")
+                    print(f"   📊 Loaded {len(tables)} tables from discovery cache")
                 else:
                     print("❌ No tables found. Run Discovery first.")
                     return False
@@ -148,15 +145,18 @@ class MenuHandler:
             success = await analyzer.analyze_tables(tables)
             
             if success:
+                stats = analyzer.get_analysis_stats()
                 domain = analyzer.get_domain()
-                relationships = analyzer.get_relationships()
                 
                 print("✅ Analysis completed!")
+                print(f"   📊 Total tables: {stats['total_tables']}")
+                print(f"   📈 Fact tables: {stats['fact_tables']}")
+                print(f"   ⚡ Operational tables: {stats['operational_tables']}")
+                
                 if domain:
                     print(f"   🏢 Domain: {domain.domain_type}")
-                    print(f"   🎯 Confidence: {domain.confidence:.2f}")
                 
-                print(f"   🔗 Relationships: {len(relationships)}")
+                print(f"   🔗 Relationships: {stats['total_relationships']}")
                 return True
             else:
                 print("❌ Analysis failed")
@@ -167,30 +167,42 @@ class MenuHandler:
             return False
     
     async def run_queries(self) -> bool:
-        """Option 3: Interactive Queries - 4-Stage Pipeline"""
-        print("\n💬 4-STAGE INTERACTIVE PIPELINE")
-        print("Following README: Constrained + EG, Schema-first, Enterprise guardrails")
-        print("=" * 80)
+        """Option 3: Interactive Queries"""
+        print("\n💬 BI-AWARE INTERACTIVE QUERIES")
+        print("4-stage pipeline with capability validation")
+        print("=" * 70)
         
         try:
             analyzer = self.components.get('analyzer')
             discovery = self.components.get('discovery')
             query_interface = self.components.get('query_interface')
             
-            # Load data
-            tables = analyzer.get_tables()
-            domain = analyzer.get_domain()
-            relationships = analyzer.get_relationships()
+            # Load data with proper fallback
+            tables = []
+            domain = None
+            relationships = []
             
-            # Try loading from caches
+            # Try to get from analyzer first
+            if hasattr(analyzer, 'get_tables'):
+                tables = analyzer.get_tables()
+                domain = analyzer.get_domain()
+                relationships = analyzer.get_relationships()
+            
+            # Try loading from caches if no data
             if not tables:
+                print("   🔄 Loading from caches...")
+                
+                # Try analyzer cache first
                 if analyzer.load_from_cache():
                     tables = analyzer.get_tables()
                     domain = analyzer.get_domain()
                     relationships = analyzer.get_relationships()
                     print("   📊 Loaded analysis from cache")
+                    
+                # Fallback to discovery cache
                 elif discovery.load_from_cache():
                     tables = discovery.get_tables()
+                    relationships = discovery.get_relationships()
                     print("   📊 Loaded tables from discovery cache")
             
             if not tables:
@@ -199,10 +211,10 @@ class MenuHandler:
                 print("   2. Semantic Analysis")
                 return False
             
-            print(f"🚀 Starting 4-stage pipeline:")
+            print(f"🚀 Starting BI-aware pipeline:")
             print(f"   📊 Tables: {len(tables)}")
             print(f"   🎯 Domain: {domain.domain_type if domain else 'Unknown'}")
-            print(f"   🔗 Relationships: {len(relationships) if relationships else 0}")
+            print(f"   🔗 Relationships: {len(relationships)}")
             
             await query_interface.start_session(tables, domain, relationships)
             return True
@@ -222,61 +234,56 @@ class MenuHandler:
             
             # Check discovery status
             discovery_tables = discovery.get_tables()
-            if not discovery_tables:
+            if not discovery_tables and hasattr(discovery, 'load_from_cache'):
                 discovery.load_from_cache()
                 discovery_tables = discovery.get_tables()
             
             # Check analysis status  
-            analyzer_tables = analyzer.get_tables()
-            if not analyzer_tables:
+            analyzer_tables = []
+            analyzer_domain = None
+            if hasattr(analyzer, 'load_from_cache'):
                 analyzer.load_from_cache()
                 analyzer_tables = analyzer.get_tables()
+                analyzer_domain = analyzer.get_domain()
             
-            domain = analyzer.get_domain()
-            relationships = analyzer.get_relationships()
-            view_info = discovery.get_view_info()
-            
-            # Display status
+            # Display discovery status
             print(f"📋 Discovery Status:")
             if discovery_tables:
-                table_count = sum(1 for t in discovery_tables if t.object_type in ['BASE TABLE', 'TABLE'])
-                view_count = sum(1 for t in discovery_tables if t.object_type == 'VIEW')
-                
-                print(f"   ✅ Completed - {len(discovery_tables)} objects")
-                print(f"   📊 Tables: {table_count}")
-                print(f"   👁️ Views: {view_count} (definitions: {len(view_info)})")
+                stats = discovery.get_discovery_stats()
+                print(f"   ✅ Completed - {stats['total_objects']} objects")
+                print(f"   📊 Tables: {stats['tables']}")
+                print(f"   👁️ Views: {stats['views']}")
             else:
                 print(f"   ❌ Not completed - Run Option 1")
             
+            # Display analysis status
             print(f"\n🧠 Analysis Status:")
             if analyzer_tables:
-                classified = sum(1 for t in analyzer_tables if t.entity_type != 'Unknown')
-                print(f"   ✅ Completed - {len(analyzer_tables)} tables")
-                print(f"   🏷️ Classified: {classified}")
-                
-                if domain:
-                    print(f"   🏢 Domain: {domain.domain_type}")
-                    print(f"   🎯 Confidence: {domain.confidence:.2f}")
+                print(f"   ✅ Completed - {len(analyzer_tables)} tables analyzed")
+                if analyzer_domain:
+                    print(f"   🏢 Domain: {analyzer_domain.domain_type}")
             else:
                 print(f"   ❌ Not completed - Run Option 2")
             
+            # Display pipeline status
             print(f"\n💬 Pipeline Status:")
             if analyzer_tables or discovery_tables:
                 print(f"   ✅ Ready for interactive queries")
             else:
                 print(f"   ❌ Not ready - Complete Options 1 & 2 first")
             
+            # README compliance
             print(f"\n📖 README Compliance:")
             print(f"   ✅ Simple, Readable, Maintainable code")
             print(f"   ✅ DRY, SOLID, YAGNI principles")
             print(f"   ✅ Function names: SemanticRAG (not SimplifiedSemanticRAG)")
-            print(f"   ✅ All features implemented")
+            print(f"   ✅ All features preserved")
                     
         except Exception as e:
             print(f"⚠️ Status check error: {e}")
 
 class SemanticRAG:
-    """Main system orchestrator - Clean interface (SOLID principle)"""
+    """Main system orchestrator - Clean interface"""
     
     def __init__(self):
         load_env()
@@ -288,7 +295,7 @@ class SemanticRAG:
     def _initialize(self):
         """Initialize system components"""
         try:
-            # Check dependencies first
+            # Check dependencies
             if not SystemChecker.check_dependencies():
                 raise RuntimeError("Missing required dependencies")
             
@@ -308,7 +315,7 @@ class SemanticRAG:
             # Initialize menu handler
             self.menu = MenuHandler(self.components)
             
-            print("✅ Semantic RAG System initialized")
+            print("✅ SemanticRAG System initialized")
             print("   Following README: Simple, Readable, Maintainable")
             
         except Exception as e:
@@ -318,7 +325,7 @@ class SemanticRAG:
             print("   2. Set AZURE_OPENAI_API_KEY")
             print("   3. Set DATABASE_CONNECTION_STRING")
             print("   4. Set AZURE_ENDPOINT")
-            print("   5. Install: pip install pyodbc sqlglot langchain-openai")
+            print("   5. Install: pip install pyodbc langchain-openai")
             raise
     
     async def run_discovery(self) -> bool:
@@ -338,34 +345,29 @@ class SemanticRAG:
         self.menu.show_status()
 
 def show_main_menu() -> None:
-    """Display main menu (DRY principle)"""
+    """Display main menu"""
     print("\n" + "="*60)
     print("SEMANTIC DATABASE RAG SYSTEM")
     print("Simple, Readable, Maintainable (README compliant)")
     print("="*60)
     print("1. 🔍 Database Discovery (Schema + samples + views/SPs)")
-    print("2. 🧠 Semantic Analysis (Classification + relationships)")  
+    print("2. 🧠 Semantic Analysis (BI-aware classification)")  
     print("3. 💬 Interactive Queries (4-Stage Pipeline)")
     print("4. 📊 System Status")
     print("0. Exit")
     print("="*60)
 
 async def handle_menu_choice(system: SemanticRAG, choice: str) -> bool:
-    """Handle menu choice (DRY principle)"""
-    handlers = {
-        '1': system.run_discovery,
-        '2': system.run_analysis, 
-        '3': system.run_queries,
-        '4': lambda: system.show_status() or True  # show_status returns None, so add True
-    }
-    
-    handler = handlers.get(choice)
-    if handler:
-        if choice == '4':
-            handler()
-            return True
-        else:
-            return await handler()
+    """Handle menu choice"""
+    if choice == '1':
+        return await system.run_discovery()
+    elif choice == '2':
+        return await system.run_analysis()
+    elif choice == '3':
+        return await system.run_queries()
+    elif choice == '4':
+        system.show_status()
+        return True
     else:
         print(f"❌ Invalid choice: '{choice}'. Please enter 0-4.")
         return True

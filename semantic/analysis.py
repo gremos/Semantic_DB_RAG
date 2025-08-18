@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-BI-Aware Semantic Analysis - No-Fallback Operating Rules
-Following BI Requirements: Capability contracts, evidence-driven selection, NER
-DRY, SOLID, YAGNI principles with strict validation gates
+BI-Aware Semantic Analysis - Simple, Readable, Maintainable
+Following README: Capability contracts, evidence-driven selection, NER
+DRY, SOLID, YAGNI principles with clean cache support
 """
 
 import asyncio
@@ -12,6 +12,7 @@ import time
 from typing import List, Dict, Any, Optional, Tuple, Set, Union
 from datetime import datetime
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from langchain_openai import AzureChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
@@ -20,6 +21,166 @@ from shared.config import Config
 from shared.models import (TableInfo, BusinessDomain, Relationship, NonExecutableAnalysisReport, 
                           AnalyticalTask, EvidenceScore, CapabilityContract)
 from shared.utils import parse_json_response
+
+class CacheManager:
+    """Simple cache management for semantic analysis - Single responsibility (SOLID)"""
+    
+    def __init__(self, config: Config):
+        self.config = config
+    
+    def save_analysis_cache(self, tables: List[TableInfo], domain: Optional[BusinessDomain], 
+                           relationships: List[Relationship]):
+        """Save analysis results to cache"""
+        cache_file = self.config.get_cache_path("semantic_analysis.json")
+        
+        data = {
+            'tables': [self._table_to_dict(t) for t in tables],
+            'domain': self._domain_to_dict(domain) if domain else None,
+            'relationships': [self._relationship_to_dict(r) for r in relationships],
+            'analyzed': datetime.now().isoformat(),
+            'version': '2.0-bi-aware'
+        }
+        
+        try:
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False, default=str)
+            print(f"   💾 Saved analysis to cache: {cache_file}")
+        except Exception as e:
+            print(f"   ⚠️ Failed to save analysis cache: {e}")
+    
+    def load_analysis_cache(self) -> Tuple[List[TableInfo], Optional[BusinessDomain], List[Relationship]]:
+        """Load analysis results from cache if fresh"""
+        cache_file = self.config.get_cache_path("semantic_analysis.json")
+        
+        if not cache_file.exists():
+            return [], None, []
+        
+        try:
+            # Check cache age
+            cache_age = time.time() - cache_file.stat().st_mtime
+            if cache_age > (self.config.semantic_cache_hours * 3600):
+                return [], None, []
+            
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            tables = [self._dict_to_table(t) for t in data.get('tables', [])]
+            domain = self._dict_to_domain(data.get('domain')) if data.get('domain') else None
+            relationships = [self._dict_to_relationship(r) for r in data.get('relationships', [])]
+            
+            return tables, domain, relationships
+            
+        except Exception as e:
+            print(f"   ⚠️ Failed to load analysis cache: {e}")
+            return [], None, []
+    
+    def _table_to_dict(self, table: TableInfo) -> Dict:
+        """Convert TableInfo to dictionary for cache"""
+        return {
+            'name': table.name,
+            'schema': table.schema,
+            'full_name': table.full_name,
+            'object_type': table.object_type,
+            'row_count': table.row_count,
+            'columns': table.columns,
+            'sample_data': table.sample_data,
+            'relationships': table.relationships,
+            'entity_type': table.entity_type,
+            'business_role': table.business_role,
+            'confidence': table.confidence,
+            'data_type': getattr(table, 'data_type', 'reference'),
+            'bi_role': getattr(table, 'bi_role', 'dimension'),
+            'grain': getattr(table, 'grain', 'unknown'),
+            'measures': getattr(table, 'measures', []),
+            'entity_keys': getattr(table, 'entity_keys', []),
+            'time_columns': getattr(table, 'time_columns', []),
+            'filter_columns': getattr(table, 'filter_columns', [])
+        }
+    
+    def _dict_to_table(self, data: Dict) -> TableInfo:
+        """Convert dictionary to TableInfo from cache"""
+        table = TableInfo(
+            name=data['name'],
+            schema=data['schema'],
+            full_name=data['full_name'],
+            object_type=data['object_type'],
+            row_count=data['row_count'],
+            columns=data['columns'],
+            sample_data=data['sample_data'],
+            relationships=data.get('relationships', []),
+            entity_type=data.get('entity_type', 'Unknown'),
+            business_role=data.get('business_role', 'Unknown'),
+            confidence=data.get('confidence', 0.0)
+        )
+        
+        # BI-aware properties
+        table.data_type = data.get('data_type', 'reference')
+        table.bi_role = data.get('bi_role', 'dimension')
+        table.grain = data.get('grain', 'unknown')
+        table.measures = data.get('measures', [])
+        table.entity_keys = data.get('entity_keys', [])
+        table.time_columns = data.get('time_columns', [])
+        table.filter_columns = data.get('filter_columns', [])
+        
+        return table
+    
+    def _domain_to_dict(self, domain: BusinessDomain) -> Dict:
+        """Convert BusinessDomain to dictionary"""
+        return {
+            'domain_type': domain.domain_type,
+            'industry': domain.industry,
+            'confidence': domain.confidence,
+            'sample_questions': domain.sample_questions,
+            'capabilities': domain.capabilities,
+            'bi_maturity': getattr(domain, 'bi_maturity', 'Basic'),
+            'analytical_patterns': getattr(domain, 'analytical_patterns', []),
+            'data_quality_score': getattr(domain, 'data_quality_score', 0.0)
+        }
+    
+    def _dict_to_domain(self, data: Dict) -> BusinessDomain:
+        """Convert dictionary to BusinessDomain"""
+        domain = BusinessDomain(
+            domain_type=data['domain_type'],
+            industry=data['industry'],
+            confidence=data['confidence'],
+            sample_questions=data['sample_questions'],
+            capabilities=data.get('capabilities', {})
+        )
+        
+        domain.bi_maturity = data.get('bi_maturity', 'Basic')
+        domain.analytical_patterns = data.get('analytical_patterns', [])
+        domain.data_quality_score = data.get('data_quality_score', 0.0)
+        
+        return domain
+    
+    def _relationship_to_dict(self, rel: Relationship) -> Dict:
+        """Convert Relationship to dictionary"""
+        return {
+            'from_table': rel.from_table,
+            'to_table': rel.to_table,
+            'relationship_type': rel.relationship_type,
+            'confidence': rel.confidence,
+            'description': rel.description,
+            'cardinality': getattr(rel, 'cardinality', 'unknown'),
+            'join_strength': getattr(rel, 'join_strength', 'weak'),
+            'bi_pattern': getattr(rel, 'bi_pattern', 'unknown')
+        }
+    
+    def _dict_to_relationship(self, data: Dict) -> Relationship:
+        """Convert dictionary to Relationship"""
+        rel = Relationship(
+            from_table=data['from_table'],
+            to_table=data['to_table'],
+            relationship_type=data['relationship_type'],
+            confidence=data['confidence'],
+            description=data.get('description', '')
+        )
+        
+        rel.cardinality = data.get('cardinality', 'unknown')
+        rel.join_strength = data.get('join_strength', 'weak')
+        rel.bi_pattern = data.get('bi_pattern', 'unknown')
+        
+        return rel
 
 class LLMAnalyzer:
     """LLM communication for BI-aware analysis"""
@@ -47,8 +208,8 @@ class LLMAnalyzer:
             print(f"   ⚠️ LLM error: {e}")
             return ""
 
-class BIAwareTableClassifier:
-    """BI-aware table classification with operational/planning/reference detection"""
+class BITableClassifier:
+    """BI-aware table classification - Simple and effective"""
     
     def __init__(self, llm_analyzer: LLMAnalyzer):
         self.llm_analyzer = llm_analyzer
@@ -57,37 +218,38 @@ class BIAwareTableClassifier:
         """Classify tables with BI-aware categories"""
         print(f"🏷️ BI-aware classification of {len(tables)} tables...")
         
-        batch_size = 6  # Smaller batches for more detailed analysis
+        batch_size = 6  # Process in small batches
         classified = 0
         
         for i in range(0, len(tables), batch_size):
             batch = tables[i:i+batch_size]
             
-            # Create BI-aware classification prompt
-            prompt = self._create_bi_classification_prompt(batch)
+            # Create classification prompt
+            prompt = self._create_classification_prompt(batch)
             
             # Get LLM response
             response = await self.llm_analyzer.analyze(
-                "You are a business intelligence analyst. Classify database tables for BI capability assessment. Respond with valid JSON only.",
+                "You are a BI analyst. Classify database tables for business intelligence. Respond with valid JSON only.",
                 prompt
             )
             
             # Apply classifications
-            classified += self._apply_bi_classifications(response, batch)
+            classified += self._apply_classifications(response, batch)
             
             # Rate limiting
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.5)
         
         print(f"   ✅ BI-classified {classified} tables")
         return classified
     
-    def _create_bi_classification_prompt(self, tables: List[TableInfo]) -> str:
-        """Create BI-aware classification prompt"""
+    def _create_classification_prompt(self, tables: List[TableInfo]) -> str:
+        """Create BI classification prompt"""
         
         table_summaries = []
         for table in tables:
+            # Analyze columns for BI patterns
+            column_analysis = self._analyze_columns(table)
             sample_preview = self._get_sample_preview(table)
-            column_analysis = self._analyze_columns_for_bi(table)
             
             table_summaries.append({
                 'table_name': table.full_name,
@@ -97,31 +259,15 @@ class BIAwareTableClassifier:
             })
         
         return f"""
-Analyze these database tables for BUSINESS INTELLIGENCE capabilities. Focus on identifying:
+Analyze these tables for BUSINESS INTELLIGENCE capabilities:
 
-1. DATA TYPE: Operational (real transactions), Planning (targets/budgets), or Reference (lookups)
-2. BI ROLE: Fact (measures/metrics), Dimension (entities/attributes), or Bridge (relationships)
-3. GRAIN: What each row represents (customer, transaction, order, etc.)
-4. MEASURES: Numeric columns suitable for aggregation
-5. ENTITY KEYS: Columns for grouping/filtering
-6. TIME DIMENSION: Date/timestamp columns for temporal analysis
+1. DATA TYPE: operational (real transactions), planning (targets), reference (lookups)
+2. BI ROLE: fact (measures), dimension (attributes), bridge (relationships)
+3. GRAIN: what each row represents
+4. CAPABILITIES: measures, entity keys, time columns, filters
 
-TABLES TO ANALYZE:
+TABLES:
 {json.dumps(table_summaries, indent=2)}
-
-CLASSIFICATION RULES:
-- Operational data: Real transactions, events, actual business activity
-- Planning data: Targets, goals, budgets, forecasts (often with zeros or future dates)
-- Reference data: Lookup tables, codes, categories, static definitions
-
-- Fact tables: Contain measures (amounts, quantities) and foreign keys
-- Dimension tables: Contain descriptive attributes (names, descriptions)
-- Bridge tables: Many-to-many relationships
-
-Look at actual sample data values to determine:
-- Are amounts real transaction values or planning targets?
-- Are dates historical (operational) or future (planning)?
-- Do rows represent events/transactions or reference items?
 
 Respond with JSON only:
 {{
@@ -130,36 +276,34 @@ Respond with JSON only:
       "table_name": "[schema].[table]",
       "data_type": "operational|planning|reference",
       "bi_role": "fact|dimension|bridge",
-      "grain": "customer|transaction|order|product|event",
-      "entity_type": "Customer|Payment|Order|Product|Reference",
-      "measures": ["amount_column", "quantity_column"],
+      "grain": "customer|transaction|order|product",
+      "entity_type": "Customer|Payment|Order|Product",
+      "measures": ["amount_col", "quantity_col"],
       "entity_keys": ["customer_id", "product_id"],
-      "time_columns": ["created_date", "transaction_date"],
-      "filter_columns": ["status", "type", "region"],
-      "confidence": 0.9,
-      "reasoning": "Sample data shows real transaction amounts and historical dates"
+      "time_columns": ["date_col"],
+      "filter_columns": ["status", "type"],
+      "confidence": 0.9
     }}
   ]
 }}
 """
     
-    def _analyze_columns_for_bi(self, table: TableInfo) -> Dict[str, Any]:
+    def _analyze_columns(self, table: TableInfo) -> Dict[str, Any]:
         """Analyze columns for BI capabilities"""
         analysis = {
             'measures': [],
             'entity_keys': [],
             'time_columns': [],
-            'filter_columns': [],
-            'total_columns': len(table.columns)
+            'filter_columns': []
         }
         
         for col in table.columns:
             col_name = col.get('name', '').lower()
             col_type = col.get('data_type', '').lower()
             
-            # Identify measures (numeric columns for aggregation)
-            if any(numeric_type in col_type for numeric_type in ['decimal', 'money', 'float', 'numeric', 'int']):
-                if any(measure_word in col_name for measure_word in ['amount', 'value', 'price', 'cost', 'revenue', 'total', 'quantity', 'count']):
+            # Identify measures
+            if any(t in col_type for t in ['decimal', 'money', 'float', 'numeric', 'int']):
+                if any(w in col_name for w in ['amount', 'value', 'price', 'total', 'quantity']):
                     analysis['measures'].append(col.get('name'))
             
             # Identify entity keys
@@ -167,43 +311,32 @@ Respond with JSON only:
                 analysis['entity_keys'].append(col.get('name'))
             
             # Identify time columns
-            if ('date' in col_type or 'time' in col_type or 
-                any(time_word in col_name for time_word in ['date', 'time', 'created', 'modified', 'updated'])):
+            if 'date' in col_type or 'time' in col_type or any(w in col_name for w in ['date', 'time', 'created']):
                 analysis['time_columns'].append(col.get('name'))
             
             # Identify filter columns
-            if any(filter_word in col_name for filter_word in ['status', 'type', 'category', 'region', 'channel', 'active']):
+            if any(w in col_name for w in ['status', 'type', 'category', 'region']):
                 analysis['filter_columns'].append(col.get('name'))
         
         return analysis
     
     def _get_sample_preview(self, table: TableInfo) -> str:
-        """Get meaningful sample data preview for BI analysis"""
+        """Get sample data preview"""
         if not table.sample_data:
             return "No sample data"
         
-        # Look for meaningful patterns in sample data
-        sample_analysis = []
+        # Show first row with meaningful values
         first_row = table.sample_data[0]
+        preview = []
         
-        for key, value in list(first_row.items())[:6]:
-            if key.startswith('__'):  # Skip metadata
-                continue
-                
-            # Analyze value patterns
-            if isinstance(value, (int, float)) and value > 0:
-                sample_analysis.append(f"{key}: {value} (positive numeric)")
-            elif isinstance(value, (int, float)) and value == 0:
-                sample_analysis.append(f"{key}: 0 (zero - planning?)")
-            elif isinstance(value, str) and len(str(value)) > 0:
-                sample_analysis.append(f"{key}: '{value}' (text)")
-            else:
-                sample_analysis.append(f"{key}: {value}")
+        for key, value in list(first_row.items())[:4]:
+            if not key.startswith('__'):
+                preview.append(f"{key}={value}")
         
-        return " | ".join(sample_analysis)
+        return " | ".join(preview)
     
-    def _apply_bi_classifications(self, response: str, batch: List[TableInfo]) -> int:
-        """Apply BI-aware classifications to tables"""
+    def _apply_classifications(self, response: str, batch: List[TableInfo]) -> int:
+        """Apply classifications to tables"""
         data = parse_json_response(response)
         if not data or 'classifications' not in data:
             return 0
@@ -215,22 +348,16 @@ Respond with JSON only:
             # Find and update table
             for table in batch:
                 if table.full_name == table_name:
-                    # Standard classifications
+                    # Apply BI classifications
                     table.entity_type = classification.get('entity_type', 'Unknown')
                     table.confidence = float(classification.get('confidence', 0.0))
-                    
-                    # BI-specific classifications
                     table.data_type = classification.get('data_type', 'reference')
                     table.bi_role = classification.get('bi_role', 'dimension')
                     table.grain = classification.get('grain', 'unknown')
-                    table.business_role = classification.get('bi_role', 'Supporting')
-                    
-                    # BI capabilities
                     table.measures = classification.get('measures', [])
                     table.entity_keys = classification.get('entity_keys', [])
                     table.time_columns = classification.get('time_columns', [])
                     table.filter_columns = classification.get('filter_columns', [])
-                    
                     count += 1
                     break
         
@@ -239,34 +366,18 @@ Respond with JSON only:
 class CapabilityAnalyzer:
     """Analyze tables for BI capability contracts"""
     
-    def __init__(self):
-        self.business_synonyms = {
-            'customer': ['customer', 'client', 'account', 'user', 'subscriber'],
-            'revenue': ['amount', 'value', 'price', 'cost', 'revenue', 'total', 'payment'],
-            'transaction': ['payment', 'order', 'sale', 'purchase', 'transaction'],
-            'product': ['product', 'item', 'inventory', 'sku', 'catalog'],
-            'time': ['date', 'time', 'created', 'modified', 'updated', 'timestamp']
-        }
-    
     def assess_capability_contract(self, table: TableInfo, intent: AnalyticalTask) -> CapabilityContract:
-        """Assess if table satisfies capability contract for intent"""
+        """Assess if table satisfies capability contract"""
         contract = CapabilityContract()
         
-        # Determine grain from BI classification
         contract.grain = getattr(table, 'grain', 'unknown')
-        
-        # Find measures
         contract.measures = getattr(table, 'measures', [])
-        
-        # Find time columns
-        time_columns = getattr(table, 'time_columns', [])
-        if time_columns:
-            contract.time_column = time_columns[0]  # Use first available
-        
-        # Find entity keys
         contract.entity_keys = getattr(table, 'entity_keys', [])
         
-        # Assess quality
+        time_columns = getattr(table, 'time_columns', [])
+        if time_columns:
+            contract.time_column = time_columns[0]
+        
         contract.quality_checks = {
             'row_count': table.row_count,
             'has_sample_data': len(table.sample_data) > 0,
@@ -275,117 +386,48 @@ class CapabilityAnalyzer:
         }
         
         return contract
-    
-    def generate_fix_paths(self, table: TableInfo, missing_capabilities: List[str]) -> List[str]:
-        """Generate suggested fix paths for missing capabilities"""
-        fixes = []
-        
-        if "Row grain identification" in missing_capabilities:
-            fixes.append(f"Define grain for {table.full_name} - what does each row represent?")
-        
-        if "Numeric measures" in missing_capabilities:
-            numeric_cols = [col.get('name') for col in table.columns 
-                          if col.get('data_type', '').lower() in ['decimal', 'money', 'float', 'numeric', 'int']]
-            if numeric_cols:
-                fixes.append(f"Use numeric columns as measures: {', '.join(numeric_cols[:3])}")
-            else:
-                fixes.append(f"No numeric columns found in {table.full_name} for aggregation")
-        
-        if "Time/date column" in missing_capabilities:
-            date_cols = [col.get('name') for col in table.columns 
-                        if 'date' in col.get('name', '').lower() or 'time' in col.get('data_type', '').lower()]
-            if date_cols:
-                fixes.append(f"Use time columns: {', '.join(date_cols[:2])}")
-            else:
-                fixes.append(f"No time/date columns found in {table.full_name}")
-        
-        return fixes
 
 class EvidenceScorer:
-    """Evidence-driven object selection with weighted scoring"""
+    """Evidence-driven object selection"""
     
     def __init__(self, tables: List[TableInfo]):
         self.tables = tables
-        self.table_map = {t.full_name: t for t in tables}
     
     def score_table_for_intent(self, table: TableInfo, intent: AnalyticalTask) -> EvidenceScore:
         """Score table based on evidence for analytical intent"""
         score = EvidenceScore()
         
-        # Role match (high weight)
-        score.role_match = self._score_role_match(table, intent)
-        
-        # Join evidence (high weight)  
-        score.join_evidence = self._score_join_evidence(table)
-        
-        # Lexical/semantic match (medium weight)
-        score.lexical_match = self._score_lexical_match(table, intent)
-        
-        # Operational vs planning (medium weight)
-        score.operational_tag = self._score_operational_data(table)
-        
-        # Row count and freshness (tie-breaker)
-        score.row_count = min(1.0, table.row_count / 10000.0) if table.row_count > 0 else 0.0
-        score.freshness = 1.0  # Assume fresh for now
-        
-        return score
-    
-    def _score_role_match(self, table: TableInfo, intent: AnalyticalTask) -> float:
-        """Score based on BI role appropriateness"""
+        # Role match (fact tables for aggregation)
         bi_role = getattr(table, 'bi_role', 'dimension')
         data_type = getattr(table, 'data_type', 'reference')
         
-        # For aggregation tasks, prefer fact tables with operational data
-        if intent.task_type in ['aggregation', 'ranking', 'trend']:
-            if bi_role == 'fact' and data_type == 'operational':
-                return 1.0
-            elif bi_role == 'fact':
-                return 0.8
-            else:
-                return 0.3
-        
-        # For other tasks, dimension tables are also valuable
-        return 0.7 if bi_role in ['fact', 'dimension'] else 0.3
-    
-    def _score_join_evidence(self, table: TableInfo) -> float:
-        """Score based on join relationships"""
-        # Count foreign key relationships
-        fk_count = len(table.relationships)
-        
-        # Score based on connectivity
-        if fk_count >= 3:
-            return 1.0
-        elif fk_count >= 1:
-            return 0.7
+        if intent.task_type in ['aggregation', 'ranking'] and bi_role == 'fact' and data_type == 'operational':
+            score.role_match = 1.0
+        elif bi_role == 'fact':
+            score.role_match = 0.8
         else:
-            return 0.3
-    
-    def _score_lexical_match(self, table: TableInfo, intent: AnalyticalTask) -> float:
-        """Score based on lexical/semantic matching"""
+            score.role_match = 0.3
+        
+        # Join evidence
+        score.join_evidence = min(1.0, len(table.relationships) / 3.0)
+        
+        # Lexical match
         table_name = table.name.lower()
-        entity_type = table.entity_type.lower()
-        
-        # Match against intent entity
         if intent.entity and intent.entity.lower() in table_name:
-            return 1.0
+            score.lexical_match = 1.0
+        elif any(metric.lower() in table_name for metric in intent.metrics):
+            score.lexical_match = 0.8
+        else:
+            score.lexical_match = 0.2
         
-        # Match against metrics
-        for metric in intent.metrics:
-            if metric.lower() in table_name or metric.lower() in entity_type:
-                return 0.8
+        # Operational preference
+        score.operational_tag = 1.0 if data_type == 'operational' else 0.5
         
-        return 0.2
-    
-    def _score_operational_data(self, table: TableInfo) -> float:
-        """Score operational data higher than planning"""
-        data_type = getattr(table, 'data_type', 'reference')
+        # Row count
+        score.row_count = min(1.0, table.row_count / 10000.0) if table.row_count > 0 else 0.0
+        score.freshness = 1.0
         
-        if data_type == 'operational':
-            return 1.0
-        elif data_type == 'reference':
-            return 0.6
-        else:  # planning
-            return 0.3
+        return score
     
     def rank_candidates(self, intent: AnalyticalTask, top_k: int = 5) -> List[Tuple[TableInfo, EvidenceScore]]:
         """Rank candidate tables by evidence score"""
@@ -395,63 +437,61 @@ class EvidenceScorer:
             score = self.score_table_for_intent(table, intent)
             scored_tables.append((table, score))
         
-        # Sort by total score descending
         scored_tables.sort(key=lambda x: x[1].total_score, reverse=True)
-        
         return scored_tables[:top_k]
 
 class NERGenerator:
-    """Non-Executable Analysis Report generator"""
-    
-    def __init__(self):
-        pass
+    """Generate Non-Executable Analysis Reports"""
     
     def generate_ner(self, question: str, intent: AnalyticalTask, 
                     capability_failures: List[Tuple[TableInfo, CapabilityContract]],
                     top_candidates: List[Tuple[TableInfo, EvidenceScore]]) -> NonExecutableAnalysisReport:
-        """Generate comprehensive NER when capability checks fail"""
+        """Generate NER when capability checks fail"""
         
-        # Collect all missing capabilities
+        # Collect missing capabilities
         all_missing = set()
         for table, contract in capability_failures:
             all_missing.update(contract.get_missing_capabilities())
         
         # Generate fix paths
         fix_paths = []
-        capability_analyzer = CapabilityAnalyzer()
-        
-        for table, contract in capability_failures[:3]:  # Top 3 candidates
+        for table, contract in capability_failures[:3]:
             missing = contract.get_missing_capabilities()
-            table_fixes = capability_analyzer.generate_fix_paths(table, missing)
-            fix_paths.extend([f"{table.full_name}: {fix}" for fix in table_fixes])
+            if "Numeric measures" in missing:
+                numeric_cols = [col.get('name') for col in table.columns 
+                              if 'int' in col.get('data_type', '').lower() or 'decimal' in col.get('data_type', '').lower()]
+                if numeric_cols:
+                    fix_paths.append(f"{table.full_name}: Use {', '.join(numeric_cols[:2])} as measures")
+            
+            if "Time/date column" in missing:
+                date_cols = [col.get('name') for col in table.columns if 'date' in col.get('name', '').lower()]
+                if date_cols:
+                    fix_paths.append(f"{table.full_name}: Use {', '.join(date_cols[:1])} for time filtering")
         
-        # Generate safe exploratory queries
+        # Generate safe queries
         safe_queries = []
         for table, score in top_candidates[:2]:
-            safe_queries.append(f"-- Explore {table.full_name} structure\nSELECT TOP 5 * FROM {table.full_name}")
-            
-            if hasattr(table, 'measures') and table.measures:
-                measures_str = ', '.join(table.measures[:2])
-                safe_queries.append(f"-- Check {table.full_name} measures\nSELECT {measures_str}, COUNT(*) as row_count FROM {table.full_name} GROUP BY {measures_str}")
+            safe_queries.append(f"SELECT TOP 5 * FROM {table.full_name}")
         
         return NonExecutableAnalysisReport(
             question=question,
-            normalized_task=intent,
+            normalized_task=intent.__dict__,
             missing_capabilities=list(all_missing),
-            top_candidate_tables=[(t.full_name, s) for t, s in top_candidates],
+            top_candidate_tables=[(t.full_name, s.total_score) for t, s in top_candidates],
             fix_paths=fix_paths,
             suggested_queries=safe_queries
         )
 
-class BISemanticAnalyzer:
-    """BI-Aware Semantic Analyzer with capability contracts and NER"""
+class SemanticAnalyzer:
+    """BI-Aware Semantic Analyzer - Simple and maintainable"""
     
     def __init__(self, config: Config):
         self.config = config
         
-        # Initialize BI-aware components
+        # Initialize components
+        self.cache_manager = CacheManager(config)
         self.llm_analyzer = LLMAnalyzer(config)
-        self.table_classifier = BIAwareTableClassifier(self.llm_analyzer)
+        self.table_classifier = BITableClassifier(self.llm_analyzer)
         self.capability_analyzer = CapabilityAnalyzer()
         self.ner_generator = NERGenerator()
         
@@ -463,38 +503,52 @@ class BISemanticAnalyzer:
     
     async def analyze_tables(self, tables: List[TableInfo]) -> bool:
         """BI-aware analysis with capability assessment"""
-        print("🧠 BI-Aware Semantic Analysis (No-Fallback)")
+        print("🧠 BI-Aware Semantic Analysis")
         print("Following capability contracts and evidence-driven selection")
         
         try:
             # Copy input tables
             self.tables = [table for table in tables]
             
-            # Step 1: BI-aware classification
+            # BI-aware classification
             await self.table_classifier.classify_tables(self.tables)
             
-            # Step 2: Initialize evidence scorer
+            # Initialize evidence scorer
             self.evidence_scorer = EvidenceScorer(self.tables)
             
-            # Step 3: Enhance relationships with BI context
-            self.relationships = self._enhance_bi_relationships()
+            # Enhance relationships
+            self.relationships = self._enhance_relationships()
             
-            # Step 4: Determine business domain with BI focus
-            self.domain = await self._determine_bi_domain()
+            # Determine business domain
+            self.domain = self._determine_domain()
             
-            # Show BI-aware summary
-            self._show_bi_summary()
+            # Save to cache
+            self.cache_manager.save_analysis_cache(self.tables, self.domain, self.relationships)
+            
+            # Show summary
+            self._show_summary()
             return True
             
         except Exception as e:
             print(f"❌ BI-aware analysis failed: {e}")
             return False
     
-    def _enhance_bi_relationships(self) -> List[Relationship]:
+    def load_from_cache(self) -> bool:
+        """Load analysis from cache"""
+        tables, domain, relationships = self.cache_manager.load_analysis_cache()
+        if tables:
+            self.tables = tables
+            self.domain = domain
+            self.relationships = relationships
+            self.evidence_scorer = EvidenceScorer(self.tables)
+            return True
+        return False
+    
+    def _enhance_relationships(self) -> List[Relationship]:
         """Enhance relationships with BI awareness"""
         relationships = []
         
-        # Extract existing FK relationships
+        # Extract FK relationships
         for table in self.tables:
             for rel_info in table.relationships:
                 if '->' in rel_info:
@@ -513,73 +567,19 @@ class BISemanticAnalyzer:
                     except Exception:
                         continue
         
-        # Add BI-specific relationships (fact-to-dimension)
-        fact_tables = [t for t in self.tables if getattr(t, 'bi_role', '') == 'fact']
-        dimension_tables = [t for t in self.tables if getattr(t, 'bi_role', '') == 'dimension']
-        
-        for fact in fact_tables:
-            fact_keys = getattr(fact, 'entity_keys', [])
-            for dim in dimension_tables:
-                dim_keys = [col.get('name', '') for col in dim.columns if 'id' in col.get('name', '').lower()]
-                
-                # Look for matching key patterns
-                for fact_key in fact_keys:
-                    for dim_key in dim_keys:
-                        if self._keys_match(fact_key, dim_key, dim.entity_type):
-                            relationships.append(Relationship(
-                                from_table=fact.full_name,
-                                to_table=dim.full_name,
-                                relationship_type='fact_dimension',
-                                confidence=0.8,
-                                description=f"BI relationship: {fact_key} -> {dim_key}"
-                            ))
-        
         return relationships
     
-    def _keys_match(self, fact_key: str, dim_key: str, entity_type: str) -> bool:
-        """Check if fact and dimension keys match"""
-        fact_lower = fact_key.lower()
-        dim_lower = dim_key.lower()
-        entity_lower = entity_type.lower()
+    def _determine_domain(self) -> Optional[BusinessDomain]:
+        """Determine business domain from BI patterns"""
+        fact_tables = len([t for t in self.tables if getattr(t, 'bi_role', '') == 'fact'])
+        operational_tables = len([t for t in self.tables if getattr(t, 'data_type', '') == 'operational'])
         
-        # Direct match
-        if fact_lower == dim_lower:
-            return True
-        
-        # Entity type match
-        if entity_lower in fact_lower and 'id' in fact_lower:
-            return True
-        
-        return False
-    
-    async def _determine_bi_domain(self) -> Optional[BusinessDomain]:
-        """Determine business domain with BI focus"""
-        # Count BI roles and data types
-        bi_distribution = {
-            'fact_tables': len([t for t in self.tables if getattr(t, 'bi_role', '') == 'fact']),
-            'dimension_tables': len([t for t in self.tables if getattr(t, 'bi_role', '') == 'dimension']),
-            'operational_tables': len([t for t in self.tables if getattr(t, 'data_type', '') == 'operational']),
-            'planning_tables': len([t for t in self.tables if getattr(t, 'data_type', '') == 'planning']),
-        }
-        
-        # Determine domain based on BI patterns
-        if bi_distribution['fact_tables'] >= 3 and bi_distribution['operational_tables'] >= 5:
+        if fact_tables >= 3 and operational_tables >= 5:
             domain_type = "Operational BI System"
             confidence = 0.9
-        elif bi_distribution['planning_tables'] >= bi_distribution['operational_tables']:
-            domain_type = "Planning & Analytics System"
-            confidence = 0.8
         else:
             domain_type = "Business System"
             confidence = 0.6
-        
-        capabilities = {
-            'customer_analysis': any('customer' in t.entity_type.lower() for t in self.tables),
-            'financial_analysis': any('payment' in t.entity_type.lower() or 'financial' in t.entity_type.lower() for t in self.tables),
-            'operational_reporting': bi_distribution['operational_tables'] > 0,
-            'planning_analysis': bi_distribution['planning_tables'] > 0,
-            'trend_analysis': any(getattr(t, 'time_columns', []) for t in self.tables)
-        }
         
         return BusinessDomain(
             domain_type=domain_type,
@@ -587,57 +587,49 @@ class BISemanticAnalyzer:
             confidence=confidence,
             sample_questions=[
                 "What is our total revenue this quarter?",
-                "Who are our top 10 customers by value?",
-                "How many active customers do we have?",
-                "What is the trend in monthly sales?"
+                "Who are our top 10 customers?",
+                "How many active customers do we have?"
             ],
-            capabilities=capabilities
+            capabilities={
+                'customer_analysis': any('customer' in t.entity_type.lower() for t in self.tables),
+                'financial_analysis': any('payment' in t.entity_type.lower() for t in self.tables),
+                'operational_reporting': operational_tables > 0
+            }
         )
     
-    def _show_bi_summary(self):
-        """Show BI-aware analysis summary"""
-        # Count classifications
+    def _show_summary(self):
+        """Show BI analysis summary"""
         fact_tables = len([t for t in self.tables if getattr(t, 'bi_role', '') == 'fact'])
-        dimension_tables = len([t for t in self.tables if getattr(t, 'bi_role', '') == 'dimension'])
         operational_tables = len([t for t in self.tables if getattr(t, 'data_type', '') == 'operational'])
-        planning_tables = len([t for t in self.tables if getattr(t, 'data_type', '') == 'planning'])
-        
-        # Count capabilities
         with_measures = len([t for t in self.tables if getattr(t, 'measures', [])])
-        with_time = len([t for t in self.tables if getattr(t, 'time_columns', [])])
         
         print(f"\n📊 BI-AWARE ANALYSIS SUMMARY:")
         print(f"   📋 Total tables: {len(self.tables)}")
         print(f"   📊 Fact tables: {fact_tables}")
-        print(f"   📚 Dimension tables: {dimension_tables}")
-        print(f"   ⚡ Operational data: {operational_tables}")
-        print(f"   📋 Planning data: {planning_tables}")
+        print(f"   ⚡ Operational tables: {operational_tables}")
         print(f"   📈 Tables with measures: {with_measures}")
-        print(f"   ⏰ Tables with time columns: {with_time}")
-        print(f"   🔗 BI relationships: {len(self.relationships)}")
+        print(f"   🔗 Relationships: {len(self.relationships)}")
         
         if self.domain:
-            print(f"   🎯 BI Domain: {self.domain.domain_type} (confidence: {self.domain.confidence:.2f})")
+            print(f"   🎯 Domain: {self.domain.domain_type}")
         
-        print(f"   ✅ Capability contracts ready for validation")
-        print(f"   🚫 No-fallback mode: Only validated queries will execute")
+        print(f"   ✅ Ready for capability validation")
     
-    # Public interface - enhanced for BI
     def assess_query_capability(self, question: str) -> Union[List[TableInfo], NonExecutableAnalysisReport]:
         """Assess if query can be executed based on capability contracts"""
         if not self.evidence_scorer:
             return NonExecutableAnalysisReport(
                 question=question,
-                normalized_task=AnalyticalTask(task_type="unknown"),
-                missing_capabilities=["System not properly initialized"],
+                normalized_task={"task_type": "unknown"},
+                missing_capabilities=["System not initialized"],
                 top_candidate_tables=[],
-                fix_paths=["Run BI-aware analysis first"]
+                fix_paths=["Run analysis first"]
             )
         
-        # Parse intent (simplified for now)
+        # Parse intent (simplified)
         intent = self._parse_intent(question)
         
-        # Rank candidates by evidence
+        # Rank candidates
         candidates = self.evidence_scorer.rank_candidates(intent, top_k=5)
         
         # Check capability contracts
@@ -654,72 +646,58 @@ class BISemanticAnalyzer:
         
         # Return valid tables or NER
         if valid_tables:
-            print(f"✅ Found {len(valid_tables)} tables satisfying capability contract")
             return valid_tables
         else:
-            print(f"❌ No tables satisfy capability contract - generating NER")
             return self.ner_generator.generate_ner(question, intent, capability_failures, candidates)
     
     def _parse_intent(self, question: str) -> AnalyticalTask:
-        """Parse user question into analytical task (simplified)"""
+        """Parse question into analytical task"""
         q_lower = question.lower()
         
-        # Detect task type
-        if any(word in q_lower for word in ['how many', 'count', 'number']):
+        if any(word in q_lower for word in ['how many', 'count']):
             task_type = 'aggregation'
             metrics = ['count']
         elif any(word in q_lower for word in ['total', 'sum']):
             task_type = 'aggregation'
             metrics = ['sum']
-        elif any(word in q_lower for word in ['top', 'highest', 'best']):
+        elif any(word in q_lower for word in ['top', 'highest']):
             task_type = 'ranking'
             metrics = ['value']
         else:
             task_type = 'aggregation'
             metrics = ['count']
         
-        # Detect entity
         entity = None
         if any(word in q_lower for word in ['customer', 'client']):
             entity = 'customer'
-        elif any(word in q_lower for word in ['revenue', 'payment', 'money']):
+        elif any(word in q_lower for word in ['revenue', 'payment']):
             entity = 'revenue'
         
         return AnalyticalTask(
             task_type=task_type,
             metrics=metrics,
-            entity=entity,
-            time_window='current'
+            entity=entity
         )
     
+    # Public interface - clean API
     def get_tables(self) -> List[TableInfo]:
-        """Get analyzed tables"""
         return self.tables
     
     def get_relationships(self) -> List[Relationship]:
-        """Get BI-enhanced relationships"""
         return self.relationships
     
     def get_domain(self) -> Optional[BusinessDomain]:
-        """Get BI-aware business domain"""
         return self.domain
     
     def get_analysis_stats(self) -> Dict[str, Any]:
-        """Get BI-aware analysis statistics"""
         fact_tables = len([t for t in self.tables if getattr(t, 'bi_role', '') == 'fact'])
         operational_tables = len([t for t in self.tables if getattr(t, 'data_type', '') == 'operational'])
-        with_measures = len([t for t in self.tables if getattr(t, 'measures', [])])
         
         return {
             'total_tables': len(self.tables),
             'fact_tables': fact_tables,
             'operational_tables': operational_tables,
-            'tables_with_measures': with_measures,
             'total_relationships': len(self.relationships),
             'domain_type': self.domain.domain_type if self.domain else None,
-            'bi_ready': fact_tables > 0 and operational_tables > 0,
-            'no_fallback_mode': True
+            'bi_ready': fact_tables > 0 and operational_tables > 0
         }
-
-# Maintain compatibility with existing interface
-SemanticAnalyzer = BISemanticAnalyzer
