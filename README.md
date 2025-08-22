@@ -1,364 +1,551 @@
-# 🧠 BI-Aware Semantic Database RAG System — **No-Fallback Production**
+# 🧠 CRM-Aware Semantic Database RAG System — **OpenAI-Powered NER with Zero Hallucinations**
 
-> A **business intelligence aware** Text-to-SQL system with **strict capability contracts** and **zero schema hallucinations**. Never executes unsafe queries—returns **Non-Executable Analysis Reports (NER)** when capability checks fail.
+> A **production-grade CRM-aware** Text-to-SQL system that combines **OpenAI-powered Named Entity Recognition** with **strict capability contracts** and **zero schema hallucinations**. Leverages existing views, foreign keys, and stored procedures to understand relationships and never executes unsafe queries.
 
 ---
 
-## 🎯 Core BI-Aware Principles
+## 🎯 Core Principles
 
-### **No-Fallback Operating Rules**
-- **Never execute a query unless the schema can prove it supports the ask**
-- If any required capability is missing, return a **Non-Executable Analysis Report (NER)** with what's missing and fix paths
+### **No-Hallucination Operating Rules**
+- **Never execute a query unless the schema can prove it supports the request**
+- **OpenAI-powered intent parsing and Named Entity Recognition** for accurate CRM entity identification
+- **Leverage existing database artifacts**: Foreign keys, views, and stored procedures provide relationship truth
+- **Correctness over convenience**: never sum the wrong column or join the wrong dimension
 - **Gate every query behind three validations**: Identifier gate, Relationship gate, Capability gate
-- Use **constrained decoding + AST check + EG retry**, but never schema fallback
+- **Non-Executable Analysis Reports (NEAR)** when capability is missing—no "best-guess" queries
+- **Business-friendly results**: neat columns, explicit units, meaningful labels, reproducible SQL
 
-### **Universal Capability Contract**
-For any BI question, require ALL of the following before generation/execution:
+### **Universal CRM Capability Contract**
+For any CRM analytics question, require ALL of the following before generation/execution:
 
-✅ **Grain**: Row grain of the fact table (payment, invoice_line, order, event)  
-✅ **Measure(s)**: Numeric column(s) compatible with the asked metric (sum/avg/count/distinct)  
-✅ **Time**: Usable timestamp/date for filtering and bucketing  
-✅ **Entity key(s)**: The entity whose metric is grouped by/over (customer, product, user, store, rep)  
-✅ **Join path(s)**: Proven join(s) from fact → dimension(s) via FK or observed view/SP pattern  
-✅ **Filters & Status**: Columns for explicit filters or 'is_refund/is_cancel' flags  
+✅ **Grain**: Row grain of the fact table (opportunity, invoice_line, case, activity, campaign_member)  
+✅ **Measure(s)**: Numeric column(s) compatible with the asked metric (revenue, duration, count, score)  
+✅ **Time**: Usable timestamp/date for filtering and bucketing (CloseDate, CreatedDate, ActivityDate)  
+✅ **Entity key(s)**: The CRM entity for grouping (AccountId, ContactId, OwnerId, ProductId)  
+✅ **Join path(s)**: Proven joins from fact → dimension via FK, views, or stored procedure patterns  
+✅ **Filters & Status**: Columns for explicit filters or status flags (IsWon, IsClosed, Priority, Stage)  
 ✅ **Quality minima**: Row count > 0, null-rate thresholds, optional data-freshness check  
 
-**If ANY item fails → produce NER instead of executing**
+**If ANY item fails → produce NEAR instead of executing**
 
 ---
 
-## 🏗️ Architecture (BI-Enhanced)
+## 🏗️ Architecture
 
 ```
-semantic-db-rag/
-├── main.py                         # CLI with three options + BI validation
+crm-semantic-rag/
+├── main.py                         # CLI entry point with three-phase workflow
 ├── shared/
-│   ├── config.py                   # Env + BI feature flags
-│   ├── models.py                   # BI-enhanced dataclasses with capability contracts
-│   └── utils.py                    # I/O, logging, safety + evidence scoring
-├── db/
-│   └── discovery.py                # Schema discovery + samples + view/SP analysis (unchanged)
+│   ├── config.py                   # OpenAI + database configuration
+│   ├── models.py                   # CRM-enhanced dataclasses with capability contracts
+│   └── utils.py                    # SQL validation, formatting, safety utilities
+├── discovery/
+│   └── discovery.py                # Schema discovery + FK analysis + view/SP parsing
 ├── semantic/
-│   └── analysis.py                 # BI-AWARE: Capability contracts + Evidence-driven selection + NER
+│   └── analysis.py                 # CRM-aware semantic analysis + capability assessment
 ├── interactive/
-│   └── query_interface.py          # BI-aware 4-stage pipeline with capability gates
+│   └── query_interface.py          # OpenAI NER + intent + capability-gated SQL generation
 └── data/
-    ├── database_structure.json     # Canonical cache (schema + samples + views/SP text)
-    ├── semantic_analysis.json      # BI-enhanced: Operational/Planning classification + capability scores
-    └── query_patterns.json         # Learned successful patterns (capability-validated only)
+    ├── database_structure.json     # Canonical schema cache (tables + FKs + views/SPs)
+    ├── semantic_analysis.json      # CRM semantic classification + capability scores
+    └── query_patterns.json         # Validated successful query patterns
 ```
 
 ---
 
-## 🧠 BI-Aware Semantic Analysis (NEW)
+## 🧠 OpenAI-Powered Intent + Named Entity Recognition
 
-### **Enhanced Table Classification**
-Beyond basic entity types, now classifies:
-
-**Data Types:**
-- **Operational**: Real transactions, events, actual business activity
-- **Planning**: Targets, goals, budgets, forecasts (often zeros or future dates)
-- **Reference**: Lookup tables, codes, categories, static definitions
-
-**BI Roles:**
-- **Fact**: Contains measures (amounts, quantities) and foreign keys to dimensions
-- **Dimension**: Contains descriptive attributes (names, descriptions, categories)
-- **Bridge**: Many-to-many relationships between facts and dimensions
-
-**Capability Assessment:**
-- **Measures**: Numeric columns suitable for SUM/AVG/COUNT operations
-- **Entity Keys**: Columns for GROUP BY operations and joins
-- **Time Columns**: Date/timestamp columns for temporal filtering and trending
-- **Filter Columns**: Status, type, region columns for WHERE conditions
-
-### **Evidence-Driven Object Selection**
-Tables ranked using weighted evidence score:
-
-1. **Role Match** (high weight): Fact table with operational data + has measures/dates
-2. **Join Evidence** (high weight): FK relationships or observed joins from views/SPs
-3. **Lexical/Semantic Match** (medium weight): Synonyms in table/column names
-4. **Graph Proximity** (medium weight): Hop distance between fact and requested dimensions
-5. **Operational Tag** (medium weight): Operational > planning/config tables
-6. **Row Count & Freshness** (tie-breaker): Data availability and recency
-
----
-
-## 🚫 No-Fallback Query Pipeline
-
-### **Stage 1: Intent → Analytical Task**
-Normalize natural-language question to structured task:
-- **Task type**: aggregation | ranking | trend | distribution | cohort | funnel
-- **Metric(s)**: revenue, orders, active users, conversion rate
-- **Entity**: customer, product, sales rep, region
-- **Time window**: Q2_2025, last_12_months, YTD
-- **Grouping**: by_customer, by_rep, by_product
-- **Filters**: segments, statuses, geos
-
-### **Stage 2: Capability Gate**
-For top-ranked candidate tables, validate capability contract:
-```python
-✓ Has grain definition (what each row represents)
-✓ Has measures OR entity keys for the requested metric
-✓ Has time column for filtering (if time-based query)
-✓ Has proven join paths to requested dimensions
-✓ Passes quality minima (row count > 0, reasonable null rates)
-```
-
-### **Stage 3: Evidence-Driven Selection**
-Only tables passing capability gate are considered:
-- Score candidates using evidence weights
-- Select top N tables with complete capability contracts
-- Document WHY each table was chosen (role, joins, lexical, operational status)
-
-### **Stage 4: Validated SQL Generation OR NER**
-**If capable tables found**: Generate SQL using proven schema elements only  
-**If NO capable tables**: Return **Non-Executable Analysis Report** with:
-- What you asked (normalized analytical task)
-- Missing capabilities (grain, measures, time, joins, quality)
-- Top candidate facts/dims with evidence scores
-- Fix paths (suggested mappings, schema additions)
-- Safe exploratory queries (metadata-only SELECTs)
-
----
-
-## 📋 Non-Executable Analysis Report (NER)
-
-When capability checks fail, return structured report instead of "safe" query:
+### **Structured Intent Analysis**
+Replace heuristic pattern-matching with OpenAI structured output using JSON schema:
 
 ```json
 {
-  "question": "Top 10 customers by revenue in Q2 2025",
+  "type": "object",
+  "properties": {
+    "task_type": { 
+      "enum": ["aggregation", "ranking", "trend", "distribution", "funnel", "comparison", "drill_down"] 
+    },
+    "metrics": { 
+      "type": "array", 
+      "items": { "type": "string" },
+      "description": "revenue, pipeline, cases, activities, response_time, conversion_rate"
+    },
+    "crm_entities": { 
+      "type": "array", 
+      "items": { "type": "string" },
+      "description": "account, contact, opportunity, lead, case, campaign, product, territory, owner"
+    },
+    "time_window": { 
+      "type": "string",
+      "description": "2025, Q2_2025, last_12_months, YTD, this_quarter"
+    },
+    "group_by": { 
+      "type": "array", 
+      "items": { "type": "string" },
+      "description": "account, owner, region, product_line, stage, priority"
+    },
+    "filters": { 
+      "type": "array", 
+      "items": { "type": "string" },
+      "description": "won_opportunities, high_priority, enterprise_accounts, active_campaigns"
+    },
+    "limit": { "type": "integer", "minimum": 1, "maximum": 500 }
+  },
+  "required": ["task_type", "metrics", "crm_entities"]
+}
+```
+
+### **CRM Entity Resolution with Schema Context**
+OpenAI receives discovered schema context to map entities to actual tables:
+
+```python
+def resolve_crm_entities(llm, question: str, schema_context: dict) -> EntityResolution:
+    """
+    Uses OpenAI to map user entities to schema objects with confidence scores
+    
+    Args:
+        schema_context: {
+            "tables": [{"name": "Opportunities", "columns": [...], "fks": [...]}],
+            "views": [{"name": "vw_PipelineMetrics", "referenced_objects": [...]}],
+            "synonym_registry": {"pipeline": "Opportunity.Amount", "bookings": "InvoiceLine.NetAmount"}
+        }
+    
+    Returns:
+        EntityResolution with ranked candidate facts and supporting dimensions
+    """
+```
+
+### **Few-Shot CRM Examples**
+```python
+CRM_EXAMPLES = [
+    {
+        "question": "top 10 accounts by revenue in Q2 2025",
+        "intent": {
+            "task_type": "ranking",
+            "metrics": ["revenue"],
+            "crm_entities": ["account"],
+            "time_window": "Q2_2025",
+            "limit": 10
+        }
+    },
+    {
+        "question": "monthly case volume by priority last 12 months",
+        "intent": {
+            "task_type": "trend",
+            "metrics": ["case_count"],
+            "crm_entities": ["case"],
+            "group_by": ["priority"],
+            "time_window": "last_12_months"
+        }
+    },
+    {
+        "question": "average sales cycle length by region for won opportunities",
+        "intent": {
+            "task_type": "aggregation",
+            "metrics": ["sales_cycle_days"],
+            "crm_entities": ["opportunity"],
+            "group_by": ["region"],
+            "filters": ["won_opportunities"]
+        }
+    }
+]
+```
+
+---
+
+## 🔍 CRM-Aware Semantic Analysis
+
+### **Enhanced Table Classification**
+Beyond basic entity types, classifies CRM-specific patterns:
+
+**CRM Data Types:**
+- **Transactional**: Real business events (Opportunities, Cases, Activities, Orders)
+- **Master Data**: Core entities (Accounts, Contacts, Products, Users)
+- **Configuration**: Settings, picklists, territories, campaigns
+- **Analytical**: Views, rollup tables, calculated metrics
+
+**CRM Table Roles:**
+- **Fact Tables**: Contains measures and events (OpportunityLineItem, CaseHistory, ActivityLog)
+- **Dimension Tables**: Descriptive attributes (Accounts, Products, Territories)
+- **Bridge Tables**: Many-to-many relationships (CampaignMembers, OpportunityTeamMembers)
+- **Lookup Tables**: Static reference data (Stages, Priorities, RecordTypes)
+
+**CRM Capability Assessment:**
+- **Revenue Measures**: Amount, TotalPrice, AnnualRevenue, ExpectedRevenue
+- **Activity Measures**: Count, Duration, ResponseTime, ConversionRate
+- **CRM Entity Keys**: AccountId, ContactId, OwnerId, ProductId, TerritoryId
+- **CRM Time Columns**: CloseDate, CreatedDate, LastActivityDate, DueDate
+- **CRM Status Filters**: IsWon, IsClosed, Priority, Stage, RecordType
+
+### **Relationship Discovery via Database Artifacts**
+Leverage existing database knowledge sources:
+
+1. **Foreign Key Constraints**: Primary source of truth for relationships
+2. **View Definitions**: Parse SELECT statements to find implicit joins
+3. **Stored Procedure Analysis**: Extract JOIN patterns from procedure bodies
+4. **Naming Conventions**: AccountId → Accounts.Id, ContactId → Contacts.Id
+
+```python
+def discover_relationships(connection) -> RelationshipGraph:
+    """
+    Builds comprehensive relationship graph from multiple sources:
+    1. FK constraints (highest confidence)
+    2. View JOIN patterns (high confidence)
+    3. Stored procedure JOIN patterns (medium confidence) 
+    4. Naming convention inference (low confidence, validation required)
+    """
+```
+
+---
+
+## 🚫 No-Fallback Query Pipeline with OpenAI
+
+### **Stage 1: OpenAI Intent + NER**
+```python
+async def analyze_intent_with_openai(question: str) -> AnalyticalTask:
+    """
+    Uses OpenAI structured output to parse natural language into:
+    - Task type (ranking, trend, aggregation, etc.)
+    - CRM metrics (revenue, pipeline, case_count, response_time)
+    - CRM entities (account, opportunity, case, contact)
+    - Time windows and filters
+    """
+```
+
+### **Stage 2: Schema-Aware Entity Resolution**
+```python
+async def resolve_entities_with_schema(task: AnalyticalTask, schema: DatabaseSchema) -> List[CandidateFact]:
+    """
+    Uses OpenAI + schema context to map logical entities to physical tables:
+    - "revenue" → OpportunityLineItem.TotalPrice or InvoiceLine.NetAmount
+    - "account" → Accounts table with proper FK paths
+    - "pipeline" → Opportunities with Stage != 'Closed Won'
+    """
+```
+
+### **Stage 3: Capability Contract Validation**
+For each candidate fact table, validate the complete contract:
+```python
+def validate_capability_contract(fact: CandidateFact, task: AnalyticalTask) -> CapabilityAssessment:
+    """
+    Validates ALL required capabilities:
+    ✓ Grain matches task (opportunity-level for pipeline, line-level for revenue)
+    ✓ Measures exist and are numeric (Amount, Quantity, Duration)
+    ✓ Time column available for filtering (CloseDate, CreatedDate)
+    ✓ Entity keys available for grouping (AccountId, OwnerId)
+    ✓ Join paths proven via FK/view/SP analysis
+    ✓ Filter columns available (Stage, Priority, IsWon)
+    ✓ Quality thresholds met (row count, null rates)
+    """
+```
+
+### **Stage 4: Evidence-Driven Selection**
+Only capability-validated tables are scored:
+```python
+def score_candidate_facts(candidates: List[CandidateFact]) -> List[ScoredCandidate]:
+    """
+    Weighted evidence scoring:
+    1. CRM Role Match (40%): Transactional fact with measures + time + FKs
+    2. Join Strength (25%): FK constraints > view patterns > SP patterns > naming
+    3. Measure Fitness (20%): Exact metric match > compatible aggregation
+    4. Time Fitness (10%): Exact time semantics > compatible time column
+    5. Data Quality (5%): Row count, freshness, null rates
+    """
+```
+
+### **Stage 5: Validated SQL Generation OR NEAR**
+**If capable facts found**: Generate SQL using only proven schema elements  
+**If NO capable facts**: Return **Non-Executable Analysis Report** with:
+
+```json
+{
+  "question": "average deal size by territory in Q2 2025",
   "normalized_task": {
-    "task_type": "ranking",
-    "metrics": ["revenue"],
-    "entity": "customer",
-    "time_window": "Q2_2025",
-    "top_limit": 10
+    "task_type": "aggregation",
+    "metrics": ["deal_size"],
+    "crm_entities": ["opportunity", "territory"],
+    "time_window": "Q2_2025"
   },
   "missing_capabilities": [
-    "No measure column found for revenue aggregation",
-    "No proven join path from transactions to customers"
+    "No proven join path from Opportunities to Territories",
+    "Deal size measure requires OpportunityLineItem aggregation"
   ],
-  "top_candidate_tables": [
+  "top_candidate_facts": [
     {
-      "table": "[dbo].[Payments]",
-      "evidence_score": 0.8,
-      "reasoning": "Has amount columns but missing customer join"
+      "table": "Opportunities",
+      "evidence_score": 0.7,
+      "missing": ["territory_join", "line_item_aggregation"]
     }
   ],
   "fix_paths": [
-    "Add foreign key from [Payments].[CustomerID] to [Customers].[ID]",
-    "Use [Payments].[Amount] as revenue measure",
-    "Use [Payments].[PaymentDate] for Q2 2025 filtering"
+    "Add TerritoryId foreign key to Opportunities table",
+    "Use OpportunityLineItem.TotalPrice for accurate deal sizing",
+    "Create view vw_OpportunityMetrics with territory joins"
   ],
-  "suggested_queries": [
-    "SELECT TOP 5 * FROM [dbo].[Payments] -- Explore structure",
-    "SELECT PaymentDate, Amount, COUNT(*) FROM [dbo].[Payments] GROUP BY PaymentDate, Amount"
+  "safe_exploration": [
+    "SELECT TOP 5 * FROM Opportunities WHERE CloseDate >= '2025-04-01'",
+    "SELECT COUNT(*), MIN(Amount), MAX(Amount) FROM Opportunities"
   ]
 }
 ```
 
 ---
 
-## ⚙️ Configuration (BI-Enhanced)
+## 🔗 Leveraging Database Artifacts for Relationships
+
+### **Foreign Key Analysis**
+```sql
+-- Discover all FK relationships
+SELECT 
+    fk.name as constraint_name,
+    tp.name as parent_table,
+    cp.name as parent_column,
+    tr.name as referenced_table,
+    cr.name as referenced_column
+FROM sys.foreign_keys fk
+INNER JOIN sys.tables tp ON fk.parent_object_id = tp.object_id
+INNER JOIN sys.tables tr ON fk.referenced_object_id = tr.object_id
+INNER JOIN sys.foreign_key_columns fkc ON fk.object_id = fkc.constraint_object_id
+INNER JOIN sys.columns cp ON fkc.parent_column_id = cp.column_id AND fkc.parent_object_id = cp.object_id
+INNER JOIN sys.columns cr ON fkc.referenced_column_id = cr.column_id AND fkc.referenced_object_id = cr.object_id
+```
+
+### **View Definition Parsing**
+```python
+def parse_view_relationships(view_definition: str) -> List[JoinPattern]:
+    """
+    Parse SQL view definitions to extract JOIN patterns:
+    - FROM table1 t1 JOIN table2 t2 ON t1.id = t2.foreign_id
+    - Builds relationship graph from observed patterns
+    """
+    # Use SQLGlot to parse view SQL and extract JOIN conditions
+```
+
+### **Stored Procedure Analysis**
+```python
+def extract_sp_join_patterns(sp_body: str) -> List[JoinPattern]:
+    """
+    Extract JOIN patterns from stored procedure bodies:
+    - Common CRM patterns: Account → Contact → Opportunity
+    - Activity rollups: Account → Activities summary
+    - Pipeline reports: Opportunity → Product → Territory
+    """
+```
+
+---
+
+## 🎯 CRM-Specific SQL Generation Examples
+
+### **A) Account Revenue Ranking**
+```sql
+-- Generated from: "top 10 accounts by revenue in 2025"
+SELECT TOP 10
+    a.Name AS account_name,
+    a.Type AS account_type,
+    SUM(oli.TotalPrice) AS total_revenue,
+    COUNT(DISTINCT o.Id) AS deal_count,
+    COUNT(oli.Id) AS line_item_count
+FROM Accounts a
+    JOIN Opportunities o ON o.AccountId = a.Id
+    JOIN OpportunityLineItems oli ON oli.OpportunityId = o.Id
+WHERE o.CloseDate >= '2025-01-01' 
+    AND o.CloseDate < '2026-01-01'
+    AND o.IsWon = 1
+GROUP BY a.Id, a.Name, a.Type
+ORDER BY total_revenue DESC;
+```
+
+### **B) Case Resolution Trends**
+```sql
+-- Generated from: "monthly case resolution time by priority last 12 months"
+SELECT 
+    DATEFROMPARTS(YEAR(c.CreatedDate), MONTH(c.CreatedDate), 1) AS month_start,
+    c.Priority,
+    COUNT(*) AS case_count,
+    AVG(DATEDIFF(hour, c.CreatedDate, c.ClosedDate)) AS avg_resolution_hours
+FROM Cases c
+WHERE c.CreatedDate >= DATEADD(month, -12, GETDATE())
+    AND c.IsClosed = 1
+    AND c.ClosedDate IS NOT NULL
+GROUP BY DATEFROMPARTS(YEAR(c.CreatedDate), MONTH(c.CreatedDate), 1), c.Priority
+ORDER BY month_start, c.Priority;
+```
+
+### **C) Sales Pipeline Analysis**
+```sql
+-- Generated from: "pipeline value by stage and owner for enterprise accounts"
+SELECT 
+    u.Name AS owner_name,
+    o.StageName AS stage,
+    COUNT(*) AS opportunity_count,
+    SUM(o.Amount) AS total_pipeline_value,
+    AVG(DATEDIFF(day, o.CreatedDate, GETDATE())) AS avg_age_days
+FROM Opportunities o
+    JOIN Users u ON u.Id = o.OwnerId
+    JOIN Accounts a ON a.Id = o.AccountId
+WHERE o.IsClosed = 0
+    AND a.Type = 'Enterprise'
+GROUP BY u.Id, u.Name, o.StageName
+ORDER BY total_pipeline_value DESC;
+```
+
+---
+
+## ⚙️ Configuration
 
 ```env
-# BI-Aware Analysis Settings
-ENABLE_BI_CAPABILITY_CONTRACTS=true
-ENABLE_EVIDENCE_DRIVEN_SELECTION=true
-OPERATIONAL_DATA_PRIORITY=true
+# OpenAI Configuration
+OPENAI_API_KEY=your_openai_api_key
+OPENAI_MODEL=gpt-4o  # or gpt-4o-mini for cost optimization
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_TIMEOUT_SECS=60
+OPENAI_MAX_RETRIES=3
+
+# Database Configuration  
+DATABASE_CONNECTION_STRING=your_crm_database_connection
+DATABASE_SCHEMA=dbo  # or your CRM schema name
+
+# CRM-Aware Features
+ENABLE_OPENAI_NER=true
+ENABLE_CAPABILITY_CONTRACTS=true
+ENABLE_EVIDENCE_SELECTION=true
 DISABLE_QUERY_FALLBACKS=true
+USE_DATABASE_ARTIFACTS=true  # FKs, views, SPs for relationships
 
-# Capability Contract Thresholds
-MIN_ROW_COUNT_FOR_FACTS=100
-MAX_NULL_RATE_FOR_MEASURES=0.3
-EVIDENCE_SCORE_THRESHOLD=0.6
-CAPABILITY_COMPLETENESS_THRESHOLD=0.8
+# Capability Thresholds
+MIN_FACT_ROW_COUNT=100
+MAX_NULL_RATE_FOR_MEASURES=0.25
+EVIDENCE_SCORE_THRESHOLD=0.65
+CAPABILITY_COMPLETENESS_THRESHOLD=0.85
 
-# NER Generation Settings
-MAX_CANDIDATE_TABLES_IN_NER=5
-INCLUDE_SAFE_EXPLORATORY_QUERIES=true
-DETAILED_FIX_PATH_SUGGESTIONS=true
+# Output Configuration
+MAX_RESULTS_DEFAULT=100
+DECIMAL_PLACES=2
+SHOW_GENERATED_SQL=true
+INCLUDE_EXECUTION_STATS=true
 ```
 
 ---
 
-## 🔍 Usage Examples
+## 🛡️ Three-Gate Security Validation
 
-### **✅ Successful Capability Match**
-```
-❓ Query: "What are our top 10 customers by revenue in Q2 2025?"
+### **Gate 1: Identifier Validation**
+- SQL must reference only discovered, allow-listed objects
+- SQLGlot AST parsing with schema object existence checks
+- No dynamic identifier construction or SQL injection vectors
 
-🧠 BI Analysis:
-   📊 Intent: ranking task, revenue metric, customer entity, Q2_2025 time window
-   🔍 Evidence-driven selection: [dbo].[CustomerPayments] (score: 0.92)
-   ✅ Capability contract satisfied:
-      • Grain: payment transactions
-      • Measures: Amount column (numeric, non-null)
-      • Time: PaymentDate column available
-      • Entity keys: CustomerID for grouping
-      • Join paths: FK to [dbo].[Customers]
+### **Gate 2: Relationship Validation**  
+- All JOINs must exist in FK graph OR observed in views/SPs
+- No arbitrary table joins based on name similarity
+- Relationship confidence scoring (FK > view > SP > naming)
 
-📋 Generated SQL:
-SELECT TOP 10 
-    c.CustomerName,
-    SUM(p.Amount) as TotalRevenue,
-    COUNT(*) as TransactionCount
-FROM [dbo].[CustomerPayments] p
-JOIN [dbo].[Customers] c ON p.CustomerID = c.CustomerID
-WHERE p.PaymentDate >= '2025-04-01' AND p.PaymentDate < '2025-07-01'
-GROUP BY c.CustomerID, c.CustomerName
-ORDER BY TotalRevenue DESC
-
-📊 Results: 10 rows returned
-```
-
-### **❌ Capability Contract Failure → NER**
-```
-❓ Query: "Show me customer satisfaction trends by region"
-
-🧠 BI Analysis:
-   📊 Intent: trend task, satisfaction metric, region entity
-   🔍 Evidence-driven selection: [dbo].[Customers] (score: 0.4)
-   ❌ Capability contract FAILED:
-      • Missing: No satisfaction measure column found
-      • Missing: No time column for trend analysis
-      • Missing: No region dimension available
-
-📋 Non-Executable Analysis Report:
-   ⚠️ Cannot execute - missing required capabilities
-   
-   🔧 Fix Paths:
-      • Add satisfaction score column to customer table
-      • Add survey/feedback fact table with satisfaction measures
-      • Add region dimension or region column to customer table
-      • Ensure temporal data for trend analysis
-   
-   🔍 Suggested Exploration:
-      SELECT TOP 5 * FROM [dbo].[Customers] -- Check available columns
-      SELECT COUNT(*) as CustomerCount FROM [dbo].[Customers] -- Data volume
-```
+### **Gate 3: Capability Validation**
+- Selected fact/dimension tables must satisfy metric requirements
+- Grain compatibility (opportunity-level vs line-level)
+- Required columns present and of correct data types
+- Quality thresholds met (row counts, null rates)
 
 ---
 
-## 🛡️ Security & Safety (Enhanced)
+## 🚀 Getting Started
 
-### **Three-Gate Validation**
-1. **Identifier Gate**: SQL must reference only discovered, allow-listed objects (SQLGlot parse + allow-list)
-2. **Relationship Gate**: All joins must exist in FK graph or observed in parsed view/SP text
-3. **Capability Gate**: Selected fact/dims must satisfy metric template's minimal requirements
-
-### **Enterprise Guardrails**
-- Read-only DB principal with strict permissions
-- Allow-list SQL forms (SELECT/WITH/EXPLAIN only)
-- AST validation via SQLGlot with identifier existence checks
-- No dynamic SQL execution from stored procedures
-- Prompt isolation and input/output filtering
-- Query timeouts and row limits
-
----
-
-## 🚀 Getting Started (BI-Aware)
-
-1. **Setup Environment**
+### **1. Environment Setup**
 ```bash
-# Copy configuration
+# Clone and configure
 cp env_example.txt .env
+# Edit .env with your OpenAI key and database connection
 
-# Set required variables
-AZURE_OPENAI_API_KEY=your_key
-DATABASE_CONNECTION_STRING=your_connection
-ENABLE_BI_CAPABILITY_CONTRACTS=true
-DISABLE_QUERY_FALLBACKS=true
+# Install dependencies
+pip install openai pyodbc sqlglot pandas
 ```
 
-2. **Install Dependencies**
-```bash
-pip install pyodbc sqlglot langchain-openai
-```
+### **2. Three-Phase Workflow**
 
-3. **Run BI-Aware Discovery**
 ```bash
 python main.py
-# Choose Option 1: Database Discovery (same as before)
-```
 
-4. **Run BI-Aware Analysis**
-```bash
-# Choose Option 2: Semantic Analysis (now BI-enhanced)
-# - Classifies operational vs planning data
-# - Identifies fact vs dimension tables
+# Phase 1: Database Discovery
+# - Discovers tables, columns, data types
+# - Analyzes foreign key relationships  
+# - Parses view definitions and stored procedures
+# - Caches results in database_structure.json
+
+# Phase 2: CRM Semantic Analysis  
+# - Classifies tables by CRM role (fact/dimension/bridge)
+# - Identifies measures, entity keys, time columns
 # - Assesses capability contracts for each table
-# - Builds evidence-driven selection rankings
+# - Caches results in semantic_analysis.json
+
+# Phase 3: Interactive Querying
+# - OpenAI-powered intent parsing and NER
+# - Evidence-driven table selection
+# - Capability-gated SQL generation
+# - Business-friendly result formatting
 ```
 
-5. **Query with BI Validation**
-```bash
-# Choose Option 3: Interactive Queries (now capability-gated)
-# - Parses intent into analytical tasks
-# - Validates capability contracts before execution
-# - Returns NER when contracts fail
-# - Only executes proven, validated SQL
+### **3. Example Queries**
+
+```
+🧠 CRM Analytics Assistant Ready
+
+❓ Query: "What are our top performing sales reps by closed won revenue this quarter?"
+
+🔍 OpenAI Analysis:
+   📊 Intent: ranking task, revenue metric, sales_rep entity, this_quarter time
+   🏷️  NER: sales_rep → Users (Owner), revenue → OpportunityLineItem.TotalPrice
+   
+🧠 Capability Validation:
+   ✅ OpportunityLineItem (fact): has TotalPrice measure, CreatedDate time
+   ✅ Opportunities (bridge): has OwnerId key, CloseDate time, IsWon filter  
+   ✅ Users (dimension): has Name for grouping
+   ✅ Proven joins: OLI→Opportunity→User via FKs
+
+📋 Generated SQL:
+SELECT TOP 10
+    u.Name AS sales_rep_name,
+    u.Department,
+    SUM(oli.TotalPrice) AS total_revenue,
+    COUNT(DISTINCT o.Id) AS deals_closed,
+    AVG(oli.TotalPrice) AS avg_deal_size
+FROM OpportunityLineItems oli
+    JOIN Opportunities o ON o.Id = oli.OpportunityId
+    JOIN Users u ON u.Id = o.OwnerId  
+WHERE o.CloseDate >= '2025-07-01'
+    AND o.CloseDate < '2025-10-01'
+    AND o.IsWon = 1
+GROUP BY u.Id, u.Name, u.Department
+ORDER BY total_revenue DESC;
+
+📊 Results: 8 sales reps | Total: $2.3M revenue
 ```
 
 ---
 
-## 📊 What's New in BI-Aware Version
+## 🔧 Migration from Basic Text-to-SQL
 
-### **🔥 Major Enhancements**
-- **Capability Contracts**: Universal validation before any query execution
-- **Evidence-Driven Selection**: Weighted scoring replaces simple keyword matching
-- **BI Table Classification**: Operational/Planning/Reference + Fact/Dimension/Bridge roles
-- **Non-Executable Analysis Reports**: Structured guidance when queries can't be safely executed
-- **No-Fallback Mode**: Never runs arbitrary "safe" queries on random tables
+### **Key Improvements**
+1. **Zero Hallucinations**: Only uses discovered schema objects with proven relationships
+2. **OpenAI Intelligence**: Sophisticated intent parsing and entity resolution
+3. **CRM Awareness**: Understands CRM-specific patterns and metrics
+4. **Relationship Truth**: Leverages FKs, views, and SPs for accurate joins
+5. **Capability Contracts**: Validates completeness before execution
+6. **Business Results**: Formatted output with proper labels and units
 
-### **🧠 Intelligence Upgrades**
-- **Grain Detection**: Understands what each table row represents
-- **Measure Identification**: Finds numeric columns suitable for aggregation
-- **Time Dimension Discovery**: Locates columns for temporal analysis
-- **Join Path Validation**: Only uses proven relationships from FKs or observed patterns
-- **Operational Data Priority**: Distinguishes real transactions from planning/target data
-
-### **🛡️ Safety Improvements**
-- **Three-Gate Validation**: Identifier + Relationship + Capability gates
-- **Zero Schema Hallucination**: Only references discovered objects with proven capabilities
-- **Quality Minima**: Checks row counts, null rates, data freshness
-- **Structured Error Reporting**: Actionable guidance instead of generic error messages
-
----
-
-## 🔧 Migration from Previous Version
-
-If upgrading from the previous version:
-
-1. **Configuration**: Add BI-aware settings to `.env`
-2. **Re-run Analysis**: The semantic analysis now includes BI classification
-3. **Update Queries**: Queries now go through capability validation
-4. **Handle NERs**: Prepare to receive Non-Executable Analysis Reports for unsupported queries
-
-**Breaking Changes**:
-- No more fallback queries - unsupported requests return NER
-- Enhanced table metadata requires re-running semantic analysis
-- Some previously "working" queries may now fail capability validation (this is intentional for safety)
+### **Breaking Changes**
+- Queries now require capability validation - some may return NEAR instead of executing
+- Enhanced schema analysis required - re-run discovery and semantic analysis
+- OpenAI API key required for NER functionality
 
 ---
 
 ## 📈 Success Metrics
 
-**BI-Aware System Quality Indicators**:
-- **Capability Contract Coverage**: % of tables with complete contracts
-- **Evidence Score Distribution**: Quality of table selection reasoning
-- **NER Rate**: % of queries requiring Non-Executable Analysis Reports
-- **False Positive Rate**: Queries that pass validation but fail execution
-- **Business User Satisfaction**: Quality of generated insights and guidance
+**Production Quality Indicators:**
+- **Schema Coverage**: >90% of CRM tables properly classified
+- **Relationship Accuracy**: >95% of generated JOINs use proven paths  
+- **Intent Recognition**: >85% accurate OpenAI entity/metric extraction
+- **Capability Success**: >80% of queries pass validation and execute
+- **Zero Hallucination Rate**: 100% (never reference non-existent objects)
+- **Business User Satisfaction**: Readable results with proper context
 
-**Target Metrics for Production**:
-- Capability contract coverage: >80%
-- Evidence-driven selection accuracy: >90%
-- NER rate: <20% (most queries should be executable)
-- False positive rate: <5%
-- Zero schema hallucinations: 100%
-
----
-
-This BI-aware system ensures **enterprise-grade reliability** by never executing queries that cannot be proven safe and effective. Instead of falling back to arbitrary queries, it provides **actionable intelligence** about what's missing and how to fix it.
+This system ensures **enterprise-grade CRM analytics** by combining OpenAI's language understanding with rigorous schema validation and relationship discovery from existing database artifacts.
