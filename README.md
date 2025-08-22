@@ -39,7 +39,7 @@ crm-semantic-rag/
 │   ├── config.py                   # OpenAI + database configuration
 │   ├── models.py                   # CRM-enhanced dataclasses with capability contracts
 │   └── utils.py                    # SQL validation, formatting, safety utilities
-├── discovery/
+├── db/
 │   └── discovery.py                # Schema discovery + FK analysis + view/SP parsing
 ├── semantic/
 │   └── analysis.py                 # CRM-aware semantic analysis + capability assessment

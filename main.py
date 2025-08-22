@@ -67,7 +67,7 @@ class ComponentManager:
     def load_components(self) -> bool:
         """Load all system components"""
         try:
-            from discovery.discovery import DatabaseDiscovery
+            from db.discovery import DatabaseDiscovery
             from semantic.analysis import SemanticAnalyzer
             from interactive.query_interface import QueryInterface
             
