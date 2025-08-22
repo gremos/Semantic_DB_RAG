@@ -1,7 +1,8 @@
 """
-Interactive query interface module
+Database discovery module
+Simple, Readable, Maintainable
 """
 
-from .query_interface import QueryInterface
+from .discovery import DatabaseDiscovery
 
-__all__ = ["QueryInterface"]
+__all__ = ["DatabaseDiscovery"]
