@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Enhanced BI-Aware Data Models - Simple, Readable, Maintainable
-Following README: Enhanced for Business Intelligence with sample data utilities
+Enhanced BI-Aware Data Models - Enhanced with Additional Properties
+Following README: Enhanced for Business Intelligence with better entity support
+Simple, Readable, Maintainable
 """
 
 from dataclasses import dataclass, field
@@ -22,7 +23,7 @@ class DatabaseObject:
 
 @dataclass
 class TableInfo:
-    """Enhanced table information with first 3 + last 3 sampling"""
+    """Enhanced table information with comprehensive BI capabilities"""
     name: str
     schema: str
     full_name: str
@@ -42,11 +43,15 @@ class TableInfo:
     bi_role: str = "dimension"    # fact, dimension, bridge
     grain: str = "unknown"        # customer, transaction, order, event
     
-    # BI Capabilities for contract validation
-    measures: List[str] = field(default_factory=list)      # Numeric columns for aggregation
-    entity_keys: List[str] = field(default_factory=list)   # Keys for grouping/filtering
-    time_columns: List[str] = field(default_factory=list)  # Date/time columns
-    filter_columns: List[str] = field(default_factory=list) # Status, type, region columns
+    # Enhanced BI Capabilities for contract validation
+    measures: List[str] = field(default_factory=list)        # Numeric columns for aggregation
+    entity_keys: List[str] = field(default_factory=list)     # Keys for grouping/filtering
+    time_columns: List[str] = field(default_factory=list)    # Date/time columns
+    filter_columns: List[str] = field(default_factory=list)  # Status, type, region columns
+    name_columns: List[str] = field(default_factory=list)    # Name/title columns for display
+    
+    # Business priority for table selection
+    business_priority: str = "medium"  # high, medium, low
     
     def get_first_3_samples(self) -> List[Dict[str, Any]]:
         """Get first 3 sample rows"""
@@ -75,10 +80,14 @@ class TableInfo:
             return len(self.time_columns) > 0
         elif capability_type == "entities":
             return len(self.entity_keys) > 0
+        elif capability_type == "names":
+            return len(self.name_columns) > 0
         elif capability_type == "operational":
             return self.data_type == "operational"
         elif capability_type == "samples":
             return len(self.sample_data) > 0
+        elif capability_type == "high_priority":
+            return self.business_priority == "high"
         return False
     
     def get_capability_score(self) -> float:
@@ -87,9 +96,11 @@ class TableInfo:
             1.0 if self.has_capability("measures") else 0.0,
             1.0 if self.has_capability("time") else 0.0,
             1.0 if self.has_capability("entities") else 0.0,
+            1.0 if self.has_capability("names") else 0.0,
             1.0 if self.has_capability("operational") else 0.5,
             1.0 if self.row_count > 0 else 0.0,
-            1.0 if self.has_capability("samples") else 0.0
+            1.0 if self.has_capability("samples") else 0.0,
+            1.0 if self.has_capability("high_priority") else 0.5
         ]
         return sum(capabilities) / len(capabilities)
     
@@ -105,6 +116,42 @@ class TableInfo:
             'sampling_method': 'first_3_plus_last_3',
             'has_position_markers': any('__sample_position__' in row for row in self.sample_data)
         }
+    
+    def is_customer_table(self) -> bool:
+        """Check if this is a customer-related table"""
+        return (self.entity_type == 'Customer' or 
+                'customer' in self.name.lower() or
+                'client' in self.name.lower())
+    
+    def is_payment_table(self) -> bool:
+        """Check if this is a payment/transaction table"""
+        return (self.entity_type == 'Payment' or
+                any(word in self.name.lower() for word in ['payment', 'transaction', 'invoice', 'billing']))
+    
+    def is_fact_table(self) -> bool:
+        """Check if this is a fact table with measures"""
+        return self.bi_role == 'fact' and len(self.measures) > 0
+    
+    def get_display_columns(self) -> List[str]:
+        """Get columns suitable for display (names, titles, etc.)"""
+        display_cols = self.name_columns.copy()
+        
+        # Add other potential display columns
+        for col in self.columns:
+            col_name = col.get('name', '').lower()
+            if (col_name not in [c.lower() for c in display_cols] and
+                any(word in col_name for word in ['description', 'title', 'label'])):
+                display_cols.append(col.get('name', ''))
+        
+        return display_cols[:3]  # Limit to top 3
+    
+    def get_amount_columns(self) -> List[str]:
+        """Get columns that represent monetary amounts"""
+        amount_cols = []
+        for measure in self.measures:
+            if any(word in measure.lower() for word in ['amount', 'total', 'price', 'revenue', 'cost']):
+                amount_cols.append(measure)
+        return amount_cols
 
 @dataclass
 class ViewInfo:
@@ -226,6 +273,7 @@ class CapabilityContract:
     measures: List[str] = field(default_factory=list)
     time_column: Optional[str] = None
     entity_keys: List[str] = field(default_factory=list)
+    name_columns: List[str] = field(default_factory=list)  # Added for customer names
     join_paths: List[str] = field(default_factory=list)
     filters: List[str] = field(default_factory=list)
     quality_checks: Dict[str, Any] = field(default_factory=dict)
@@ -239,6 +287,17 @@ class CapabilityContract:
         
         return has_grain and has_capabilities and has_data
     
+    def is_customer_query_ready(self) -> bool:
+        """Check if ready for customer-related queries"""
+        return (self.is_complete() and 
+                (len(self.name_columns) > 0 or len(self.entity_keys) > 0))
+    
+    def is_payment_query_ready(self) -> bool:
+        """Check if ready for payment/revenue queries"""
+        return (self.is_complete() and 
+                len(self.measures) > 0 and
+                len(self.entity_keys) > 0)
+    
     def get_completeness_score(self) -> float:
         """Get contract completeness as percentage"""
         checks = [
@@ -246,6 +305,7 @@ class CapabilityContract:
             bool(self.measures or self.entity_keys),
             bool(self.time_column),
             bool(self.entity_keys),
+            bool(self.name_columns),  # Added name columns check
             bool(self.quality_checks.get('row_count', 0) > 0)
         ]
         return sum(checks) / len(checks)
@@ -268,6 +328,9 @@ class CapabilityContract:
         if not self.entity_keys:
             missing.append("Entity keys for grouping")
         
+        if not self.name_columns:
+            missing.append("Name/title columns for display")
+        
         quality = self.quality_checks
         if quality.get('row_count', 0) == 0:
             missing.append("Data availability (zero rows)")
@@ -276,10 +339,11 @@ class CapabilityContract:
 
 @dataclass
 class AnalyticalTask:
-    """Normalized analytical task from natural language"""
+    """Enhanced analytical task from natural language"""
     task_type: str  # aggregation, ranking, trend, distribution, cohort, funnel
     metrics: List[str] = field(default_factory=list)
     entity: Optional[str] = None
+    crm_entities: List[str] = field(default_factory=list)  # Added for enhanced entity support
     time_window: Optional[str] = None
     bucketing: Optional[str] = None
     grouping: List[str] = field(default_factory=list)
@@ -293,6 +357,20 @@ class AnalyticalTask:
     def requires_grouping(self) -> bool:
         """Check if task requires GROUP BY"""
         return len(self.grouping) > 0 or self.task_type in ['trend', 'distribution']
+    
+    def requires_customer_data(self) -> bool:
+        """Check if task requires customer information"""
+        return ('customer' in self.crm_entities or 
+                'customer' in str(self.entity).lower() if self.entity else False)
+    
+    def requires_payment_data(self) -> bool:
+        """Check if task requires payment/revenue information"""
+        return ('payment' in self.crm_entities or
+                any(metric in ['revenue', 'amount', 'payment'] for metric in self.metrics))
+    
+    def requires_names(self) -> bool:
+        """Check if task requires name/title columns"""
+        return 'name' in self.grouping or any('name' in g for g in self.grouping)
     
     def get_complexity_score(self) -> float:
         """Get task complexity score (0-1)"""
@@ -316,6 +394,8 @@ class AnalyticalTask:
             complexity += 0.1
         if len(self.filters) > 1:
             complexity += 0.1
+        if len(self.crm_entities) > 1:
+            complexity += 0.1
         
         return min(1.0, complexity)
 
@@ -325,22 +405,22 @@ class EvidenceScore:
     role_match: float = 0.0
     join_evidence: float = 0.0
     lexical_match: float = 0.0
-    graph_proximity: float = 0.0  # Now used for table quality
+    graph_proximity: float = 0.0  # Table quality score
     operational_tag: float = 0.0
     row_count: float = 0.0
     freshness: float = 0.0
     
     @property
     def total_score(self) -> float:
-        """Calculate weighted total evidence score - Updated weights"""
+        """Calculate weighted total evidence score - Enhanced weights"""
         weights = {
-            'role_match': 3.0,        # BI role importance
-            'lexical_match': 4.0,     # Name matching (high priority)
-            'graph_proximity': 5.0,   # NEW: Table quality (highest priority)
+            'role_match': 2.5,        # BI role importance
+            'lexical_match': 4.5,     # Entity matching (highest priority)  
+            'graph_proximity': 4.0,   # Table quality (very high priority)
             'operational_tag': 2.0,   # Operational data preference
-            'join_evidence': 2.0,     # Relationship connectivity
+            'join_evidence': 1.5,     # Relationship connectivity
             'row_count': 1.0,         # Data volume (low priority)
-            'freshness': 1.0          # Recency (low priority)
+            'freshness': 0.5          # Recency (lowest priority)
         }
         
         total = (
@@ -360,18 +440,30 @@ class EvidenceScore:
         """Get human-readable explanation of evidence"""
         explanations = []
         
+        if self.lexical_match > 0.8:
+            explanations.append("Excellent entity match to query intent")
+        elif self.lexical_match > 0.6:
+            explanations.append("Good entity match to query intent")
+        elif self.lexical_match < 0.3:
+            explanations.append("⚠️ Weak entity match to query")
+            
         if self.role_match > 0.7:
             explanations.append("Strong BI role match (fact/operational table)")
-        if self.lexical_match > 0.7:
-            explanations.append("Strong semantic match to query intent")
+        elif self.role_match < 0.4:
+            explanations.append("⚠️ BI role mismatch")
+            
         if self.graph_proximity > 0.8:
-            explanations.append("High-quality main table (not temp/dated)")
-        elif self.graph_proximity < 0.6:
-            explanations.append("⚠️ Lower quality table (temp/dated/bridge)")
+            explanations.append("High-quality business table")
+        elif self.graph_proximity < 0.5:
+            explanations.append("⚠️ Lower quality table (temp/test/dated)")
+            
         if self.operational_tag > 0.8:
-            explanations.append("Contains operational (non-planning) data")
+            explanations.append("Contains operational (transactional) data")
+            
         if self.row_count > 0.5:
-            explanations.append("Sufficient data volume available")
+            explanations.append("Sufficient data volume")
+        elif self.row_count < 0.1:
+            explanations.append("⚠️ Limited data volume")
         
         return explanations
 
@@ -408,14 +500,20 @@ class DiscoveryResult:
     
     def get_summary(self) -> Dict[str, Any]:
         """Get discovery summary statistics"""
+        customer_tables = len([t for t in self.tables if t.is_customer_table()])
+        payment_tables = len([t for t in self.tables if t.is_payment_table()])
+        
         return {
             'total_tables': len(self.tables),
             'total_views': len(self.views),
             'total_procedures': len(self.stored_procedures),
             'total_relationships': len(self.relationships),
-            'fact_tables': len([t for t in self.tables if getattr(t, 'bi_role', '') == 'fact']),
+            'customer_tables': customer_tables,
+            'payment_tables': payment_tables,
+            'fact_tables': len([t for t in self.tables if t.is_fact_table()]),
             'operational_tables': len([t for t in self.tables if getattr(t, 'data_type', '') == 'operational']),
             'tables_with_samples': len([t for t in self.tables if t.sample_data]),
+            'tables_with_names': len([t for t in self.tables if t.name_columns]),
             'sampling_method': 'first_3_plus_last_3'
         }
 
@@ -424,130 +522,134 @@ TableList = List[TableInfo]
 RelationshipList = List[Relationship]
 QueryCapabilityResult = Union[TableList, NonExecutableAnalysisReport]
 
-# Utility functions for enhanced sample data operations
-def merge_sample_data(first_3: List[Dict], last_3: List[Dict]) -> List[Dict[str, Any]]:
-    """Merge first 3 and last 3 samples with position markers"""
-    samples = []
-    
-    # Add first 3 with position markers
-    for i, row in enumerate(first_3, 1):
-        row_with_marker = dict(row)
-        row_with_marker['__sample_position__'] = f'first_{i}'
-        samples.append(row_with_marker)
-    
-    # Add last 3 with position markers (reverse to maintain order)
-    for i, row in enumerate(reversed(last_3), 1):
-        row_with_marker = dict(row)
-        row_with_marker['__sample_position__'] = f'last_{i}'
-        samples.append(row_with_marker)
-    
-    return samples
+# Enhanced utility functions for customer/payment analysis
+def find_customer_tables(tables: TableList) -> TableList:
+    """Find all customer-related tables"""
+    return [t for t in tables if t.is_customer_table()]
 
-def extract_sample_positions(sample_data: List[Dict[str, Any]]) -> Dict[str, List[Dict]]:
-    """Extract samples by position"""
-    first_samples = []
-    last_samples = []
-    other_samples = []
+def find_payment_tables(tables: TableList) -> TableList:
+    """Find all payment/transaction tables"""
+    return [t for t in tables if t.is_payment_table()]
+
+def find_tables_with_names(tables: TableList) -> TableList:
+    """Find tables that have name/title columns"""
+    return [t for t in tables if t.name_columns]
+
+def find_tables_with_amounts(tables: TableList) -> TableList:
+    """Find tables with monetary amount columns"""
+    return [t for t in tables if t.get_amount_columns()]
+
+def suggest_customer_payment_join(customer_tables: TableList, payment_tables: TableList) -> List[Tuple[TableInfo, TableInfo, str]]:
+    """Suggest possible joins between customer and payment tables"""
+    joins = []
     
-    for row in sample_data:
-        position = row.get('__sample_position__', '')
-        if position.startswith('first_'):
-            first_samples.append(row)
-        elif position.startswith('last_'):
-            last_samples.append(row)
-        else:
-            other_samples.append(row)
+    for customer_table in customer_tables:
+        for payment_table in payment_tables:
+            # Look for common entity keys
+            customer_keys = set(key.lower() for key in customer_table.entity_keys)
+            payment_keys = set(key.lower() for key in payment_table.entity_keys)
+            
+            common_keys = customer_keys.intersection(payment_keys)
+            if common_keys:
+                common_key = list(common_keys)[0]
+                joins.append((customer_table, payment_table, f"Common key: {common_key}"))
+            elif any('customer' in key.lower() for key in payment_table.entity_keys):
+                joins.append((customer_table, payment_table, "Customer foreign key detected"))
     
-    return {
-        'first_3': first_samples,
-        'last_3': last_samples,
-        'other': other_samples
-    }
+    return joins
 
-def create_fact_table(name: str, schema: str, measures: List[str], 
-                     entity_keys: List[str], time_columns: List[str],
-                     sample_data: List[Dict[str, Any]]) -> TableInfo:
-    """Create a properly configured fact table"""
-    table = TableInfo(
-        name=name,
-        schema=schema,
-        full_name=f"[{schema}].[{name}]",
-        object_type="BASE TABLE",
-        row_count=len(sample_data),
-        columns=[],  # Would be populated from discovery
-        sample_data=sample_data,
-        data_type="operational",
-        bi_role="fact",
-        grain="transaction",
-        measures=measures,
-        entity_keys=entity_keys,
-        time_columns=time_columns
-    )
-    return table
-
-def create_dimension_table(name: str, schema: str, entity_type: str,
-                          entity_keys: List[str], 
-                          sample_data: List[Dict[str, Any]]) -> TableInfo:
-    """Create a properly configured dimension table"""
-    table = TableInfo(
-        name=name,
-        schema=schema,
-        full_name=f"[{schema}].[{name}]",
-        object_type="BASE TABLE",
-        row_count=len(sample_data),
-        columns=[],  # Would be populated from discovery
-        sample_data=sample_data,
-        entity_type=entity_type,
-        data_type="reference",
-        bi_role="dimension",
-        grain=entity_type.lower(),
-        entity_keys=entity_keys
-    )
-    return table
-
-def calculate_bi_readiness(tables: TableList) -> Dict[str, Any]:
-    """Calculate overall BI readiness of discovered schema"""
+def calculate_enhanced_bi_readiness(tables: TableList) -> Dict[str, Any]:
+    """Calculate enhanced BI readiness focusing on customer/payment capabilities"""
     if not tables:
         return {'readiness_score': 0.0, 'issues': ['No tables available']}
     
-    fact_tables = [t for t in tables if getattr(t, 'bi_role', '') == 'fact']
-    operational_tables = [t for t in tables if getattr(t, 'data_type', '') == 'operational']
-    tables_with_measures = [t for t in tables if getattr(t, 'measures', [])]
-    tables_with_time = [t for t in tables if getattr(t, 'time_columns', [])]
-    tables_with_samples = [t for t in tables if t.sample_data]
+    customer_tables = find_customer_tables(tables)
+    payment_tables = find_payment_tables(tables)
+    tables_with_names = find_tables_with_names(tables)
+    tables_with_amounts = find_tables_with_amounts(tables)
+    fact_tables = [t for t in tables if t.is_fact_table()]
     
-    # Calculate readiness factors
+    # Enhanced readiness factors
     factors = {
+        'has_customer_data': len(customer_tables) > 0,
+        'has_payment_data': len(payment_tables) > 0,
+        'has_customer_names': len(tables_with_names) > 0,
+        'has_amount_measures': len(tables_with_amounts) > 0,
         'has_fact_tables': len(fact_tables) > 0,
-        'has_operational_data': len(operational_tables) > 0,
-        'has_measures': len(tables_with_measures) > 0,
-        'has_time_dimensions': len(tables_with_time) > 0,
         'sufficient_volume': sum(t.row_count for t in tables) > 1000,
-        'has_sample_data': len(tables_with_samples) > 0
+        'customer_payment_linkable': len(suggest_customer_payment_join(customer_tables, payment_tables)) > 0
     }
     
     readiness_score = sum(factors.values()) / len(factors)
     
     # Identify issues
     issues = []
-    if not factors['has_fact_tables']:
-        issues.append("No fact tables identified for aggregation")
-    if not factors['has_operational_data']:
-        issues.append("No operational data found (only planning/reference)")
-    if not factors['has_measures']:
-        issues.append("No numeric measures available for analysis")
-    if not factors['has_time_dimensions']:
-        issues.append("No time columns for temporal analysis")
-    if not factors['has_sample_data']:
-        issues.append("No sample data collected")
+    if not factors['has_customer_data']:
+        issues.append("No customer tables identified")
+    if not factors['has_payment_data']:
+        issues.append("No payment/transaction tables found")
+    if not factors['has_customer_names']:
+        issues.append("No customer name columns available")
+    if not factors['has_amount_measures']:
+        issues.append("No monetary amount measures found")
+    if not factors['customer_payment_linkable']:
+        issues.append("Cannot link customers to payments")
     
     return {
         'readiness_score': readiness_score,
         'factors': factors,
         'issues': issues,
-        'fact_table_count': len(fact_tables),
-        'operational_table_count': len(operational_tables),
+        'customer_table_count': len(customer_tables),
+        'payment_table_count': len(payment_tables),
         'total_data_volume': sum(t.row_count for t in tables),
-        'tables_with_samples': len(tables_with_samples),
-        'sampling_coverage': len(tables_with_samples) / len(tables) if tables else 0.0
+        'customer_payment_joins': len(suggest_customer_payment_join(customer_tables, payment_tables)),
+        'top_customer_tables': [t.name for t in customer_tables[:3]],
+        'top_payment_tables': [t.name for t in payment_tables[:3]]
     }
+
+# Enhanced table creation helpers
+def create_enhanced_customer_table(name: str, schema: str, 
+                                 name_columns: List[str], entity_keys: List[str],
+                                 sample_data: List[Dict[str, Any]]) -> TableInfo:
+    """Create a properly configured customer table"""
+    table = TableInfo(
+        name=name,
+        schema=schema,
+        full_name=f"[{schema}].[{name}]",
+        object_type="BASE TABLE",
+        row_count=len(sample_data),
+        columns=[],  # Would be populated from discovery
+        sample_data=sample_data,
+        entity_type="Customer",
+        data_type="reference",
+        bi_role="dimension",
+        grain="customer",
+        entity_keys=entity_keys,
+        name_columns=name_columns,
+        business_priority="high"
+    )
+    return table
+
+def create_enhanced_payment_table(name: str, schema: str, 
+                                measures: List[str], entity_keys: List[str], 
+                                time_columns: List[str],
+                                sample_data: List[Dict[str, Any]]) -> TableInfo:
+    """Create a properly configured payment table"""
+    table = TableInfo(
+        name=name,
+        schema=schema,
+        full_name=f"[{schema}].[{name}]",
+        object_type="BASE TABLE",
+        row_count=len(sample_data),
+        columns=[],  # Would be populated from discovery
+        sample_data=sample_data,
+        entity_type="Payment",
+        data_type="operational",
+        bi_role="fact",
+        grain="transaction",
+        measures=measures,
+        entity_keys=entity_keys,
+        time_columns=time_columns,
+        business_priority="high"
+    )
+    return table
