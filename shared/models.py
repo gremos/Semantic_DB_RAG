@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-BI-Aware Data Models - Simple, Readable, Maintainable
-Following README: Enhanced for Business Intelligence with clean methods
+Enhanced BI-Aware Data Models - Simple, Readable, Maintainable
+Following README: Enhanced for Business Intelligence with sample data utilities
 """
 
 from dataclasses import dataclass, field
@@ -22,7 +22,7 @@ class DatabaseObject:
 
 @dataclass
 class TableInfo:
-    """BI-Enhanced table information with capability assessment"""
+    """Enhanced table information with first 3 + last 3 sampling"""
     name: str
     schema: str
     full_name: str
@@ -48,6 +48,25 @@ class TableInfo:
     time_columns: List[str] = field(default_factory=list)  # Date/time columns
     filter_columns: List[str] = field(default_factory=list) # Status, type, region columns
     
+    def get_first_3_samples(self) -> List[Dict[str, Any]]:
+        """Get first 3 sample rows"""
+        return [row for row in self.sample_data 
+                if row.get('__sample_position__', '').startswith('first_')]
+    
+    def get_last_3_samples(self) -> List[Dict[str, Any]]:
+        """Get last 3 sample rows"""
+        return [row for row in self.sample_data 
+                if row.get('__sample_position__', '').startswith('last_')]
+    
+    def get_clean_samples(self) -> List[Dict[str, Any]]:
+        """Get samples without position markers"""
+        clean_samples = []
+        for row in self.sample_data:
+            clean_row = {k: v for k, v in row.items() 
+                        if not k.startswith('__')}
+            clean_samples.append(clean_row)
+        return clean_samples
+    
     def has_capability(self, capability_type: str) -> bool:
         """Check if table has specific BI capability"""
         if capability_type == "measures":
@@ -58,6 +77,8 @@ class TableInfo:
             return len(self.entity_keys) > 0
         elif capability_type == "operational":
             return self.data_type == "operational"
+        elif capability_type == "samples":
+            return len(self.sample_data) > 0
         return False
     
     def get_capability_score(self) -> float:
@@ -67,9 +88,74 @@ class TableInfo:
             1.0 if self.has_capability("time") else 0.0,
             1.0 if self.has_capability("entities") else 0.0,
             1.0 if self.has_capability("operational") else 0.5,
-            1.0 if self.row_count > 0 else 0.0
+            1.0 if self.row_count > 0 else 0.0,
+            1.0 if self.has_capability("samples") else 0.0
         ]
         return sum(capabilities) / len(capabilities)
+    
+    def get_sample_summary(self) -> Dict[str, Any]:
+        """Get summary of sample data"""
+        first_3 = self.get_first_3_samples()
+        last_3 = self.get_last_3_samples()
+        
+        return {
+            'total_samples': len(self.sample_data),
+            'first_3_count': len(first_3),
+            'last_3_count': len(last_3),
+            'sampling_method': 'first_3_plus_last_3',
+            'has_position_markers': any('__sample_position__' in row for row in self.sample_data)
+        }
+
+@dataclass
+class ViewInfo:
+    """Enhanced view information with definition storage"""
+    schema: str
+    name: str
+    full_name: str
+    definition: str
+    create_date: Optional[str] = None
+    modify_date: Optional[str] = None
+    referenced_objects: List[str] = field(default_factory=list)
+    parsed_joins: List[Dict[str, Any]] = field(default_factory=list)
+    parsing_success: bool = False
+    query_type: str = "unknown"
+    
+    def get_definition_summary(self) -> Dict[str, Any]:
+        """Get summary of view definition"""
+        return {
+            'name': self.full_name,
+            'query_type': self.query_type,
+            'definition_length': len(self.definition) if self.definition else 0,
+            'referenced_tables': len(self.referenced_objects),
+            'join_count': len(self.parsed_joins),
+            'parsing_successful': self.parsing_success
+        }
+
+@dataclass
+class StoredProcedureInfo:
+    """Enhanced stored procedure information with definition storage"""
+    schema: str
+    name: str
+    full_name: str
+    definition: str
+    create_date: Optional[str] = None
+    modify_date: Optional[str] = None
+    type_desc: str = "SQL_STORED_PROCEDURE"
+    referenced_objects: List[str] = field(default_factory=list)
+    select_statements: List[str] = field(default_factory=list)
+    parsing_success: bool = False
+    procedure_type: str = "unknown"
+    
+    def get_definition_summary(self) -> Dict[str, Any]:
+        """Get summary of procedure definition"""
+        return {
+            'name': self.full_name,
+            'procedure_type': self.procedure_type,
+            'definition_length': len(self.definition) if self.definition else 0,
+            'referenced_tables': len(self.referenced_objects),
+            'select_statements_count': len(self.select_statements),
+            'parsing_successful': self.parsing_success
+        }
 
 @dataclass
 class BusinessDomain:
@@ -310,12 +396,74 @@ class NonExecutableAnalysisReport:
             evidence_reasoning=self.fix_paths
         )
 
+# Enhanced discovery result container
+@dataclass
+class DiscoveryResult:
+    """Container for complete discovery results"""
+    tables: List[TableInfo] = field(default_factory=list)
+    views: Dict[str, ViewInfo] = field(default_factory=dict)
+    stored_procedures: Dict[str, StoredProcedureInfo] = field(default_factory=dict)
+    relationships: List[Relationship] = field(default_factory=list)
+    discovery_metadata: Dict[str, Any] = field(default_factory=dict)
+    
+    def get_summary(self) -> Dict[str, Any]:
+        """Get discovery summary statistics"""
+        return {
+            'total_tables': len(self.tables),
+            'total_views': len(self.views),
+            'total_procedures': len(self.stored_procedures),
+            'total_relationships': len(self.relationships),
+            'fact_tables': len([t for t in self.tables if getattr(t, 'bi_role', '') == 'fact']),
+            'operational_tables': len([t for t in self.tables if getattr(t, 'data_type', '') == 'operational']),
+            'tables_with_samples': len([t for t in self.tables if t.sample_data]),
+            'sampling_method': 'first_3_plus_last_3'
+        }
+
 # Type aliases for better code readability
 TableList = List[TableInfo]
 RelationshipList = List[Relationship]
 QueryCapabilityResult = Union[TableList, NonExecutableAnalysisReport]
 
-# Utility functions for BI-aware operations
+# Utility functions for enhanced sample data operations
+def merge_sample_data(first_3: List[Dict], last_3: List[Dict]) -> List[Dict[str, Any]]:
+    """Merge first 3 and last 3 samples with position markers"""
+    samples = []
+    
+    # Add first 3 with position markers
+    for i, row in enumerate(first_3, 1):
+        row_with_marker = dict(row)
+        row_with_marker['__sample_position__'] = f'first_{i}'
+        samples.append(row_with_marker)
+    
+    # Add last 3 with position markers (reverse to maintain order)
+    for i, row in enumerate(reversed(last_3), 1):
+        row_with_marker = dict(row)
+        row_with_marker['__sample_position__'] = f'last_{i}'
+        samples.append(row_with_marker)
+    
+    return samples
+
+def extract_sample_positions(sample_data: List[Dict[str, Any]]) -> Dict[str, List[Dict]]:
+    """Extract samples by position"""
+    first_samples = []
+    last_samples = []
+    other_samples = []
+    
+    for row in sample_data:
+        position = row.get('__sample_position__', '')
+        if position.startswith('first_'):
+            first_samples.append(row)
+        elif position.startswith('last_'):
+            last_samples.append(row)
+        else:
+            other_samples.append(row)
+    
+    return {
+        'first_3': first_samples,
+        'last_3': last_samples,
+        'other': other_samples
+    }
+
 def create_fact_table(name: str, schema: str, measures: List[str], 
                      entity_keys: List[str], time_columns: List[str],
                      sample_data: List[Dict[str, Any]]) -> TableInfo:
@@ -366,6 +514,7 @@ def calculate_bi_readiness(tables: TableList) -> Dict[str, Any]:
     operational_tables = [t for t in tables if getattr(t, 'data_type', '') == 'operational']
     tables_with_measures = [t for t in tables if getattr(t, 'measures', [])]
     tables_with_time = [t for t in tables if getattr(t, 'time_columns', [])]
+    tables_with_samples = [t for t in tables if t.sample_data]
     
     # Calculate readiness factors
     factors = {
@@ -373,7 +522,8 @@ def calculate_bi_readiness(tables: TableList) -> Dict[str, Any]:
         'has_operational_data': len(operational_tables) > 0,
         'has_measures': len(tables_with_measures) > 0,
         'has_time_dimensions': len(tables_with_time) > 0,
-        'sufficient_volume': sum(t.row_count for t in tables) > 1000
+        'sufficient_volume': sum(t.row_count for t in tables) > 1000,
+        'has_sample_data': len(tables_with_samples) > 0
     }
     
     readiness_score = sum(factors.values()) / len(factors)
@@ -388,6 +538,8 @@ def calculate_bi_readiness(tables: TableList) -> Dict[str, Any]:
         issues.append("No numeric measures available for analysis")
     if not factors['has_time_dimensions']:
         issues.append("No time columns for temporal analysis")
+    if not factors['has_sample_data']:
+        issues.append("No sample data collected")
     
     return {
         'readiness_score': readiness_score,
@@ -395,5 +547,7 @@ def calculate_bi_readiness(tables: TableList) -> Dict[str, Any]:
         'issues': issues,
         'fact_table_count': len(fact_tables),
         'operational_table_count': len(operational_tables),
-        'total_data_volume': sum(t.row_count for t in tables)
+        'total_data_volume': sum(t.row_count for t in tables),
+        'tables_with_samples': len(tables_with_samples),
+        'sampling_coverage': len(tables_with_samples) / len(tables) if tables else 0.0
     }

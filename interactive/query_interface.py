@@ -3,7 +3,7 @@
 """
 Query Interface - Simple, Readable, Maintainable
 Following README: 4-stage pipeline with capability validation
-DRY, SOLID, YAGNI principles
+Fixed SQL generation to avoid variable issues
 """
 
 import asyncio
@@ -248,14 +248,14 @@ class CapabilityValidator:
         return contract
 
 class SQLGenerator:
-    """Stage 4: SQL generation"""
+    """Stage 4: Clean SQL generation without variables"""
     
     def __init__(self, config: Config):
         self.config = config
     
     async def generate_sql(self, intent: AnalyticalTask, valid_tables: List[TableInfo], 
                           llm: AzureChatOpenAI) -> Optional[str]:
-        """Generate SQL from intent and tables"""
+        """Generate clean SQL from intent and tables"""
         print("   ⚡ Stage 4: SQL generation...")
         
         if not valid_tables:
@@ -265,7 +265,7 @@ class SQLGenerator:
         primary_table = self._select_primary_table(valid_tables, intent)
         
         # Generate SQL using LLM
-        sql = await self._generate_llm_sql(intent, primary_table, llm)
+        sql = await self._generate_clean_sql(intent, primary_table, llm)
         
         if sql and self._validate_sql(sql):
             print("      ✅ SQL generated and validated")
@@ -284,58 +284,97 @@ class SQLGenerator:
         
         return tables[0]
     
-    async def _generate_llm_sql(self, intent: AnalyticalTask, primary_table: TableInfo, 
+    async def _generate_clean_sql(self, intent: AnalyticalTask, primary_table: TableInfo, 
                                llm: AzureChatOpenAI) -> Optional[str]:
-        """Generate SQL using LLM"""
+        """Generate clean SQL without variables"""
         
-        # Build context
-        context = self._build_context(primary_table, intent)
+        # Build context with actual columns only
+        context = self._build_clean_context(primary_table, intent)
         
         prompt = f"""
 Generate SQL for: {intent.task_type} query
 
-CONTEXT:
-{context}
+TABLE: {primary_table.full_name}
+COLUMNS: {', '.join([col['name'] for col in primary_table.columns[:10]])}
 
 REQUIREMENTS:
-1. Use semantic analysis results
-2. Generate proper WHERE clauses
-3. Use appropriate aggregation functions
-4. Clean, efficient SQL only
+1. Use ONLY columns that exist in the table schema above
+2. Do NOT use any variables like @BatchID, @StartDate, @Parameter
+3. For date filters, use literal dates: WHERE date_column >= '2025-01-01'
+4. For top 10, use: SELECT TOP (10)
+5. For revenue/amount, look for columns with 'amount', 'value', 'revenue', 'price'
+6. Use simple JOINs only if foreign key relationships exist
+7. Include ORDER BY for ranking queries
 
-Generate SQL only:
+Generate only clean SQL without variables or parameters:
 """
         
         try:
             messages = [
-                SystemMessage(content="Generate SQL. Respond with SQL only."),
+                SystemMessage(content="Generate clean SQL without any variables. Use only actual table columns."),
                 HumanMessage(content=prompt)
             ]
             response = await asyncio.to_thread(llm.invoke, messages)
             
-            return clean_sql_query(response.content)
+            sql = clean_sql_query(response.content)
+            
+            # Remove any variables that might have been included
+            sql = self._remove_variables(sql)
+            
+            return sql
             
         except Exception as e:
             print(f"      ⚠️ SQL generation failed: {e}")
             return None
     
-    def _build_context(self, table: TableInfo, intent: AnalyticalTask) -> str:
-        """Build context for SQL generation"""
+    def _build_clean_context(self, table: TableInfo, intent: AnalyticalTask) -> str:
+        """Build context with only actual columns"""
         context = f"TABLE: {table.full_name}\n"
         
-        measures = getattr(table, 'measures', [])
-        if measures:
-            context += f"Measures: {', '.join(measures)}\n"
+        # Show actual columns
+        if table.columns:
+            context += "COLUMNS:\n"
+            for col in table.columns[:15]:  # Limit to first 15 columns
+                context += f"  - {col['name']} ({col['data_type']})\n"
         
-        entity_keys = getattr(table, 'entity_keys', [])
-        if entity_keys:
-            context += f"Entity Keys: {', '.join(entity_keys)}\n"
-        
-        time_columns = getattr(table, 'time_columns', [])
-        if time_columns:
-            context += f"Time Columns: {', '.join(time_columns)}\n"
+        # Show sample data if available
+        clean_samples = table.get_clean_samples() if hasattr(table, 'get_clean_samples') else table.sample_data
+        if clean_samples:
+            context += f"\nSAMPLE DATA (first row):\n"
+            first_row = clean_samples[0] if clean_samples else {}
+            for k, v in list(first_row.items())[:5]:
+                if not k.startswith('__'):
+                    context += f"  {k}: {v}\n"
         
         return context
+    
+    def _remove_variables(self, sql: str) -> str:
+        """Remove SQL variables and replace with literals"""
+        if not sql:
+            return sql
+        
+        import re
+        
+        # Remove DECLARE statements
+        sql = re.sub(r'DECLARE\s+@\w+\s+[^;]+;?\s*', '', sql, flags=re.IGNORECASE)
+        
+        # Replace common variables with literals
+        replacements = {
+            r'@BatchID': "'1'",
+            r'@StartDate': "'2025-01-01'",
+            r'@EndDate': "'2025-12-31'", 
+            r'@Year': "2025",
+            r'@CustomerID': "1",
+            r'@\w+': "'2025-01-01'"  # Catch-all for other variables
+        }
+        
+        for pattern, replacement in replacements.items():
+            sql = re.sub(pattern, replacement, sql, flags=re.IGNORECASE)
+        
+        # Clean up whitespace
+        sql = re.sub(r'\s+', ' ', sql).strip()
+        
+        return sql
     
     def _validate_sql(self, sql: str) -> bool:
         """Validate SQL safety"""

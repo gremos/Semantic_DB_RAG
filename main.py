@@ -10,6 +10,7 @@ import asyncio
 import os
 from pathlib import Path
 
+
 def load_env():
     """Load environment variables from .env file"""
     env_file = Path('.env')
@@ -20,238 +21,32 @@ def load_env():
                     key, value = line.strip().split('=', 1)
                     os.environ[key] = value.strip('"\'')
 
-class SystemValidator:
-    """System validation - Single responsibility"""
-    
-    @staticmethod
-    def check_dependencies() -> bool:
-        """Check required dependencies"""
-        try:
-            import pyodbc
-            from langchain_openai import AzureChatOpenAI
-            print("✅ Dependencies available")
-            return True
-        except ImportError as e:
-            print(f"❌ Missing dependency: {e}")
-            print("💡 Install: pip install pyodbc langchain-openai sqlglot")
-            return False
-    
-    @staticmethod
-    def check_config(config) -> bool:
-        """Validate configuration"""
-        health = config.get_health_check()
-        
-        issues = []
-        if not health['llm_configured']:
-            issues.append("Azure OpenAI settings incomplete")
-        if not health['database_configured']:
-            issues.append("Database connection string missing")
-        
-        if issues:
-            print("❌ Configuration issues:")
-            for issue in issues:
-                print(f"   - {issue}")
-            print("\n💡 Check your .env file settings")
-            return False
-        
-        print("✅ Configuration validated")
+
+def check_dependencies() -> bool:
+    """Check required dependencies"""
+    try:
+        import pyodbc
+        from langchain_openai import AzureChatOpenAI
+        print("✅ Dependencies available")
         return True
+    except ImportError as e:
+        print(f"❌ Missing dependency: {e}")
+        print("💡 Install: pip install pyodbc langchain-openai sqlglot")
+        return False
 
-class ComponentManager:
-    """Component management - Single responsibility"""
-    
-    def __init__(self, config):
-        self.config = config
-        self.components = {}
-    
-    def load_components(self) -> bool:
-        """Load all system components"""
-        try:
-            from db.discovery import DatabaseDiscovery
-            from semantic.analysis import SemanticAnalyzer
-            from interactive.query_interface import QueryInterface
-            
-            self.components = {
-                'discovery': DatabaseDiscovery(self.config),
-                'analyzer': SemanticAnalyzer(self.config), 
-                'query_interface': QueryInterface(self.config)
-            }
-            
-            print("✅ Components loaded")
-            return True
-            
-        except Exception as e:
-            print(f"❌ Component loading failed: {e}")
-            return False
-    
-    def get(self, name: str):
-        """Get component by name"""
-        return self.components.get(name)
-
-class WorkflowManager:
-    """Workflow operations - Single responsibility"""
-    
-    def __init__(self, components: ComponentManager):
-        self.components = components
-    
-    async def run_discovery(self) -> bool:
-        """Run database discovery"""
-        print("\n🔍 DATABASE DISCOVERY")
-        print("=" * 50)
-        
-        try:
-            discovery = self.components.get('discovery')
-            success = await discovery.discover_database()
-            
-            if success:
-                stats = discovery.get_discovery_stats()
-                print(f"✅ Discovery completed!")
-                print(f"   📊 Tables: {stats['tables']}")
-                print(f"   👁️ Views: {stats['views']}")
-                return True
-            else:
-                print("❌ Discovery failed")
-                return False
-                
-        except Exception as e:
-            print(f"❌ Discovery error: {e}")
-            return False
-    
-    async def run_analysis(self) -> bool:
-        """Run semantic analysis"""
-        print("\n🧠 SEMANTIC ANALYSIS")
-        print("=" * 50)
-        
-        try:
-            discovery = self.components.get('discovery')
-            analyzer = self.components.get('analyzer')
-            
-            # Load tables
-            tables = discovery.get_tables()
-            if not tables:
-                if discovery.load_from_cache():
-                    tables = discovery.get_tables()
-                else:
-                    print("❌ No tables found. Run Discovery first.")
-                    return False
-            
-            success = await analyzer.analyze_tables(tables)
-            
-            if success:
-                stats = analyzer.get_analysis_stats()
-                print("✅ Analysis completed!")
-                print(f"   📊 Total tables: {stats['total_tables']}")
-                print(f"   📈 Fact tables: {stats['fact_tables']}")
-                return True
-            else:
-                print("❌ Analysis failed")
-                return False
-                
-        except Exception as e:
-            print(f"❌ Analysis error: {e}")
-            return False
-    
-    async def run_queries(self) -> bool:
-        """Run interactive queries"""
-        print("\n💬 INTERACTIVE QUERIES")
-        print("=" * 50)
-        
-        try:
-            analyzer = self.components.get('analyzer')
-            discovery = self.components.get('discovery')
-            query_interface = self.components.get('query_interface')
-            
-            # Load data
-            tables = []
-            domain = None
-            relationships = []
-            
-            # Try analyzer first
-            if hasattr(analyzer, 'get_tables'):
-                tables = analyzer.get_tables()
-                domain = analyzer.get_domain()
-                relationships = analyzer.get_relationships()
-            
-            # Try caches if no data
-            if not tables:
-                print("   🔄 Loading from caches...")
-                
-                if analyzer.load_from_cache():
-                    tables = analyzer.get_tables()
-                    domain = analyzer.get_domain()
-                    relationships = analyzer.get_relationships()
-                elif discovery.load_from_cache():
-                    tables = discovery.get_tables()
-                    relationships = discovery.get_relationships()
-            
-            if not tables:
-                print("❌ No data available. Please run:")
-                print("   1. Database Discovery")
-                print("   2. Semantic Analysis")
-                return False
-            
-            print(f"🚀 Starting pipeline:")
-            print(f"   📊 Tables: {len(tables)}")
-            print(f"   🔗 Relationships: {len(relationships)}")
-            
-            await query_interface.start_session(tables, domain, relationships)
-            return True
-            
-        except Exception as e:
-            print(f"❌ Query interface error: {e}")
-            return False
-    
-    def show_status(self) -> None:
-        """Show system status"""
-        print("\n📊 SYSTEM STATUS")
-        print("=" * 30)
-        
-        try:
-            discovery = self.components.get('discovery')
-            analyzer = self.components.get('analyzer')
-            
-            # Check discovery
-            discovery_tables = discovery.get_tables()
-            if not discovery_tables:
-                discovery.load_from_cache()
-                discovery_tables = discovery.get_tables()
-            
-            # Check analysis
-            analyzer_tables = []
-            if hasattr(analyzer, 'load_from_cache'):
-                analyzer.load_from_cache()
-                analyzer_tables = analyzer.get_tables()
-            
-            # Show status
-            print(f"📋 Discovery: {'✅ Complete' if discovery_tables else '❌ Incomplete'}")
-            if discovery_tables:
-                stats = discovery.get_discovery_stats()
-                print(f"   📊 {stats['total_objects']} objects")
-            
-            print(f"🧠 Analysis: {'✅ Complete' if analyzer_tables else '❌ Incomplete'}")
-            if analyzer_tables:
-                print(f"   📊 {len(analyzer_tables)} tables")
-            
-            print(f"💬 Pipeline: {'✅ Ready' if (analyzer_tables or discovery_tables) else '❌ Not ready'}")
-            
-        except Exception as e:
-            print(f"⚠️ Status check error: {e}")
 
 class SemanticRAG:
     """Main system orchestrator - Clean interface"""
     
     def __init__(self):
         load_env()
-        self.config = None
-        self.components = None
-        self.workflow = None
         self._initialize()
     
     def _initialize(self):
         """Initialize system"""
         try:
             # Check dependencies
-            if not SystemValidator.check_dependencies():
+            if not check_dependencies():
                 raise RuntimeError("Missing dependencies")
             
             # Load config
@@ -259,16 +54,18 @@ class SemanticRAG:
             self.config = Config()
             
             # Validate config
-            if not SystemValidator.check_config(self.config):
-                raise RuntimeError("Configuration validation failed")
+            health = self.config.get_health_check()
+            if not health['llm_configured'] or not health['database_configured']:
+                raise RuntimeError("Configuration incomplete")
             
             # Load components
-            self.components = ComponentManager(self.config)
-            if not self.components.load_components():
-                raise RuntimeError("Component loading failed")
+            from db.discovery import DatabaseDiscovery
+            from semantic.analysis import SemanticAnalyzer
+            from interactive.query_interface import QueryInterface
             
-            # Initialize workflow
-            self.workflow = WorkflowManager(self.components)
+            self.discovery = DatabaseDiscovery(self.config)
+            self.analyzer = SemanticAnalyzer(self.config)
+            self.query_interface = QueryInterface(self.config)
             
             print("✅ SemanticRAG System initialized")
             print("   Simple, Readable, Maintainable")
@@ -285,19 +82,136 @@ class SemanticRAG:
     
     async def run_discovery(self) -> bool:
         """Run discovery"""
-        return await self.workflow.run_discovery()
+        print("\n🔍 DATABASE DISCOVERY")
+        print("=" * 50)
+        
+        try:
+            success = await self.discovery.discover_database()
+            
+            if success:
+                stats = self.discovery.get_discovery_stats()
+                print(f"✅ Discovery completed!")
+                print(f"   📊 Tables: {stats['tables']}")
+                print(f"   👁️ Views: {stats['views']}")
+                return True
+            else:
+                print("❌ Discovery failed")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Discovery error: {e}")
+            return False
     
     async def run_analysis(self) -> bool:
         """Run analysis"""
-        return await self.workflow.run_analysis()
+        print("\n🧠 SEMANTIC ANALYSIS")
+        print("=" * 50)
+        
+        try:
+            # Load tables
+            tables = self.discovery.get_tables()
+            if not tables:
+                if self.discovery.load_from_cache():
+                    tables = self.discovery.get_tables()
+                else:
+                    print("❌ No tables found. Run Discovery first.")
+                    return False
+            
+            success = await self.analyzer.analyze_tables(tables)
+            
+            if success:
+                stats = self.analyzer.get_analysis_stats()
+                print("✅ Analysis completed!")
+                print(f"   📊 Total tables: {stats['total_tables']}")
+                print(f"   📈 Fact tables: {stats['fact_tables']}")
+                return True
+            else:
+                print("❌ Analysis failed")
+                return False
+                
+        except Exception as e:
+            print(f"❌ Analysis error: {e}")
+            return False
     
     async def run_queries(self) -> bool:
         """Run queries"""
-        return await self.workflow.run_queries()
+        print("\n💬 INTERACTIVE QUERIES")
+        print("=" * 50)
+        
+        try:
+            # Load data
+            tables = []
+            domain = None
+            relationships = []
+            
+            # Try analyzer first
+            if hasattr(self.analyzer, 'get_tables'):
+                tables = self.analyzer.get_tables()
+                domain = self.analyzer.get_domain()
+                relationships = self.analyzer.get_relationships()
+            
+            # Try caches if no data
+            if not tables:
+                print("   🔄 Loading from caches...")
+                
+                if self.analyzer.load_from_cache():
+                    tables = self.analyzer.get_tables()
+                    domain = self.analyzer.get_domain()
+                    relationships = self.analyzer.get_relationships()
+                elif self.discovery.load_from_cache():
+                    tables = self.discovery.get_tables()
+                    relationships = self.discovery.get_relationships()
+            
+            if not tables:
+                print("❌ No data available. Please run:")
+                print("   1. Database Discovery")
+                print("   2. Semantic Analysis")
+                return False
+            
+            print(f"🚀 Starting pipeline:")
+            print(f"   📊 Tables: {len(tables)}")
+            print(f"   🔗 Relationships: {len(relationships)}")
+            
+            await self.query_interface.start_session(tables, domain, relationships)
+            return True
+            
+        except Exception as e:
+            print(f"❌ Query interface error: {e}")
+            return False
     
     def show_status(self) -> None:
         """Show status"""
-        self.workflow.show_status()
+        print("\n📊 SYSTEM STATUS")
+        print("=" * 30)
+        
+        try:
+            # Check discovery
+            discovery_tables = self.discovery.get_tables()
+            if not discovery_tables:
+                self.discovery.load_from_cache()
+                discovery_tables = self.discovery.get_tables()
+            
+            # Check analysis
+            analyzer_tables = []
+            if hasattr(self.analyzer, 'load_from_cache'):
+                self.analyzer.load_from_cache()
+                analyzer_tables = self.analyzer.get_tables()
+            
+            # Show status
+            print(f"📋 Discovery: {'✅ Complete' if discovery_tables else '❌ Incomplete'}")
+            if discovery_tables:
+                stats = self.discovery.get_discovery_stats()
+                print(f"   📊 {stats['total_objects']} objects")
+            
+            print(f"🧠 Analysis: {'✅ Complete' if analyzer_tables else '❌ Incomplete'}")
+            if analyzer_tables:
+                print(f"   📊 {len(analyzer_tables)} tables")
+            
+            print(f"💬 Pipeline: {'✅ Ready' if (analyzer_tables or discovery_tables) else '❌ Not ready'}")
+            
+        except Exception as e:
+            print(f"⚠️ Status check error: {e}")
+
 
 def show_menu() -> None:
     """Display main menu"""
@@ -311,6 +225,7 @@ def show_menu() -> None:
     print("4. 📊 System Status")
     print("0. Exit")
     print("="*50)
+
 
 async def handle_choice(system: SemanticRAG, choice: str) -> bool:
     """Handle menu choice"""
@@ -333,6 +248,7 @@ async def handle_choice(system: SemanticRAG, choice: str) -> bool:
     except Exception as e:
         print(f"❌ Operation failed: {e}")
         return True
+
 
 def main():
     """Main entry point - Clean and simple"""
@@ -365,6 +281,7 @@ def main():
             break
         except Exception as e:
             print(f"❌ Error: {e}")
+
 
 if __name__ == "__main__":
     main()

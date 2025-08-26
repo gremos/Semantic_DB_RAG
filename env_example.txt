@@ -1,225 +1,47 @@
 # =================================================================
-# SEMANTIC DATABASE RAG SYSTEM - Improved Configuration
-# Simple, Readable, Maintainable with SQLGlot support
-# Copy this file to .env and fill in your actual values
+# SEMANTIC DATABASE RAG SYSTEM - Simple Configuration
+# Copy this file to .env and fill in your values
 # =================================================================
 
 # =================================================================
-# AZURE OPENAI CONFIGURATION (Required)
+# REQUIRED: Azure OpenAI Configuration
 # =================================================================
 AZURE_OPENAI_API_KEY=your_azure_openai_api_key_here
 AZURE_ENDPOINT=https://your-endpoint.openai.azure.com/
-DEPLOYMENT_NAME=gpt-4.1-mini
+DEPLOYMENT_NAME=gpt-4o-mini
 MODEL_VERSION=2024-12-01-preview
 
 # =================================================================
-# DATABASE CONFIGURATION (Required)
+# REQUIRED: Database Configuration
 # =================================================================
-# SQL Server connection string with optimal settings
-DATABASE_CONNECTION_STRING=Driver={ODBC Driver 17 for SQL Server};Server=localhost;Database=YourDatabase;Trusted_Connection=yes;MARS_Connection=yes;MultipleActiveResultSets=true;Pooling=true;Max Pool Size=50;
+# SQL Server connection string
+DATABASE_CONNECTION_STRING=Driver={ODBC Driver 17 for SQL Server};Server=localhost;Database=YourDatabase;Trusted_Connection=yes;MARS_Connection=yes;
 
 # =================================================================
-# 4-STAGE PIPELINE CONFIGURATION (README Requirements)
+# OPTIONAL: System Configuration
 # =================================================================
 
-# Core pipeline settings
+# Pipeline settings
 ENABLE_4_STAGE_PIPELINE=true
 ENABLE_VIEW_ANALYSIS=true
-ENABLE_SPROC_ANALYSIS=true
-ENABLE_RESULT_VALIDATION=true
-
-# SQL validation and safety (Enterprise guardrails)
 SQL_SYNTAX_VALIDATION=true
-RELATIONSHIP_VALIDATION=true
-TABLE_SELECTION_CONFIDENCE=0.7
 
-# Pipeline performance
-PIPELINE_TIMEOUT_SECONDS=60
-MAX_RETRY_ATTEMPTS=2
+# Cache settings (hours)
+DISCOVERY_CACHE_HOURS=168
+SEMANTIC_CACHE_HOURS=168
+
+# Performance
 QUERY_TIMEOUT_SECONDS=30
-
-# =================================================================
-# DISCOVERY CONFIGURATION WITH SQLGLOT
-# =================================================================
-
-# Cache settings
-DISCOVERY_CACHE_HOURS=24
-SEMANTIC_CACHE_HOURS=24
-
-# Performance optimization
-USE_FAST_QUERIES=true
 MAX_PARALLEL_WORKERS=8
-ROW_LIMIT_DEFAULT=100
 
-# SQLGlot integration for enhanced parsing
-ENABLE_SQLGLOT_PARSING=true
-ENABLE_VIEW_DEFINITION_PARSING=true
-ENABLE_STORED_PROCEDURE_PARSING=true
-
-# =================================================================
-# EXCLUSION PATTERNS (Merged from Environment)
-# SQLGlot-enhanced filtering with configurable patterns
-# =================================================================
-
-# Table exclusion patterns (comma-separated)
-# These are merged with default exclusions in the code
-TABLE_EXCLUSIONS=msreplication,syscommittab,sysdiagrams,dtproperties,backup,corrupted,broken,temp_,test_,dev_,staging_
-
-# Additional custom exclusions for your environment
-# Add your specific table patterns here
-CUSTOM_TABLE_EXCLUSIONS=old_,legacy_,archive_,migration_
+# Table exclusions (comma-separated)
+TABLE_EXCLUSIONS=temp_,test_,backup_,old_
 
 # Schema exclusions (comma-separated)
-SCHEMA_EXCLUSIONS=sys,information_schema,msdb,tempdb
+SCHEMA_EXCLUSIONS=sys,information_schema
 
-# View-specific exclusions (merged with table exclusions)
-VIEW_EXCLUSIONS=timingview,viewbatchactionanalysis,viewfixofferfailure,viewrenewalfailure
-
-# Stored procedure exclusions
-PROCEDURE_EXCLUSIONS=sp_,xp_,dt_,fn_
-
-# =================================================================
-# SEMANTIC ANALYSIS CONFIGURATION
-# =================================================================
-
-# Entity classification settings
-ENABLE_PATTERN_CLASSIFICATION=true
-ENABLE_LLM_ENHANCEMENT=true
-CLASSIFICATION_CONFIDENCE_THRESHOLD=0.6
-ENTITY_CLASSIFICATION_BATCH_SIZE=8
-
-# Business domain analysis
-ENABLE_DOMAIN_ANALYSIS=true
-CREATE_BUSINESS_TEMPLATES=true
-DOMAIN_CONFIDENCE_THRESHOLD=0.6
-
-# Relationship discovery methods
-RELATIONSHIP_DISCOVERY_METHODS=all
-RELATIONSHIP_CONFIDENCE_MIN=0.6
-MAX_RELATIONSHIPS_PER_TABLE=10
-
-# =================================================================
-# INTERNATIONAL CHARACTER SUPPORT (README Requirement)
-# =================================================================
-
-# UTF-8 encoding for Greek and other international characters
+# International support
 UTF8_ENCODING=true
-PRESERVE_INTERNATIONAL_CHARS=true
-UNICODE_NORMALIZATION=true
-
-# =================================================================
-# SAMPLE DATA CONFIGURATION (README: First 3 + Last 3)
-# =================================================================
-
-# Sample data collection (README requirement: first 3 + last 3 rows)
-SAMPLES_PER_OBJECT=6
-SAMPLE_FIRST_ROWS=3
-SAMPLE_LAST_ROWS=3
-SAMPLE_DATA_ANALYSIS=true
-
-# Sample data safety
-SAMPLE_DATA_MAX_LENGTH=200
-TRUNCATE_LONG_TEXT=true
-
-# =================================================================
-# FEATURE FLAGS FOR ADVANCED CAPABILITIES
-# =================================================================
-
-# View definition mining with SQLGlot
-ENABLE_VIEW_MINING=true
-ANALYZE_VIEW_DEFINITIONS=true
-EXTRACT_VIEW_RELATIONSHIPS=true
-PARSE_VIEW_JOINS=true
-
-# Stored procedure analysis
-ANALYZE_PROCEDURE_SELECTS=true
-EXTRACT_PROCEDURE_RELATIONSHIPS=true
-SKIP_DYNAMIC_SQL=true
-
-# Query pattern learning
-ENABLE_QUERY_CACHING=true
-CACHE_QUERY_PATTERNS=true
-TEMPLATE_CONFIDENCE_MIN=0.7
-
-# Business intelligence features
-ENABLE_BUSINESS_INTELLIGENCE=true
-ENABLE_ADVANCED_RELATIONSHIPS=true
-ENABLE_DATA_CORRELATION=true
-
-# =================================================================
-# SYSTEM BEHAVIOR AND USER EXPERIENCE
-# =================================================================
-
-# Progress and output
-SHOW_PROGRESS_BARS=true
-COLORED_OUTPUT=true
-DETAILED_ERROR_MESSAGES=true
-HELPFUL_SUGGESTIONS=true
-
-# Discovery behavior
-EXCLUDE_SYSTEM_TABLES=true
-MINIMAL_FILTERING=false
-PRIORITIZE_BUSINESS_OBJECTS=true
-
-# Result formatting
-RESULT_FORMATTING=enhanced
-LARGE_NUMBER_FORMATTING=true
-ADD_THOUSANDS_SEPARATORS=true
-
-# =================================================================
-# ENVIRONMENT-SPECIFIC CONFIGURATIONS
-# =================================================================
-
-# Development environment
-# Uncomment for development
-# MAX_PARALLEL_WORKERS=4
-# DISCOVERY_CACHE_HOURS=1
-# DETAILED_LOGGING=true
-
-# Production environment
-# Uncomment for production
-# MAX_PARALLEL_WORKERS=12
-# DISCOVERY_CACHE_HOURS=48
-# ENABLE_AGGRESSIVE_CACHING=true
-
-# Testing environment
-# Uncomment for testing
-# ENABLE_MOCK_DATA=true
-# FAST_TESTING_MODE=true
-# SKIP_EXPENSIVE_OPERATIONS=true
-
-# =================================================================
-# SQLGLOT-SPECIFIC CONFIGURATION
-# =================================================================
-
-# SQLGlot parsing settings
-SQLGLOT_DIALECT=tsql
-SQLGLOT_STRICT_MODE=false
-SQLGLOT_NORMALIZE_IDENTIFIERS=true
-
-# Enhanced relationship discovery using SQLGlot
-EXTRACT_JOINS_FROM_VIEWS=true
-EXTRACT_TABLES_FROM_VIEWS=true
-PARSE_COMPLEX_QUERIES=true
-
-# AST validation settings (Enterprise guardrails)
-ENABLE_AST_VALIDATION=true
-BLOCK_DANGEROUS_OPERATIONS=true
-VALIDATE_IDENTIFIER_EXISTENCE=true
-
-# =================================================================
-# MONITORING AND OBSERVABILITY
-# =================================================================
-
-# Logging levels
-LOG_LEVEL=INFO
-ENABLE_PERFORMANCE_LOGGING=true
-LOG_QUERY_EXECUTION_TIMES=true
-
-# Health monitoring
-ENABLE_HEALTH_CHECKS=true
-MONITOR_CACHE_USAGE=true
-TRACK_SUCCESS_RATES=true
 
 # =================================================================
 # EXAMPLE CONNECTION STRINGS
@@ -235,56 +57,11 @@ TRACK_SUCCESS_RATES=true
 # DATABASE_CONNECTION_STRING=Driver={ODBC Driver 17 for SQL Server};Server=yourserver.database.windows.net;Database=YourDB;UID=username;PWD=password;Encrypt=yes;
 
 # =================================================================
-# VALIDATION AND TROUBLESHOOTING
+# QUICK START STEPS
 # =================================================================
-
-# Configuration validation
-VALIDATE_CONFIG_ON_STARTUP=true
-FAIL_FAST_ON_CONFIG_ERRORS=true
-
-# Common troubleshooting settings
-DEBUG_MODE=false
-VERBOSE_ERROR_MESSAGES=true
-ENABLE_DIAGNOSTIC_LOGGING=false
-
-# =================================================================
-# WHAT'S NEW IN THIS IMPROVED VERSION
-# =================================================================
-
-# 🚀 IMPROVEMENTS FOLLOWING README:
-# ✅ SQLGlot integration for enhanced SQL parsing and validation
-# ✅ Merged exclusion patterns from environment (as requested)
-# ✅ Simple, readable, maintainable configuration structure
-# ✅ DRY principle - no duplicate settings
-# ✅ SOLID principle - clear separation of concerns
-# ✅ YAGNI principle - only necessary configuration options
-
-# 📊 SQLGLOT ENHANCEMENTS:
-# - Enhanced view definition parsing with join extraction
-# - AST-based SQL validation for enterprise guardrails
-# - Improved relationship discovery from parsed SQL
-# - Better identifier validation and safety checks
-
-# 🔧 CONFIGURATION IMPROVEMENTS:
-# - Environment-based exclusion pattern merging
-# - Cleaner separation between different feature areas
-# - Better default values following README requirements
-# - More flexible cache and performance tuning
-
-# 🛡️ ENTERPRISE FEATURES:
-# - Enhanced security with SQLGlot AST validation
-# - Configurable exclusion patterns for different environments
-# - International character support (Greek text, Unicode)
-# - Production-ready monitoring and observability
-
-# =================================================================
-# GETTING STARTED CHECKLIST
-# =================================================================
-# □ Copy this file to .env
-# □ Set AZURE_OPENAI_API_KEY with your actual API key
-# □ Set DATABASE_CONNECTION_STRING with your database details
-# □ Set AZURE_ENDPOINT with your Azure OpenAI endpoint
-# □ Customize TABLE_EXCLUSIONS for your environment
-# □ Install dependencies: pip install pyodbc sqlglot langchain-openai
-# □ Test configuration: python -c "from shared.config import Config; print(Config())"
-# □ Run discovery and enjoy the improved system! 🚀
+# 1. Copy this file to .env
+# 2. Set AZURE_OPENAI_API_KEY with your actual API key
+# 3. Set DATABASE_CONNECTION_STRING with your database details
+# 4. Set AZURE_ENDPOINT with your Azure OpenAI endpoint
+# 5. Run: python setup.py
+# 6. Run: python main.py
