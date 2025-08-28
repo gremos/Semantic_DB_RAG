@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Query Interface - Enhanced with LLM Entity Resolution
-Following README: OpenAI-powered NER with schema context
-Simple, Readable, Maintainable
+Query Interface - Simplified 3-Stage Pipeline
+Simple, Readable, Maintainable - Following DRY, SOLID, YAGNI
 """
 
 import asyncio
@@ -15,99 +14,84 @@ from langchain_openai import AzureChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
 
 from shared.config import Config
-from shared.models import (TableInfo, BusinessDomain, Relationship, QueryResult, 
-                          AnalyticalTask, CapabilityContract, EvidenceScore)
+from shared.models import TableInfo, BusinessDomain, Relationship, QueryResult
 from shared.utils import parse_json_response, clean_sql_query, safe_database_value, validate_sql_safety
 
-class EnhancedIntentAnalyzer:
-    """Enhanced intent analysis with LLM entity resolution"""
+class IntentAnalyzer:
+    """Stage 1: Understand user intent - Single Responsibility"""
     
     def __init__(self, llm: AzureChatOpenAI):
         self.llm = llm
     
-    async def analyze_intent(self, question: str, schema_context: Dict[str, Any]) -> AnalyticalTask:
-        """Enhanced intent analysis with schema-aware entity resolution"""
-        print("   🧠 Stage 1: Enhanced intent analysis with LLM...")
+    async def analyze_intent(self, question: str, tables: List[TableInfo]) -> Dict[str, Any]:
+        """Analyze user intent and identify relevant entities"""
+        print("   🧠 Stage 1: Intent analysis...")
         
-        # Build schema context for LLM
-        context = self._build_schema_context(schema_context)
+        # Create table context for LLM
+        table_context = self._build_table_context(tables)
         
-        # Use LLM for structured intent extraction
-        intent_data = await self._llm_intent_analysis(question, context)
+        # Get LLM analysis
+        intent = await self._get_intent_from_llm(question, table_context)
         
-        if intent_data:
-            print(f"      ✅ LLM Analysis: {intent_data.get('task_type', 'unknown')}")
-            return AnalyticalTask(
-                task_type=intent_data.get('task_type', 'aggregation'),
-                metrics=intent_data.get('metrics', []),
-                entity=intent_data.get('entity'),
-                crm_entities=intent_data.get('crm_entities', []),
-                time_window=intent_data.get('time_window'),
-                grouping=intent_data.get('group_by', []),
-                filters=intent_data.get('filters', []),
-                top_limit=intent_data.get('limit')
-            )
+        if intent:
+            print(f"      ✅ Intent: {intent.get('task_type', 'unknown')}")
+            return intent
         
-        # Fallback to pattern matching
-        return self._pattern_fallback(question)
+        # Fallback to simple pattern matching
+        return self._simple_intent_fallback(question)
     
-    def _build_schema_context(self, schema_context: Dict[str, Any]) -> str:
-        """Build schema context for LLM"""
-        context_parts = []
+    def _build_table_context(self, tables: List[TableInfo]) -> str:
+        """Build table context for LLM"""
+        context_lines = ["AVAILABLE TABLES:"]
         
-        # Add table summaries
-        if 'tables' in schema_context:
-            context_parts.append("AVAILABLE TABLES:")
-            for table in schema_context['tables'][:20]:  # Limit to top 20 tables
-                table_name = table.get('full_name', table.get('name', 'Unknown'))
-                entity_type = table.get('entity_type', 'Unknown')
-                columns = [col.get('name', '') for col in table.get('columns', [])[:8]]
-                sample = table.get('sample_preview', '')
-                
-                context_parts.append(f"- {table_name}: {entity_type}")
-                context_parts.append(f"  Columns: {', '.join(columns)}")
-                if sample:
-                    context_parts.append(f"  Sample: {sample}")
+        # Show most relevant tables first (customers, payments)
+        priority_tables = []
+        other_tables = []
         
-        return '\n'.join(context_parts)
+        for table in tables[:15]:  # Limit to avoid token limits
+            table_info = f"- {table.full_name}: {table.entity_type}"
+            if getattr(table, 'name_columns', []):
+                table_info += f" (Names: {', '.join(table.name_columns[:2])})"
+            if getattr(table, 'measures', []):
+                table_info += f" (Amounts: {', '.join(table.measures[:2])})"
+            
+            if table.entity_type in ['Customer', 'Payment']:
+                priority_tables.append(table_info)
+            else:
+                other_tables.append(table_info)
+        
+        context_lines.extend(priority_tables)
+        context_lines.extend(other_tables[:8])  # Limit other tables
+        
+        return '\n'.join(context_lines)
     
-    async def _llm_intent_analysis(self, question: str, context: str) -> Optional[Dict[str, Any]]:
-        """LLM-based intent analysis with schema context"""
+    async def _get_intent_from_llm(self, question: str, context: str) -> Optional[Dict[str, Any]]:
+        """Get intent analysis from LLM"""
         try:
-            system_prompt = """
-You are a BI analyst. Extract analytical intent from natural language and map to database schema.
+            prompt = f"""Analyze this business question and map to available data:
 
-Respond with JSON only using this structure:
-{
-  "task_type": "ranking|aggregation|trend|count",
-  "metrics": ["revenue", "amount", "count", "quantity"],
-  "entity": "customer|payment|order|product",
-  "crm_entities": ["customer", "payment"],
-  "group_by": ["customer_name", "region"],
-  "filters": ["paid", "active", "won"],
-  "time_window": "this_year|last_month|2025",
-  "limit": 10
-}
-
-ENTITY MAPPING RULES:
-- "customers" → customer entity, look for Customer/Client tables
-- "paid/revenue/sales" → payment/transaction tables with amount columns  
-- "top X" → ranking task with limit X
-- "names" → include name/title columns in grouping
-"""
-
-            user_prompt = f"""
 QUESTION: "{question}"
 
-SCHEMA CONTEXT:
 {context}
 
-Map the question to available tables and extract intent as JSON:
-"""
+Identify:
+1. What the user wants (ranking, total, count, list)
+2. Which entity types are needed (Customer, Payment, Order, etc.)
+3. What should be shown (names, amounts, dates)
+4. Any limits (top 10, etc.)
+
+Respond with JSON only:
+{{
+  "task_type": "ranking|aggregation|count|list",
+  "entities": ["Customer", "Payment"],
+  "show_fields": ["names", "amounts"],
+  "limit": 10,
+  "time_filter": "this_year|last_month|null"
+}}"""
 
             messages = [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=user_prompt)
+                SystemMessage(content="You are a business intelligence assistant. Analyze questions and respond with JSON only."),
+                HumanMessage(content=prompt)
             ]
             
             response = await asyncio.to_thread(self.llm.invoke, messages)
@@ -117,652 +101,261 @@ Map the question to available tables and extract intent as JSON:
             print(f"      ⚠️ LLM intent analysis failed: {e}")
             return None
     
-    def _pattern_fallback(self, question: str) -> AnalyticalTask:
-        """Enhanced pattern matching fallback"""
+    def _simple_intent_fallback(self, question: str) -> Dict[str, Any]:
+        """Simple pattern-based intent analysis as fallback"""
         q_lower = question.lower()
         
-        # Detect task type
-        if any(word in q_lower for word in ['top', 'highest', 'best', 'worst', 'most']):
+        # Determine task type
+        if any(word in q_lower for word in ['top', 'highest', 'best']):
             task_type = 'ranking'
-        elif any(word in q_lower for word in ['count', 'how many', 'number of']):
-            task_type = 'count'
+            limit = 10
         elif any(word in q_lower for word in ['total', 'sum']):
             task_type = 'aggregation'
+            limit = None
+        elif any(word in q_lower for word in ['count', 'how many']):
+            task_type = 'count'
+            limit = None
         else:
-            task_type = 'aggregation'
-        
-        # Detect metrics
-        metrics = []
-        if any(word in q_lower for word in ['paid', 'payment', 'revenue', 'sales', 'amount']):
-            metrics = ['amount', 'revenue']
-        elif 'count' in q_lower or 'number' in q_lower:
-            metrics = ['count']
-        else:
-            metrics = ['amount']
+            task_type = 'list'
+            limit = 20
         
         # Detect entities
-        crm_entities = []
-        if any(word in q_lower for word in ['customer', 'client', 'account']):
-            crm_entities.append('customer')
-        if any(word in q_lower for word in ['payment', 'paid', 'revenue', 'sales']):
-            crm_entities.append('payment')
+        entities = []
+        if any(word in q_lower for word in ['customer', 'client']):
+            entities.append('Customer')
+        if any(word in q_lower for word in ['payment', 'revenue', 'sales', 'paid']):
+            entities.append('Payment')
         
-        # Extract limit
-        import re
-        top_match = re.search(r'top\s+(\d+)', q_lower)
-        limit = int(top_match.group(1)) if top_match else (10 if task_type == 'ranking' else None)
-        
-        # Detect grouping
-        grouping = []
+        # Detect what to show
+        show_fields = []
         if 'name' in q_lower:
-            grouping = ['name']
+            show_fields.append('names')
+        if any(word in q_lower for word in ['amount', 'revenue', 'total', 'paid']):
+            show_fields.append('amounts')
         
-        return AnalyticalTask(
-            task_type=task_type,
-            metrics=metrics,
-            crm_entities=crm_entities,
-            grouping=grouping,
-            top_limit=limit
-        )
+        return {
+            'task_type': task_type,
+            'entities': entities,
+            'show_fields': show_fields,
+            'limit': limit,
+            'time_filter': None
+        }
 
-class EnhancedTableSelector:
-    """Enhanced table selection with entity-based scoring"""
+class TableSelector:
+    """Stage 2: Select best tables for query - Single Responsibility"""
     
-    def __init__(self, tables: List[TableInfo], relationships: List[Relationship]):
+    def __init__(self, tables: List[TableInfo]):
         self.tables = tables
-        self.relationships = relationships
     
-    def select_candidates(self, intent: AnalyticalTask, top_k: int = 5) -> List[Tuple[TableInfo, EvidenceScore]]:
-        """Enhanced evidence-based table selection"""
-        print("   📋 Stage 2: Enhanced entity-aware table selection...")
+    def select_tables(self, intent: Dict[str, Any]) -> List[TableInfo]:
+        """Select best tables based on intent"""
+        print("   📋 Stage 2: Table selection...")
         
+        target_entities = intent.get('entities', [])
+        show_fields = intent.get('show_fields', [])
+        
+        # Score tables based on intent
         scored_tables = []
         for table in self.tables:
-            score = self._calculate_enhanced_evidence(table, intent)
-            if score.total_score > 0.1:  # Only consider tables with some relevance
+            score = self._calculate_table_score(table, target_entities, show_fields)
+            if score > 0:
                 scored_tables.append((table, score))
         
-        # Sort by evidence score
-        scored_tables.sort(key=lambda x: x[1].total_score, reverse=True)
+        # Sort by score and select top candidates
+        scored_tables.sort(key=lambda x: x[1], reverse=True)
+        selected = [table for table, score in scored_tables[:3]]
         
-        # Show reasoning for top candidates
-        for i, (table, score) in enumerate(scored_tables[:3]):
-            explanations = score.get_explanation()
-            print(f"      #{i+1} {table.name} (score: {score.total_score:.2f}): {explanations[0] if explanations else 'No strong evidence'}")
-        
-        selected = scored_tables[:top_k]
-        print(f"      ✅ Selected {len(selected)} candidates")
+        if selected:
+            print(f"      ✅ Selected {len(selected)} tables")
+            for i, table in enumerate(selected):
+                print(f"         {i+1}. {table.name} ({table.entity_type})")
+        else:
+            print("      ❌ No suitable tables found")
         
         return selected
     
-    def _calculate_enhanced_evidence(self, table: TableInfo, intent: AnalyticalTask) -> EvidenceScore:
-        """Enhanced evidence calculation with entity matching"""
-        score = EvidenceScore()
+    def _calculate_table_score(self, table: TableInfo, target_entities: List[str], show_fields: List[str]) -> float:
+        """Calculate table relevance score"""
+        score = 0.0
         
-        # Entity matching - primary scoring factor
-        score.lexical_match = self._calculate_entity_match(table, intent)
+        # Entity type match (highest priority)
+        if table.entity_type in target_entities:
+            score += 3.0
         
-        # BI role and data type scoring
-        score.role_match = self._calculate_bi_role_match(table, intent)
+        # Business priority
+        priority_bonus = {
+            'high': 1.0,
+            'medium': 0.5,
+            'low': 0.0
+        }
+        score += priority_bonus.get(getattr(table, 'business_priority', 'medium'), 0.5)
         
-        # Table quality (avoid temp/test/system tables)
-        score.graph_proximity = self._calculate_table_quality(table)
-        
-        # Operational preference
-        score.operational_tag = 1.0 if getattr(table, 'data_type', '') == 'operational' else 0.3
-        
-        # Join connectivity
-        score.join_evidence = min(1.0, len(table.relationships) / 2.0)
+        # Check for required fields
+        if 'names' in show_fields and getattr(table, 'name_columns', []):
+            score += 1.0
+        if 'amounts' in show_fields and getattr(table, 'measures', []):
+            score += 1.0
         
         # Data availability
-        score.row_count = min(1.0, table.row_count / 1000.0) if table.row_count > 0 else 0.0
-        score.freshness = 1.0  # Assume fresh for now
+        if table.row_count > 0:
+            score += 0.5
+        
+        # Avoid system/temp tables
+        if any(word in table.name.lower() for word in ['temp', 'test', 'backup', 'sys']):
+            score = 0.0
         
         return score
-    
-    def _calculate_entity_match(self, table: TableInfo, intent: AnalyticalTask) -> float:
-        """Calculate entity matching score"""
-        if not intent.crm_entities:
-            return 0.5
-        
-        table_name = table.name.lower()
-        entity_type = getattr(table, 'entity_type', '').lower()
-        columns = [col.get('name', '').lower() for col in table.columns]
-        
-        max_match = 0.0
-        
-        for entity in intent.crm_entities:
-            entity_lower = entity.lower()
-            
-            # Direct table name match
-            if entity_lower in table_name:
-                max_match = max(max_match, 1.0)
-            
-            # Entity type match
-            elif entity_lower in entity_type:
-                max_match = max(max_match, 0.9)
-            
-            # Column name matches
-            elif any(entity_lower in col for col in columns):
-                max_match = max(max_match, 0.7)
-            
-            # Semantic matches
-            elif self._semantic_entity_match(entity_lower, table_name, columns):
-                max_match = max(max_match, 0.6)
-        
-        return max_match
-    
-    def _semantic_entity_match(self, entity: str, table_name: str, columns: List[str]) -> bool:
-        """Semantic entity matching"""
-        semantic_mappings = {
-            'customer': ['client', 'account', 'buyer', 'consumer'],
-            'payment': ['transaction', 'invoice', 'billing', 'revenue', 'sales'],
-            'order': ['purchase', 'transaction', 'sale'],
-            'product': ['item', 'goods', 'service']
-        }
-        
-        if entity in semantic_mappings:
-            synonyms = semantic_mappings[entity]
-            return (any(syn in table_name for syn in synonyms) or 
-                   any(any(syn in col for syn in synonyms) for col in columns))
-        
-        return False
-    
-    def _calculate_bi_role_match(self, table: TableInfo, intent: AnalyticalTask) -> float:
-        """Calculate BI role match score"""
-        bi_role = getattr(table, 'bi_role', 'dimension')
-        
-        if intent.task_type in ['ranking', 'aggregation'] and bi_role == 'fact':
-            return 1.0
-        elif bi_role == 'fact':
-            return 0.8
-        elif intent.task_type == 'count' and bi_role == 'dimension':
-            return 0.7
-        else:
-            return 0.4
-    
-    def _calculate_table_quality(self, table: TableInfo) -> float:
-        """Calculate table quality score"""
-        table_name = table.name.lower()
-        
-        # High quality indicators
-        quality = 1.0
-        
-        # Penalize temp/test tables
-        low_quality_indicators = [
-            'temp', 'test', 'backup', 'old', 'archive', 'delete', 
-            'staging', 'work', 'scratch', 'debug'
-        ]
-        
-        for indicator in low_quality_indicators:
-            if indicator in table_name:
-                quality -= 0.5
-                break
-        
-        # Penalize dated tables (with timestamps)
-        import re
-        if re.search(r'\d{8}|\d{4}_\d{2}_\d{2}', table_name):
-            quality -= 0.3
-        elif re.search(r'\d{4}', table_name):
-            quality -= 0.1
-        
-        # Boost main business tables
-        business_indicators = ['customer', 'payment', 'order', 'product', 'invoice', 'transaction']
-        if any(indicator in table_name for indicator in business_indicators):
-            quality += 0.2
-        
-        return max(0.0, min(1.0, quality))
 
-class EnhancedSQLGenerator:
-    """Enhanced SQL generation with intent-driven approach"""
+class SQLGenerator:
+    """Stage 3: Generate SQL from intent and tables - Single Responsibility"""
     
-    def __init__(self, config: Config):
-        self.config = config
+    def __init__(self, llm: AzureChatOpenAI):
+        self.llm = llm
     
-    async def generate_sql(self, intent: AnalyticalTask, valid_tables: List[TableInfo], 
-                          llm: AzureChatOpenAI) -> Optional[str]:
-        """Generate SQL with enhanced intent understanding"""
-        print("   ⚡ Stage 4: Enhanced SQL generation...")
+    async def generate_sql(self, question: str, intent: Dict[str, Any], tables: List[TableInfo]) -> Optional[str]:
+        """Generate SQL based on intent and selected tables"""
+        print("   ⚡ Stage 3: SQL generation...")
         
-        if not valid_tables:
+        if not tables:
             return None
         
-        # Select best table combination
-        primary_table, supporting_tables = self._select_table_combination(valid_tables, intent)
+        # Use primary table (best scored)
+        primary_table = tables[0]
         
-        # Generate SQL with LLM using enhanced context
-        sql = await self._generate_intent_driven_sql(intent, primary_table, supporting_tables, llm)
+        # Create SQL generation prompt
+        sql = await self._generate_sql_with_llm(question, intent, primary_table)
         
-        if sql and self._validate_sql(sql):
-            print("      ✅ Enhanced SQL generated and validated")
+        if sql and validate_sql_safety(sql):
+            print("      ✅ SQL generated and validated")
             return sql
         
-        print("      ❌ Enhanced SQL generation failed")
-        return None
+        # Fallback: Simple template-based SQL
+        return self._generate_simple_sql(intent, primary_table)
     
-    def _select_table_combination(self, tables: List[TableInfo], intent: AnalyticalTask) -> Tuple[TableInfo, List[TableInfo]]:
-        """Select optimal table combination for the query"""
-        # For customer queries, prefer customer-related tables
-        if 'customer' in intent.crm_entities:
-            customer_tables = [t for t in tables if 'customer' in t.name.lower() or 
-                             'customer' in getattr(t, 'entity_type', '').lower()]
-            if customer_tables:
-                primary = customer_tables[0]
-                supporting = [t for t in tables if 'payment' in t.name.lower() or 
-                            'transaction' in t.name.lower() or 'invoice' in t.name.lower()]
-                return primary, supporting
-        
-        # For payment queries, prefer fact tables with measures
-        if 'payment' in intent.crm_entities:
-            payment_tables = [t for t in tables if getattr(t, 'measures', []) and 
-                            ('payment' in t.name.lower() or 'transaction' in t.name.lower())]
-            if payment_tables:
-                primary = payment_tables[0]
-                supporting = [t for t in tables if 'customer' in t.name.lower()]
-                return primary, supporting
-        
-        # Default: use first valid table
-        return tables[0], tables[1:3] if len(tables) > 1 else []
-    
-    async def _generate_intent_driven_sql(self, intent: AnalyticalTask, primary_table: TableInfo, 
-                                        supporting_tables: List[TableInfo], llm: AzureChatOpenAI) -> Optional[str]:
-        """Generate SQL based on intent understanding"""
-        
-        # Build enhanced context
-        context = self._build_enhanced_context(intent, primary_table, supporting_tables)
-        
-        # Create intent-specific prompt
-        prompt = self._create_intent_prompt(intent, context)
-        
+    async def _generate_sql_with_llm(self, question: str, intent: Dict[str, Any], table: TableInfo) -> Optional[str]:
+        """Generate SQL using LLM"""
         try:
+            # Build context about the table
+            table_context = self._build_sql_context(table)
+            
+            prompt = f"""Generate SQL for this question using the provided table.
+
+QUESTION: "{question}"
+
+INTENT:
+- Task: {intent.get('task_type', 'list')}
+- Show: {intent.get('show_fields', [])}
+- Limit: {intent.get('limit', '')}
+
+{table_context}
+
+Generate simple, working SQL:
+- Use only columns that exist
+- For rankings: SELECT TOP ({intent.get('limit', 10)}) ... ORDER BY amount DESC
+- For totals: SELECT SUM(amount) FROM table
+- For counts: SELECT COUNT(*) FROM table
+- Include name columns when possible
+
+Return only the SQL query:"""
+
             messages = [
-                SystemMessage(content="""
-You are a SQL expert. Generate simple, correct SQL for business intelligence queries.
-
-RULES:
-1. Use only columns that exist in the provided schema
-2. No variables or parameters - use literal values
-3. For "top N" queries: SELECT TOP (N) ...
-4. For customer names: look for Name, CustomerName, Title columns  
-5. For amounts: look for Amount, Total, Price, Revenue columns
-6. Use simple JOINs only when necessary
-7. GROUP BY when aggregating
-8. ORDER BY for rankings (DESC for highest values)
-
-Generate clean SQL only - no explanations.
-"""),
+                SystemMessage(content="You are a SQL expert. Generate simple, correct SQL queries. Return only SQL code."),
                 HumanMessage(content=prompt)
             ]
             
-            response = await asyncio.to_thread(llm.invoke, messages)
-            sql = clean_sql_query(response.content)
-            
-            # Post-process to ensure simplicity
-            sql = self._simplify_sql(sql, intent)
-            
-            return sql
+            response = await asyncio.to_thread(self.llm.invoke, messages)
+            return clean_sql_query(response.content)
             
         except Exception as e:
-            print(f"      ⚠️ SQL generation failed: {e}")
+            print(f"      ⚠️ LLM SQL generation failed: {e}")
             return None
     
-    def _build_enhanced_context(self, intent: AnalyticalTask, primary_table: TableInfo, 
-                              supporting_tables: List[TableInfo]) -> str:
-        """Build enhanced context for SQL generation"""
-        context_parts = []
+    def _build_sql_context(self, table: TableInfo) -> str:
+        """Build context for SQL generation"""
+        lines = [f"TABLE: {table.full_name}"]
         
-        # Primary table context
-        context_parts.append(f"PRIMARY TABLE: {primary_table.full_name}")
-        context_parts.append("COLUMNS:")
-        
-        # Show relevant columns based on intent
-        for col in primary_table.columns[:15]:
+        # Show relevant columns
+        lines.append("COLUMNS:")
+        for col in table.columns[:12]:  # Show first 12 columns
             col_name = col.get('name', '')
             col_type = col.get('data_type', '')
             
-            # Highlight relevant columns
-            relevance = ""
-            if any(word in col_name.lower() for word in ['name', 'title', 'customer']):
-                relevance = " [CUSTOMER NAME]"
-            elif any(word in col_name.lower() for word in ['amount', 'total', 'price', 'revenue']):
-                relevance = " [AMOUNT]"
-            elif any(word in col_name.lower() for word in ['date', 'time']):
-                relevance = " [DATE/TIME]"
+            # Highlight important columns
+            notes = []
+            if col_name in getattr(table, 'name_columns', []):
+                notes.append('NAME')
+            if col_name in getattr(table, 'measures', []):
+                notes.append('AMOUNT')
+            if col_name in getattr(table, 'time_columns', []):
+                notes.append('DATE')
             
-            context_parts.append(f"  - {col_name} ({col_type}){relevance}")
+            note_str = f" [{', '.join(notes)}]" if notes else ""
+            lines.append(f"  - {col_name} ({col_type}){note_str}")
         
-        # Sample data for understanding
-        if primary_table.sample_data:
-            context_parts.append("\nSAMPLE DATA (first row):")
-            first_row = primary_table.sample_data[0]
-            for k, v in list(first_row.items())[:6]:
-                if not k.startswith('__'):
-                    context_parts.append(f"  {k}: {v}")
+        # Show sample data
+        if table.sample_data:
+            lines.append("\nSAMPLE DATA:")
+            first_row = table.sample_data[0]
+            for key, value in list(first_row.items())[:4]:
+                if not key.startswith('__'):
+                    lines.append(f"  {key}: {value}")
         
-        # Supporting tables if any
-        if supporting_tables:
-            context_parts.append(f"\nSUPPORTING TABLES:")
-            for table in supporting_tables[:2]:
-                context_parts.append(f"- {table.full_name}")
-                key_cols = [col.get('name', '') for col in table.columns[:5]]
-                context_parts.append(f"  Key columns: {', '.join(key_cols)}")
-        
-        return '\n'.join(context_parts)
+        return '\n'.join(lines)
     
-    def _create_intent_prompt(self, intent: AnalyticalTask, context: str) -> str:
-        """Create intent-specific prompt"""
-        task_templates = {
-            'ranking': f"Generate SQL for: Get top {intent.top_limit or 10} records ranked by {intent.metrics[0] if intent.metrics else 'value'}",
-            'aggregation': f"Generate SQL for: Calculate {intent.metrics[0] if intent.metrics else 'total'} aggregated by groups",
-            'count': f"Generate SQL for: Count records matching criteria"
-        }
+    def _generate_simple_sql(self, intent: Dict[str, Any], table: TableInfo) -> Optional[str]:
+        """Generate simple SQL using templates"""
+        task_type = intent.get('task_type', 'list')
+        limit = intent.get('limit')
         
-        task_description = task_templates.get(intent.task_type, f"Generate SQL for: {intent.task_type} query")
+        # Build SELECT clause
+        select_parts = []
         
-        return f"""
-{task_description}
-
-REQUIREMENTS:
-- Task: {intent.task_type}
-- Entities: {', '.join(intent.crm_entities) if intent.crm_entities else 'general'}
-- Metrics: {', '.join(intent.metrics) if intent.metrics else 'count'}
-- Grouping: {', '.join(intent.grouping) if intent.grouping else 'none'}
-- Limit: {intent.top_limit or 'none'}
-
-SCHEMA CONTEXT:
-{context}
-
-Generate simple, working SQL:
-"""
-    
-    def _simplify_sql(self, sql: str, intent: AnalyticalTask) -> str:
-        """Simplify SQL to remove unnecessary complexity"""
-        if not sql:
-            return sql
+        # Add name columns if available
+        name_columns = getattr(table, 'name_columns', [])
+        if name_columns:
+            select_parts.extend(name_columns[:2])  # First 2 name columns
         
-        import re
+        # Add measure columns if requested
+        if 'amounts' in intent.get('show_fields', []):
+            measures = getattr(table, 'measures', [])
+            if measures:
+                select_parts.extend(measures[:2])  # First 2 measure columns
         
-        # Remove unnecessary ROW_NUMBER() constructs for simple ranking
-        if intent.task_type == 'ranking' and 'ROW_NUMBER()' in sql and intent.top_limit:
-            # Try to simplify to basic ORDER BY with TOP
-            sql = re.sub(r'SELECT .* FROM \([^)]+ROW_NUMBER\(\)[^)]+\) AS \w+ WHERE \w+ <= \d+', 
-                        f"SELECT TOP ({intent.top_limit})", sql)
+        # Fallback: use first few columns
+        if not select_parts:
+            for col in table.columns[:3]:
+                select_parts.append(col.get('name', ''))
         
-        # Clean up excessive whitespace
-        sql = re.sub(r'\s+', ' ', sql).strip()
-        
-        return sql
-    
-    def _validate_sql(self, sql: str) -> bool:
-        """Enhanced SQL validation"""
-        return validate_sql_safety(sql)
-
-class QueryInterface:
-    """Enhanced query interface with LLM entity resolution"""
-    
-    def __init__(self, config: Config):
-        self.config = config
-        
-        # Initialize LLM
-        self.llm = AzureChatOpenAI(
-            azure_endpoint=config.azure_endpoint,
-            api_key=config.api_key,
-            azure_deployment=config.deployment_name,
-            api_version=config.api_version,
-            request_timeout=60,
-        )
-        
-        # Initialize enhanced components
-        self.intent_analyzer = EnhancedIntentAnalyzer(self.llm)
-        self.capability_validator = CapabilityValidator()
-        self.sql_generator = EnhancedSQLGenerator(config)
-        self.executor = QueryExecutor(config)
-        
-        print("✅ Enhanced Query Interface initialized with LLM entity resolution")
-    
-    async def start_session(self, tables: List[TableInfo], 
-                          domain: Optional[BusinessDomain], 
-                          relationships: List[Relationship]):
-        """Start enhanced interactive query session"""
-        
-        # Initialize enhanced table selector
-        self.table_selector = EnhancedTableSelector(tables, relationships)
-        
-        # Build schema context for LLM
-        self.schema_context = self._build_schema_context(tables)
-        
-        # Show enhanced readiness
-        self._show_enhanced_readiness(tables, domain)
-        
-        query_count = 0
-        
-        while True:
-            try:
-                question = input(f"\n❓ Query #{query_count + 1}: ").strip()
-                
-                if question.lower() in ['quit', 'exit', 'q']:
-                    break
-                if not question:
-                    continue
-                
-                query_count += 1
-                print(f"🧠 Processing with enhanced 4-stage pipeline...")
-                
-                start_time = time.time()
-                result = await self.process_enhanced_query(question)
-                result.execution_time = time.time() - start_time
-                
-                self._display_enhanced_result(result)
-                
-            except KeyboardInterrupt:
-                print("\n⏸️ Interrupted")
-                break
-            except Exception as e:
-                print(f"❌ Error: {e}")
-    
-    def _build_schema_context(self, tables: List[TableInfo]) -> Dict[str, Any]:
-        """Build schema context for LLM entity resolution"""
-        schema_tables = []
-        
-        for table in tables:
-            # Get sample preview for context
-            sample_preview = ""
-            if table.sample_data:
-                first_row = table.sample_data[0]
-                preview_parts = []
-                for k, v in list(first_row.items())[:3]:
-                    if not k.startswith('__'):
-                        preview_parts.append(f"{k}={v}")
-                sample_preview = " | ".join(preview_parts)
-            
-            schema_tables.append({
-                'name': table.name,
-                'full_name': table.full_name,
-                'entity_type': table.entity_type,
-                'columns': table.columns,
-                'bi_role': getattr(table, 'bi_role', 'dimension'),
-                'measures': getattr(table, 'measures', []),
-                'sample_preview': sample_preview
-            })
-        
-        return {'tables': schema_tables}
-    
-    async def process_enhanced_query(self, question: str) -> QueryResult:
-        """Enhanced 4-Stage Pipeline with LLM entity resolution"""
-        
-        try:
-            # Stage 1: Enhanced intent analysis with schema context
-            intent = await self.intent_analyzer.analyze_intent(question, self.schema_context)
-            
-            # Stage 2: Enhanced entity-aware table selection
-            candidates = self.table_selector.select_candidates(intent, top_k=5)
-            
-            # Stage 3: Capability validation
-            valid_tables = self.capability_validator.validate_capabilities(candidates, intent)
-            
-            # Stage 4: Enhanced SQL generation and execution
-            if valid_tables:
-                sql = await self.sql_generator.generate_sql(intent, valid_tables, self.llm)
-                
-                if sql:
-                    results, error = await self.executor.execute_sql(sql)
-                    
-                    return QueryResult(
-                        question=question,
-                        sql_query=sql,
-                        results=results,
-                        error=error,
-                        tables_used=[t.full_name for t in valid_tables],
-                        result_type="data"
-                    )
-                else:
-                    return QueryResult(
-                        question=question,
-                        sql_query="",
-                        results=[],
-                        error="Enhanced SQL generation failed",
-                        result_type="error"
-                    )
+        # Generate SQL based on task type
+        if task_type == 'ranking' and limit:
+            sql = f"SELECT TOP ({limit}) {', '.join(select_parts)} FROM {table.full_name}"
+            if getattr(table, 'measures', []):
+                order_col = getattr(table, 'measures', [])[0]
+                sql += f" ORDER BY {order_col} DESC"
+        elif task_type == 'aggregation':
+            measures = getattr(table, 'measures', [])
+            if measures:
+                sql = f"SELECT SUM({measures[0]}) AS Total FROM {table.full_name}"
             else:
-                return QueryResult(
-                    question=question,
-                    sql_query="",
-                    results=[],
-                    error="No tables passed capability validation",
-                    result_type="ner"
-                )
-            
-        except Exception as e:
-            return QueryResult(
-                question=question,
-                sql_query="",
-                results=[],
-                error=f"Enhanced pipeline error: {str(e)}",
-                result_type="error"
-            )
-    
-    def _show_enhanced_readiness(self, tables: List[TableInfo], domain: Optional[BusinessDomain]):
-        """Show enhanced system readiness"""
-        fact_tables = len([t for t in tables if getattr(t, 'bi_role', '') == 'fact'])
-        customer_tables = len([t for t in tables if 'customer' in t.name.lower()])
-        payment_tables = len([t for t in tables if any(word in t.name.lower() 
-                              for word in ['payment', 'transaction', 'invoice'])])
-        
-        print(f"\n🧠 ENHANCED BI SYSTEM READY:")
-        print(f"   📊 Total tables: {len(tables)}")
-        print(f"   📈 Fact tables: {fact_tables}")
-        print(f"   👥 Customer tables: {customer_tables}")
-        print(f"   💳 Payment tables: {payment_tables}")
-        
-        if domain:
-            print(f"   🎯 Domain: {domain.domain_type}")
-        
-        print(f"\n🧠 ENHANCED FEATURES:")
-        print(f"   • LLM-powered entity resolution")
-        print(f"   • Schema-aware intent analysis") 
-        print(f"   • Enhanced table selection")
-        print(f"   • Intent-driven SQL generation")
-    
-    def _display_enhanced_result(self, result: QueryResult):
-        """Display enhanced query results"""
-        
-        print(f"⏱️ Completed in {result.execution_time:.1f}s")
-        print("-" * 60)
-        
-        if result.is_successful():
-            print(f"✅ ENHANCED QUERY EXECUTED")
-            print(f"\n📋 SQL:")
-            print(f"{result.sql_query}")
-            
-            print(f"\n📊 Results: {len(result.results)} rows")
-            if result.results:
-                self._display_enhanced_data(result.results)
-        
+                sql = f"SELECT COUNT(*) AS Count FROM {table.full_name}"
+        elif task_type == 'count':
+            sql = f"SELECT COUNT(*) AS Count FROM {table.full_name}"
         else:
-            print(f"❌ ENHANCED QUERY FAILED")
-            print(f"   Error: {result.error}")
-            print(f"   💡 Try more specific entity names or check table availability")
-    
-    def _display_enhanced_data(self, results: List[Dict[str, Any]]):
-        """Display enhanced query results with better formatting"""
-        if len(results) == 1 and len(results[0]) == 1:
-            # Single value
-            key, value = next(iter(results[0].items()))
-            from shared.utils import format_number
-            formatted = format_number(value) if isinstance(value, (int, float)) else str(value)
-            print(f"   🎯 {key}: {formatted}")
-        else:
-            # Multiple rows - show in a more business-friendly format
-            for i, row in enumerate(results[:10], 1):
-                display_parts = []
-                for key, value in list(row.items())[:4]:  # Show first 4 columns
-                    if isinstance(value, str) and len(value) > 25:
-                        value = value[:25] + "..."
-                    elif isinstance(value, (int, float)) and abs(value) >= 1000:
-                        from shared.utils import format_number
-                        value = format_number(value)
-                    display_parts.append(f"{key}: {value}")
-                
-                print(f"   {i:2d}. {' | '.join(display_parts)}")
-            
-            if len(results) > 10:
-                print(f"   ... and {len(results) - 10} more rows")
-
-
-# Keep existing CapabilityValidator and QueryExecutor classes unchanged
-class CapabilityValidator:
-    """Stage 3: Capability validation"""
-    
-    def validate_capabilities(self, candidates: List[Tuple[TableInfo, EvidenceScore]], 
-                            intent: AnalyticalTask) -> List[TableInfo]:
-        """Validate capability contracts"""
-        print("   🔒 Stage 3: Capability validation...")
+            # List query
+            top_clause = f"TOP ({limit})" if limit else "TOP (50)"
+            sql = f"SELECT {top_clause} {', '.join(select_parts)} FROM {table.full_name}"
         
-        valid_tables = []
-        
-        for table, score in candidates:
-            contract = self._assess_contract(table, intent)
-            
-            if contract.is_complete():
-                valid_tables.append(table)
-                print(f"      ✅ {table.name}: Contract satisfied")
-            else:
-                missing = contract.get_missing_capabilities()
-                print(f"      ❌ {table.name}: Missing {', '.join(missing[:2])}")
-        
-        return valid_tables
-    
-    def _assess_contract(self, table: TableInfo, intent: AnalyticalTask) -> CapabilityContract:
-        """Assess capability contract"""
-        contract = CapabilityContract()
-        
-        contract.grain = getattr(table, 'grain', 'unknown')
-        contract.measures = getattr(table, 'measures', [])
-        contract.entity_keys = getattr(table, 'entity_keys', [])
-        
-        time_columns = getattr(table, 'time_columns', [])
-        if time_columns:
-            contract.time_column = time_columns[0]
-        
-        contract.quality_checks = {
-            'row_count': table.row_count,
-            'has_measures': len(contract.measures) > 0,
-            'has_entity_keys': len(contract.entity_keys) > 0,
-            'has_time': contract.time_column is not None
-        }
-        
-        return contract
-
+        return sql if sql else None
 
 class QueryExecutor:
-    """Execute SQL with error handling"""
+    """Execute SQL queries - Single Responsibility"""
     
     def __init__(self, config: Config):
         self.config = config
     
-    async def execute_sql(self, sql: str) -> Tuple[List[Dict], Optional[str]]:
+    async def execute_query(self, sql: str) -> Tuple[List[Dict[str, Any]], Optional[str]]:
         """Execute SQL and return results"""
-        print("   🔄 Executing SQL...")
+        print("   🔄 Executing query...")
         
         try:
             with pyodbc.connect(self.config.get_database_connection_string()) as conn:
@@ -777,17 +370,190 @@ class QueryExecutor:
                 
                 if cursor.description:
                     columns = [col[0] for col in cursor.description]
-                    results = [
-                        {columns[i]: safe_database_value(row[i]) for i in range(len(columns))}
-                        for row in cursor
-                    ]
+                    results = []
                     
-                    print(f"      ✅ Success: {len(results)} rows")
+                    for row in cursor:
+                        row_dict = {}
+                        for i, value in enumerate(row):
+                            if i < len(columns):
+                                row_dict[columns[i]] = safe_database_value(value)
+                        results.append(row_dict)
+                    
+                    print(f"      ✅ Query executed: {len(results)} rows")
                     return results, None
                 else:
                     return [], None
                     
         except Exception as e:
             error_msg = str(e)
-            print(f"      ❌ Failed: {error_msg}")
+            print(f"      ❌ Query failed: {error_msg}")
             return [], error_msg
+
+class QueryInterface:
+    """Main query interface - Simplified 3-stage pipeline"""
+    
+    def __init__(self, config: Config):
+        self.config = config
+        
+        # Initialize LLM
+        self.llm = AzureChatOpenAI(
+            azure_endpoint=config.azure_endpoint,
+            api_key=config.api_key,
+            azure_deployment=config.deployment_name,
+            api_version=config.api_version,
+            request_timeout=60,
+        )
+        
+        # Initialize pipeline components
+        self.intent_analyzer = IntentAnalyzer(self.llm)
+        self.sql_generator = SQLGenerator(self.llm)
+        self.executor = QueryExecutor(config)
+        
+        print("✅ Simplified Query Interface initialized")
+    
+    async def start_session(self, tables: List[TableInfo], 
+                          domain: Optional[BusinessDomain], 
+                          relationships: List[Relationship]):
+        """Start interactive query session"""
+        
+        # Initialize table selector
+        self.table_selector = TableSelector(tables)
+        
+        # Show system readiness
+        self._show_readiness(tables, domain)
+        
+        query_count = 0
+        
+        while True:
+            try:
+                question = input(f"\n❓ Query #{query_count + 1}: ").strip()
+                
+                if question.lower() in ['quit', 'exit', 'q']:
+                    break
+                if not question:
+                    continue
+                
+                query_count += 1
+                print(f"🔄 Processing with simplified 3-stage pipeline...")
+                
+                start_time = time.time()
+                result = await self.process_query(question, tables)
+                result.execution_time = time.time() - start_time
+                
+                self._display_result(result)
+                
+            except KeyboardInterrupt:
+                print("\n⏸️ Interrupted")
+                break
+            except Exception as e:
+                print(f"❌ Error: {e}")
+    
+    async def process_query(self, question: str, tables: List[TableInfo]) -> QueryResult:
+        """Process query using simplified 3-stage pipeline"""
+        
+        try:
+            # Stage 1: Analyze intent
+            intent = await self.intent_analyzer.analyze_intent(question, tables)
+            
+            # Stage 2: Select tables
+            selected_tables = self.table_selector.select_tables(intent)
+            
+            if not selected_tables:
+                return QueryResult(
+                    question=question,
+                    sql_query="",
+                    results=[],
+                    error="No suitable tables found for this query",
+                    result_type="error"
+                )
+            
+            # Stage 3: Generate and execute SQL
+            sql = await self.sql_generator.generate_sql(question, intent, selected_tables)
+            
+            if not sql:
+                return QueryResult(
+                    question=question,
+                    sql_query="",
+                    results=[],
+                    error="Could not generate SQL for this query",
+                    result_type="error"
+                )
+            
+            # Execute SQL
+            results, error = await self.executor.execute_query(sql)
+            
+            return QueryResult(
+                question=question,
+                sql_query=sql,
+                results=results,
+                error=error,
+                tables_used=[t.full_name for t in selected_tables],
+                result_type="data" if results else "error"
+            )
+            
+        except Exception as e:
+            return QueryResult(
+                question=question,
+                sql_query="",
+                results=[],
+                error=f"Query processing error: {str(e)}",
+                result_type="error"
+            )
+    
+    def _show_readiness(self, tables: List[TableInfo], domain: Optional[BusinessDomain]):
+        """Show system readiness"""
+        customer_tables = len([t for t in tables if t.entity_type == 'Customer'])
+        payment_tables = len([t for t in tables if t.entity_type == 'Payment'])
+        
+        print(f"\n🚀 SIMPLIFIED BI SYSTEM READY:")
+        print(f"   📊 Total tables: {len(tables)}")
+        print(f"   👥 Customer tables: {customer_tables}")
+        print(f"   💳 Payment tables: {payment_tables}")
+        
+        if domain:
+            print(f"   🎯 Domain: {domain.domain_type}")
+        
+        print(f"\n🔄 SIMPLIFIED PIPELINE:")
+        print(f"   1. Intent Analysis (LLM)")
+        print(f"   2. Table Selection (Scoring)")
+        print(f"   3. SQL Generation (LLM)")
+    
+    def _display_result(self, result: QueryResult):
+        """Display query results"""
+        
+        print(f"⏱️ Completed in {result.execution_time:.1f}s")
+        print("-" * 50)
+        
+        if result.is_successful() and result.has_results():
+            print(f"✅ QUERY SUCCESSFUL")
+            print(f"\n📋 SQL:")
+            print(f"{result.sql_query}")
+            
+            print(f"\n📊 Results ({len(result.results)} rows):")
+            self._display_data(result.results)
+        else:
+            print(f"❌ QUERY FAILED")
+            print(f"   Error: {result.error}")
+    
+    def _display_data(self, results: List[Dict[str, Any]]):
+        """Display query results in a readable format"""
+        if len(results) == 1 and len(results[0]) == 1:
+            # Single value result
+            key, value = next(iter(results[0].items()))
+            formatted_value = f"{value:,}" if isinstance(value, (int, float)) and abs(value) >= 1000 else str(value)
+            print(f"   🎯 {key}: {formatted_value}")
+        else:
+            # Multiple rows - show first 10
+            for i, row in enumerate(results[:10], 1):
+                parts = []
+                for key, value in list(row.items())[:3]:  # First 3 columns
+                    if isinstance(value, (int, float)) and abs(value) >= 1000:
+                        value = f"{value:,}"
+                    elif isinstance(value, str) and len(value) > 30:
+                        value = value[:30] + "..."
+                    parts.append(f"{key}: {value}")
+                
+                print(f"   {i:2d}. {' | '.join(parts)}")
+            
+            if len(results) > 10:
+                print(f"   ... and {len(results) - 10} more rows")

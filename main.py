@@ -1,16 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Enhanced Semantic Database RAG System - Simple, Readable, Maintainable
-Following README: DRY, SOLID, YAGNI principles
-Clean function names: SemanticRAG (not SimplifiedSemanticRAG)
-Enhanced with better entity resolution and customer/payment focus
+Semantic Database RAG System - Simplified & Maintainable
+Simple function names: SemanticRAG (not SimplifiedSemanticRAG)
+Following DRY, SOLID, YAGNI principles - Pure LLM approach
 """
 
 import asyncio
 import os
 from pathlib import Path
-
 
 def load_env():
     """Load environment variables from .env file"""
@@ -21,7 +19,6 @@ def load_env():
                 if '=' in line and not line.startswith('#'):
                     key, value = line.strip().split('=', 1)
                     os.environ[key] = value.strip('"\'')
-
 
 def check_dependencies() -> bool:
     """Check required dependencies"""
@@ -35,83 +32,82 @@ def check_dependencies() -> bool:
         print("💡 Install: pip install pyodbc langchain-openai sqlglot")
         return False
 
-
 class SemanticRAG:
-    """Enhanced system orchestrator with better entity resolution"""
+    """Main system orchestrator - Simple and Clean"""
     
     def __init__(self):
         load_env()
         self._initialize()
     
     def _initialize(self):
-        """Initialize enhanced system"""
+        """Initialize system components"""
         try:
             # Check dependencies
             if not check_dependencies():
                 raise RuntimeError("Missing dependencies")
             
-            # Load config
+            # Load configuration
             from shared.config import Config
             self.config = Config()
             
-            # Validate config
+            # Validate configuration
             health = self.config.get_health_check()
             if not health['llm_configured'] or not health['database_configured']:
                 raise RuntimeError("Configuration incomplete")
             
-            # Load enhanced components
+            # Initialize components
             from db.discovery import DatabaseDiscovery
-            from semantic.analysis import EnhancedSemanticAnalyzer
-            from interactive.query_interface import QueryInterface
+            from semantic.analysis import SemanticAnalyzer  # Uses pure LLM approach
+            from interactive.query_interface import QueryInterface  # Simplified pipeline
             
             self.discovery = DatabaseDiscovery(self.config)
-            self.analyzer = EnhancedSemanticAnalyzer(self.config)  # Use enhanced version
+            self.analyzer = SemanticAnalyzer(self.config)
             self.query_interface = QueryInterface(self.config)
             
-            print("✅ Enhanced SemanticRAG System initialized")
-            print("   Enhanced with LLM entity resolution")
-            print("   Better customer/payment analysis")
+            print("✅ SemanticRAG System initialized")
+            print("   📊 Database discovery with first 3 + last 3 sampling")
+            print("   🧠 Pure LLM semantic analysis") 
+            print("   💬 Simplified 3-stage query pipeline")
             
         except Exception as e:
-            print(f"❌ Enhanced initialization failed: {e}")
+            print(f"❌ Initialization failed: {e}")
             print("\n💡 Setup checklist:")
             print("   1. Copy env_example.txt to .env")
             print("   2. Set AZURE_OPENAI_API_KEY")
             print("   3. Set DATABASE_CONNECTION_STRING")
             print("   4. Set AZURE_ENDPOINT")
-            print("   5. Install: pip install -r requirements.txt")
             raise
     
     async def run_discovery(self) -> bool:
-        """Run enhanced discovery"""
-        print("\n🔍 ENHANCED DATABASE DISCOVERY")
-        print("=" * 50)
+        """Run database discovery"""
+        print("\n🔍 DATABASE DISCOVERY")
+        print("=" * 30)
         
         try:
             success = await self.discovery.discover_database()
             
             if success:
                 stats = self.discovery.get_discovery_stats()
-                print(f"✅ Enhanced discovery completed!")
+                print(f"✅ Discovery completed!")
                 print(f"   📊 Tables: {stats['tables']}")
                 print(f"   👁️ Views: {stats['views']}")
                 print(f"   📝 Sampling: First 3 + Last 3 rows")
                 return True
             else:
-                print("❌ Enhanced discovery failed")
+                print("❌ Discovery failed")
                 return False
                 
         except Exception as e:
-            print(f"❌ Enhanced discovery error: {e}")
+            print(f"❌ Discovery error: {e}")
             return False
     
     async def run_analysis(self) -> bool:
-        """Run enhanced analysis"""
-        print("\n🧠 ENHANCED SEMANTIC ANALYSIS")
-        print("=" * 50)
+        """Run pure LLM semantic analysis"""
+        print("\n🧠 SEMANTIC ANALYSIS")
+        print("=" * 30)
         
         try:
-            # Load tables
+            # Get tables from discovery
             tables = self.discovery.get_tables()
             if not tables:
                 if self.discovery.load_from_cache():
@@ -120,42 +116,43 @@ class SemanticRAG:
                     print("❌ No tables found. Run Discovery first.")
                     return False
             
+            # Run pure LLM analysis
             success = await self.analyzer.analyze_tables(tables)
             
             if success:
                 stats = self.analyzer.get_analysis_stats()
-                print("✅ Enhanced analysis completed!")
-                print(f"   📊 Total tables: {stats['total_tables']}")
+                print("✅ Pure LLM analysis completed!")
+                print(f"   📊 Tables analyzed: {stats['total_tables']}")
                 print(f"   👥 Customer tables: {stats['customer_tables']}")
                 print(f"   💳 Payment tables: {stats['payment_tables']}")
-                print(f"   📈 Fact tables: {stats['fact_tables']}")
+                print(f"   🧠 Method: Pure LLM")
                 return True
             else:
-                print("❌ Enhanced analysis failed")
+                print("❌ Analysis failed")
                 return False
                 
         except Exception as e:
-            print(f"❌ Enhanced analysis error: {e}")
+            print(f"❌ Analysis error: {e}")
             return False
     
     async def run_queries(self) -> bool:
-        """Run enhanced queries with LLM entity resolution"""
-        print("\n💬 ENHANCED INTERACTIVE QUERIES")
-        print("=" * 50)
+        """Run simplified query interface"""
+        print("\n💬 QUERY INTERFACE")
+        print("=" * 30)
         
         try:
-            # Load enhanced data
+            # Load data
             tables = []
             domain = None
             relationships = []
             
-            # Try enhanced analyzer first
+            # Try analyzer first (has enriched tables)
             if hasattr(self.analyzer, 'get_tables'):
                 tables = self.analyzer.get_tables()
                 domain = self.analyzer.get_domain()
                 relationships = self.analyzer.get_relationships()
             
-            # Try caches if no data
+            # Fallback to caches
             if not tables:
                 print("   🔄 Loading from caches...")
                 
@@ -169,32 +166,31 @@ class SemanticRAG:
             
             if not tables:
                 print("❌ No data available. Please run:")
-                print("   1. Enhanced Database Discovery")
-                print("   2. Enhanced Semantic Analysis")
+                print("   1. Database Discovery")
+                print("   2. Semantic Analysis")
                 return False
             
-            # Show enhanced readiness
-            customer_tables = len([t for t in tables if hasattr(t, 'is_customer_table') and t.is_customer_table()])
-            payment_tables = len([t for t in tables if hasattr(t, 'is_payment_table') and t.is_payment_table()])
+            # Show readiness
+            customer_tables = len([t for t in tables if getattr(t, 'entity_type', '') == 'Customer'])
+            payment_tables = len([t for t in tables if getattr(t, 'entity_type', '') == 'Payment'])
             
-            print(f"🚀 Starting enhanced pipeline:")
-            print(f"   📊 Total tables: {len(tables)}")
+            print(f"🚀 Starting simplified pipeline:")
+            print(f"   📊 Tables: {len(tables)}")
             print(f"   👥 Customer tables: {customer_tables}")
             print(f"   💳 Payment tables: {payment_tables}")
-            print(f"   🔗 Relationships: {len(relationships)}")
-            print(f"   🧠 LLM entity resolution: Enabled")
+            print(f"   🧠 Pipeline: Intent → Tables → SQL")
             
             await self.query_interface.start_session(tables, domain, relationships)
             return True
             
         except Exception as e:
-            print(f"❌ Enhanced query interface error: {e}")
+            print(f"❌ Query interface error: {e}")
             return False
     
     def show_status(self) -> None:
-        """Show enhanced status"""
-        print("\n📊 ENHANCED SYSTEM STATUS")
-        print("=" * 30)
+        """Show system status"""
+        print("\n📊 SYSTEM STATUS")
+        print("=" * 20)
         
         try:
             # Check discovery
@@ -203,62 +199,50 @@ class SemanticRAG:
                 self.discovery.load_from_cache()
                 discovery_tables = self.discovery.get_tables()
             
-            # Check enhanced analysis
+            # Check analysis
             analyzer_tables = []
             if hasattr(self.analyzer, 'load_from_cache'):
                 self.analyzer.load_from_cache()
                 analyzer_tables = self.analyzer.get_tables()
             
-            # Show enhanced status
-            print(f"📋 Discovery: {'✅ Complete' if discovery_tables else '❌ Incomplete'}")
+            # Show status
+            print(f"📋 Discovery: {'✅ Ready' if discovery_tables else '❌ Incomplete'}")
             if discovery_tables:
                 stats = self.discovery.get_discovery_stats()
                 print(f"   📊 {stats['total_objects']} objects discovered")
-                print(f"   📝 Enhanced sampling: First 3 + Last 3")
             
-            print(f"🧠 Analysis: {'✅ Complete' if analyzer_tables else '❌ Incomplete'}")
+            print(f"🧠 Analysis: {'✅ Ready' if analyzer_tables else '❌ Incomplete'}")
             if analyzer_tables:
-                try:
-                    stats = self.analyzer.get_analysis_stats()
-                    print(f"   📊 {len(analyzer_tables)} tables analyzed")
-                    print(f"   👥 {stats.get('customer_tables', 0)} customer tables")
-                    print(f"   💳 {stats.get('payment_tables', 0)} payment tables")
-                except Exception as e:
-                    print(f"   📊 {len(analyzer_tables)} tables analyzed")
+                stats = self.analyzer.get_analysis_stats()
+                print(f"   📊 {len(analyzer_tables)} tables analyzed")
+                print(f"   👥 {stats.get('customer_tables', 0)} customer tables")
+                print(f"   💳 {stats.get('payment_tables', 0)} payment tables")
+                print(f"   🧠 Method: {stats.get('analysis_method', 'unknown')}")
             
-            print(f"💬 Pipeline: {'✅ Ready' if (analyzer_tables or discovery_tables) else '❌ Not ready'}")
-            
-            if analyzer_tables or discovery_tables:
-                print(f"🧠 Enhanced Features:")
-                print(f"   • LLM-powered entity resolution")
-                print(f"   • Customer/payment focus")
-                print(f"   • Intent-driven SQL generation")
+            print(f"💬 Queries: {'✅ Ready' if (analyzer_tables or discovery_tables) else '❌ Not ready'}")
             
         except Exception as e:
-            print(f"⚠️ Enhanced status check error: {e}")
+            print(f"⚠️ Status check error: {e}")
 
-
-def show_enhanced_menu() -> None:
-    """Display enhanced main menu"""
-    print("\n" + "="*60)
-    print("ENHANCED SEMANTIC DATABASE RAG SYSTEM")
-    print("LLM-Powered Entity Resolution & Customer Analytics")
-    print("="*60)
-    print("1. 🔍 Enhanced Database Discovery")
-    print("2. 🧠 Enhanced Semantic Analysis")  
-    print("3. 💬 Enhanced Interactive Queries")
-    print("4. 📊 Enhanced System Status")
+def show_menu() -> None:
+    """Display main menu"""
+    print("\n" + "="*50)
+    print("SEMANTIC DATABASE RAG SYSTEM")
+    print("Pure LLM Analysis & Simplified Pipeline")
+    print("="*50)
+    print("1. 🔍 Database Discovery")
+    print("2. 🧠 Semantic Analysis (Pure LLM)")
+    print("3. 💬 Query Interface (Simplified)")
+    print("4. 📊 System Status")
     print("0. Exit")
-    print("="*60)
-    print("💡 Enhanced Features:")
-    print("   • Better customer/payment table recognition")
-    print("   • LLM-powered intent analysis")
-    print("   • Schema-aware entity resolution")
-    print("   • Simplified SQL generation")
+    print("="*50)
+    print("💡 Features:")
+    print("   • First 3 + Last 3 sampling")
+    print("   • Pure LLM table analysis")
+    print("   • 3-stage query pipeline")
 
-
-async def handle_enhanced_choice(system: SemanticRAG, choice: str) -> bool:
-    """Handle enhanced menu choice"""
+async def handle_choice(system: SemanticRAG, choice: str) -> bool:
+    """Handle menu choice"""
     try:
         if choice == '1':
             return await system.run_discovery()
@@ -276,45 +260,41 @@ async def handle_enhanced_choice(system: SemanticRAG, choice: str) -> bool:
         print("\n⏸️ Operation interrupted")
         return True
     except Exception as e:
-        print(f"❌ Enhanced operation failed: {e}")
+        print(f"❌ Operation failed: {e}")
         return True
 
-
 def main():
-    """Enhanced main entry point"""
-    print("🚀 ENHANCED SEMANTIC DATABASE RAG SYSTEM")
-    print("LLM-Powered Entity Resolution & Customer Analytics")
-    print("Following README with enhanced capabilities")
-    print("=" * 60)
+    """Main entry point"""
+    print("🚀 SEMANTIC DATABASE RAG SYSTEM")
+    print("Simple, Readable, Maintainable")
+    print("=" * 40)
     
     try:
         system = SemanticRAG()
     except Exception:
-        print("\n❌ Enhanced system initialization failed")
+        print("\n❌ System initialization failed")
         return
     
-    # Enhanced main loop
+    # Main loop
     while True:
-        show_enhanced_menu()
+        show_menu()
         
         try:
             choice = input("Enter choice (0-4): ").strip()
             
             if choice == '0':
-                print("👋 Thanks for using Enhanced Semantic Database RAG!")
-                print("   🧠 LLM entity resolution enabled")
-                print("   👥 Customer analytics ready")
-                print("   💳 Payment analysis supported")
+                print("👋 Thanks for using Semantic Database RAG!")
+                print("   🧠 Pure LLM analysis")
+                print("   🔄 Simplified pipeline")
                 break
             
-            success = asyncio.run(handle_enhanced_choice(system, choice))
+            asyncio.run(handle_choice(system, choice))
             
         except KeyboardInterrupt:
             print("\n⏸️ Interrupted")
             break
         except Exception as e:
-            print(f"❌ Enhanced error: {e}")
-
+            print(f"❌ Error: {e}")
 
 if __name__ == "__main__":
     main()
