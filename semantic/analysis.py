@@ -3,6 +3,7 @@
 """
 Semantic Analysis - Pure LLM Approach
 Simple, Readable, Maintainable - Following DRY, SOLID, YAGNI
+Enhanced to analyze tables+columns together and include views
 """
 
 import asyncio
@@ -20,104 +21,229 @@ from shared.models import TableInfo, BusinessDomain, Relationship
 from shared.utils import parse_json_response
 
 class LLMTableAnalyzer:
-    """Pure LLM-based table analysis - Single Responsibility"""
+    """Pure LLM-based table analysis with enhanced column understanding"""
     
     def __init__(self, llm: AzureChatOpenAI):
         self.llm = llm
     
-    async def analyze_tables(self, tables: List[TableInfo]) -> List[TableInfo]:
-        """Analyze tables using pure LLM approach"""
-        print(f"🧠 Analyzing {len(tables)} tables with pure LLM...")
+    async def analyze_tables_and_views(self, tables: List[TableInfo], view_info: Dict = None) -> List[TableInfo]:
+        """Analyze tables and views together using pure LLM approach"""
+        print(f"🧠 Analyzing {len(tables)} tables + views with enhanced column analysis...")
         
-        # Process in batches for efficiency
-        batch_size = 3
-        analyzed_tables = []
+        # Combine tables and views for comprehensive analysis
+        all_objects = []
         
-        for i in range(0, len(tables), batch_size):
-            batch = tables[i:i+batch_size]
-            batch_result = await self._analyze_batch(batch)
-            analyzed_tables.extend(batch_result)
-            
-            if i + batch_size < len(tables):
-                await asyncio.sleep(0.5)  # Rate limiting
-        
-        print(f"   ✅ Analyzed {len(analyzed_tables)} tables")
-        return analyzed_tables
-    
-    async def _analyze_batch(self, tables: List[TableInfo]) -> List[TableInfo]:
-        """Analyze a batch of tables with LLM"""
-        try:
-            prompt = self._create_analysis_prompt(tables)
-            response = await self._get_llm_response(prompt)
-            return self._apply_analysis(response, tables)
-        except Exception as e:
-            print(f"   ⚠️ Batch analysis failed: {e}")
-            return tables  # Return original tables if analysis fails
-    
-    def _create_analysis_prompt(self, tables: List[TableInfo]) -> str:
-        """Create focused analysis prompt for LLM"""
-        table_info = []
-        
+        # Add tables
         for table in tables:
-            # Get essential table information
-            columns = [col.get('name', '') for col in table.columns[:10]]  # First 10 columns
-            sample = self._get_sample_preview(table)
-            
-            table_info.append({
-                'name': table.full_name,
-                'row_count': table.row_count,
-                'columns': columns,
-                'sample': sample
+            all_objects.append({
+                'object': table,
+                'type': 'table',
+                'view_definition': None
             })
         
-        return f"""Analyze these database tables for business intelligence use.
+        # Add views if available
+        if view_info:
+            for view_name, view_data in view_info.items():
+                # Create TableInfo for views
+                view_table = self._create_view_table_info(view_name, view_data)
+                if view_table:
+                    all_objects.append({
+                        'object': view_table,
+                        'type': 'view', 
+                        'view_definition': view_data.get('definition', '')
+                    })
+        
+        print(f"   📊 Total objects to analyze: {len(all_objects)} (tables + views)")
+        
+        # Process in batches for efficiency
+        batch_size = 2  # Smaller batches for more detailed analysis
+        analyzed_objects = []
+        
+        for i in range(0, len(all_objects), batch_size):
+            batch = all_objects[i:i+batch_size]
+            batch_result = await self._analyze_enhanced_batch(batch)
+            analyzed_objects.extend(batch_result)
+            
+            if i + batch_size < len(all_objects):
+                await asyncio.sleep(0.7)  # Rate limiting
+        
+        print(f"   ✅ Enhanced analysis completed: {len(analyzed_objects)} objects")
+        return [obj['object'] for obj in analyzed_objects]
+    
+    def _create_view_table_info(self, view_name: str, view_data: Dict) -> Optional[TableInfo]:
+        """Convert view info to TableInfo for analysis"""
+        try:
+            # Extract schema and name
+            if '.' in view_name:
+                parts = view_name.replace('[', '').replace(']', '').split('.')
+                schema = parts[0] if len(parts) > 1 else 'dbo'
+                name = parts[1] if len(parts) > 1 else parts[0]
+            else:
+                schema = 'dbo'
+                name = view_name
+            
+            # Create basic view TableInfo
+            return TableInfo(
+                name=name,
+                schema=schema,
+                full_name=view_name,
+                object_type='VIEW',
+                row_count=0,  # Views don't have direct row counts
+                columns=[],   # Will be populated by analysis
+                sample_data=[],
+                relationships=[]
+            )
+        except Exception:
+            return None
+    
+    async def _analyze_enhanced_batch(self, batch: List[Dict]) -> List[Dict]:
+        """Enhanced batch analysis with deep column understanding"""
+        try:
+            prompt = self._create_enhanced_analysis_prompt(batch)
+            response = await self._get_llm_response(prompt)
+            return self._apply_enhanced_analysis(response, batch)
+        except Exception as e:
+            print(f"   ⚠️ Enhanced batch analysis failed: {e}")
+            return batch  # Return original if analysis fails
+    
+    def _create_enhanced_analysis_prompt(self, batch: List[Dict]) -> str:
+        """Create enhanced analysis prompt focusing on table+column relationships"""
+        objects_info = []
+        
+        for item in batch:
+            obj = item['object']
+            obj_type = item['type']
+            view_def = item.get('view_definition')
+            
+            # Get detailed column information
+            columns_detail = self._get_detailed_columns(obj)
+            sample_detail = self._get_enhanced_sample(obj)
+            
+            obj_info = {
+                'name': obj.full_name,
+                'type': obj_type,
+                'row_count': obj.row_count,
+                'columns_with_types': columns_detail,
+                'sample_data_analysis': sample_detail,
+                'relationships': obj.relationships
+            }
+            
+            # Add view definition if available
+            if view_def:
+                obj_info['view_definition'] = view_def[:500]  # Limit length
+            
+            objects_info.append(obj_info)
+        
+        return f"""Analyze these database objects (tables/views) for business intelligence.
+Focus on understanding what business data each object contains by analyzing columns + sample data together.
 
-TABLES:
-{json.dumps(table_info, indent=2)}
+OBJECTS TO ANALYZE:
+{json.dumps(objects_info, indent=2, default=str)}
 
-For each table, determine:
-1. ENTITY_TYPE: Customer, Payment, Order, Product, Campaign, or describe the business entity
-2. BI_ROLE: fact (contains measures/transactions) or dimension (contains attributes)
-3. MEASURES: numeric columns suitable for aggregation (amounts, quantities, counts)
-4. ENTITY_KEYS: key columns for joining/grouping (IDs, foreign keys)
-5. NAME_COLUMNS: columns with names/titles for display
-6. TIME_COLUMNS: date/time columns for filtering
-7. BUSINESS_PRIORITY: high (customer/payment data), medium, or low
+For each object, provide detailed analysis:
+
+1. ENTITY_TYPE: What business entity does this represent?
+   - Customer: customer master data, accounts, contacts
+   - Payment: transactions, payments, invoices, financial data  
+   - Order: sales orders, purchases, transactions
+   - Product: items, catalog, inventory
+   - Campaign: marketing campaigns, promotions
+   - Address: location/geography data
+   - System: logging, configuration, technical tables
+   - Other: describe the specific business entity
+
+2. BUSINESS_CONTEXT: What specific business information does this contain?
+   (e.g., "Customer contact information with addresses", "Payment transactions with amounts")
+
+3. COLUMN_ANALYSIS: Analyze columns by purpose:
+   - MEASURES: numeric columns for aggregation (amounts, quantities, totals, counts)
+   - ENTITY_KEYS: primary keys, IDs, foreign keys for joining
+   - NAME_COLUMNS: descriptive text for display (names, titles, descriptions)  
+   - TIME_COLUMNS: date/time columns for filtering/grouping
+   - CATEGORY_COLUMNS: classification/grouping columns (status, type, category)
+
+4. BI_ROLE: Based on column analysis:
+   - fact: contains measures/transactions (quantitative data)
+   - dimension: contains attributes/descriptions (qualitative data)
+
+5. BUSINESS_PRIORITY: Based on business value:
+   - high: core business entities (Customer, Payment, Order)
+   - medium: supporting entities (Product, Address) 
+   - low: system/technical entities
+
+6. DATA_QUALITY: Based on sample data:
+   - production: real business data
+   - test: test/sample data
+   - archive: historical/backup data
 
 Respond with JSON only:
 {{
-  "tables": [
+  "analysis": [
     {{
-      "table_name": "[schema].[table]",
+      "object_name": "[schema].[table]",
       "entity_type": "Customer",
+      "business_context": "Customer master data with contact information",
+      "column_analysis": {{
+        "measures": ["total_spent", "order_count"],
+        "entity_keys": ["customer_id", "account_id"],
+        "name_columns": ["customer_name", "company_name"],
+        "time_columns": ["created_date", "last_order_date"],
+        "category_columns": ["status", "customer_type"]
+      }},
       "bi_role": "dimension",
-      "measures": ["amount", "quantity"],
-      "entity_keys": ["customer_id", "id"],
-      "name_columns": ["name", "title"],
-      "time_columns": ["created_date", "modified_date"],
-      "business_priority": "high"
+      "business_priority": "high",
+      "data_quality": "production"
     }}
   ]
 }}"""
     
-    def _get_sample_preview(self, table: TableInfo) -> str:
-        """Get simple sample preview"""
-        if not table.sample_data:
-            return "No sample data"
+    def _get_detailed_columns(self, obj: TableInfo) -> List[Dict]:
+        """Get detailed column information with types"""
+        columns = []
+        for col in obj.columns[:15]:  # First 15 columns
+            col_info = {
+                'name': col.get('name', ''),
+                'type': col.get('data_type', ''),
+                'nullable': col.get('is_nullable', True)
+            }
+            columns.append(col_info)
+        return columns
+    
+    def _get_enhanced_sample(self, obj: TableInfo) -> Dict:
+        """Get enhanced sample data analysis"""
+        if not obj.sample_data:
+            return {'status': 'no_sample_data', 'insights': []}
         
-        first_row = table.sample_data[0]
-        preview = []
+        insights = []
+        first_row = obj.sample_data[0]
         
-        for key, value in list(first_row.items())[:4]:
-            if not key.startswith('__'):
-                preview.append(f"{key}={value}")
+        # Analyze sample values
+        for key, value in list(first_row.items())[:6]:
+            if key.startswith('__'):
+                continue
+                
+            value_type = type(value).__name__
+            if isinstance(value, (int, float)) and abs(value) > 0:
+                insights.append(f"{key}: numeric value ({value}) - potential measure")
+            elif isinstance(value, str) and len(value) > 2:
+                if any(word in key.lower() for word in ['name', 'title', 'description']):
+                    insights.append(f"{key}: text value - likely name column")
+                else:
+                    insights.append(f"{key}: text value - potential category")
         
-        return " | ".join(preview)
+        return {
+            'status': 'has_sample_data',
+            'row_count': len(obj.sample_data),
+            'insights': insights
+        }
     
     async def _get_llm_response(self, prompt: str) -> str:
         """Get LLM response with error handling"""
         try:
-            system_msg = "You are a business intelligence expert. Analyze database tables and respond with valid JSON only."
+            system_msg = """You are a business intelligence expert specializing in database analysis.
+Analyze tables and views by understanding the relationship between column names, data types, and sample values.
+Focus on identifying what business data each object contains. Respond with valid JSON only."""
+            
             messages = [
                 SystemMessage(content=system_msg),
                 HumanMessage(content=prompt)
@@ -129,114 +255,171 @@ Respond with JSON only:
             print(f"      ⚠️ LLM request failed: {e}")
             return ""
     
-    def _apply_analysis(self, response: str, tables: List[TableInfo]) -> List[TableInfo]:
-        """Apply LLM analysis results to tables"""
+    def _apply_enhanced_analysis(self, response: str, batch: List[Dict]) -> List[Dict]:
+        """Apply enhanced LLM analysis results"""
         data = parse_json_response(response)
-        if not data or 'tables' not in data:
-            return tables
+        if not data or 'analysis' not in data:
+            print("      ⚠️ No valid analysis in LLM response")
+            return batch
         
-        # Create lookup for easy matching
+        # Create lookup for analysis results
         analysis_map = {
-            item.get('table_name', ''): item 
-            for item in data['tables']
+            item.get('object_name', ''): item 
+            for item in data['analysis']
         }
         
-        # Apply analysis to tables
-        for table in tables:
-            analysis = analysis_map.get(table.full_name, {})
+        # Apply enhanced analysis
+        for item in batch:
+            obj = item['object']
+            analysis = analysis_map.get(obj.full_name, {})
+            
             if analysis:
-                # Update table properties
-                table.entity_type = analysis.get('entity_type', 'Unknown')
-                table.bi_role = analysis.get('bi_role', 'dimension')
-                table.measures = analysis.get('measures', [])
-                table.entity_keys = analysis.get('entity_keys', [])
-                table.name_columns = analysis.get('name_columns', [])
-                table.time_columns = analysis.get('time_columns', [])
-                table.business_priority = analysis.get('business_priority', 'medium')
-                table.confidence = 0.9  # High confidence from LLM analysis
+                # Core properties
+                obj.entity_type = analysis.get('entity_type', 'Unknown')
+                obj.business_role = analysis.get('business_context', 'Unknown')
+                obj.confidence = 0.9  # High confidence from LLM
                 
-                # Set data type based on BI role
-                table.data_type = 'operational' if table.bi_role == 'fact' else 'reference'
-                table.grain = self._determine_grain(table.entity_type)
+                # Enhanced column analysis
+                col_analysis = analysis.get('column_analysis', {})
+                obj.measures = col_analysis.get('measures', [])
+                obj.entity_keys = col_analysis.get('entity_keys', [])
+                obj.name_columns = col_analysis.get('name_columns', [])
+                obj.time_columns = col_analysis.get('time_columns', [])
+                
+                # Set category columns (new property)
+                if hasattr(obj, '__dict__'):
+                    obj.category_columns = col_analysis.get('category_columns', [])
+                
+                # BI properties
+                obj.bi_role = analysis.get('bi_role', 'dimension')
+                obj.business_priority = analysis.get('business_priority', 'medium')
+                obj.data_type = 'operational' if obj.bi_role == 'fact' else 'reference'
+                obj.grain = self._determine_grain(obj.entity_type)
+                
+                # Data quality
+                if hasattr(obj, '__dict__'):
+                    obj.data_quality = analysis.get('data_quality', 'production')
+                
+                print(f"      ✅ {obj.name}: {obj.entity_type} ({obj.bi_role})")
+            else:
+                print(f"      ⚠️ No analysis for {obj.full_name}")
         
-        return tables
+        return batch
     
     def _determine_grain(self, entity_type: str) -> str:
         """Determine table grain from entity type"""
         grain_map = {
             'Customer': 'customer',
-            'Payment': 'transaction',
+            'Payment': 'transaction', 
             'Order': 'order',
             'Product': 'product',
-            'Campaign': 'campaign'
+            'Campaign': 'campaign',
+            'Address': 'location'
         }
         return grain_map.get(entity_type, entity_type.lower())
 
 class DomainAnalyzer:
-    """Simple domain analysis - Single Responsibility"""
+    """Enhanced domain analysis including views"""
     
     def determine_domain(self, tables: List[TableInfo]) -> Optional[BusinessDomain]:
-        """Determine business domain from analyzed tables"""
+        """Determine business domain from analyzed tables and views"""
         if not tables:
             return None
         
         # Count entity types
         entity_counts = {}
+        high_priority_tables = []
+        
         for table in tables:
             entity_type = table.entity_type
             entity_counts[entity_type] = entity_counts.get(entity_type, 0) + 1
+            
+            # Track high priority tables
+            if getattr(table, 'business_priority', 'medium') == 'high':
+                high_priority_tables.append(table)
         
-        # Determine domain based on entity mix
-        customer_tables = entity_counts.get('Customer', 0)
-        payment_tables = entity_counts.get('Payment', 0)
+        # Enhanced domain determination
+        customer_objects = entity_counts.get('Customer', 0)
+        payment_objects = entity_counts.get('Payment', 0)
+        order_objects = entity_counts.get('Order', 0)
         
-        if customer_tables >= 1 and payment_tables >= 1:
+        # Determine capabilities
+        capabilities = {
+            'data_exploration': True,
+            'basic_reporting': len(tables) > 0
+        }
+        
+        if customer_objects >= 1:
+            capabilities['customer_analysis'] = True
+            
+        if payment_objects >= 1:
+            capabilities['payment_analysis'] = True
+            capabilities['revenue_reporting'] = True
+            
+        if customer_objects >= 1 and payment_objects >= 1:
+            capabilities['customer_revenue_analysis'] = True
+            
+        # Create appropriate domain
+        if customer_objects >= 1 and payment_objects >= 1:
             return BusinessDomain(
-                domain_type="Customer Analytics",
+                domain_type="Customer & Payment Analytics",
                 industry="Business Intelligence",
-                confidence=0.9,
+                confidence=0.95,
                 sample_questions=[
                     "Who are our top paying customers?",
-                    "What is our total revenue?",
-                    "Show customer payment trends"
+                    "What is our total revenue this year?",
+                    "Show customer payment trends",
+                    "How many customers do we have?",
+                    "What's the average payment amount?"
                 ],
-                capabilities={
-                    'customer_analysis': True,
-                    'payment_analysis': True,
-                    'revenue_reporting': True
-                }
+                capabilities=capabilities
+            )
+        elif customer_objects >= 1:
+            return BusinessDomain(
+                domain_type="Customer Analytics", 
+                industry="CRM/Business",
+                confidence=0.85,
+                sample_questions=[
+                    "List our customers",
+                    "How many customers do we have?",
+                    "Show customer information",
+                    "Find customers by name"
+                ],
+                capabilities=capabilities
             )
         else:
+            # Generic business domain
+            dominant_entity = max(entity_counts.items(), key=lambda x: x[1])[0] if entity_counts else "Business"
+            
             return BusinessDomain(
-                domain_type="Business Analytics",
-                industry="General",
+                domain_type=f"{dominant_entity} Analytics",
+                industry="Business Intelligence",
                 confidence=0.7,
                 sample_questions=[
-                    "Show me the data summary",
-                    "What information is available?"
+                    f"Show {dominant_entity.lower()} data",
+                    "What information is available?",
+                    "List the main data"
                 ],
-                capabilities={
-                    'basic_reporting': True,
-                    'data_exploration': True
-                }
+                capabilities=capabilities
             )
 
 class CacheManager:
-    """Simple cache management - Single Responsibility"""
+    """Enhanced cache management"""
     
     def __init__(self, config: Config):
         self.config = config
     
     def save_analysis(self, tables: List[TableInfo], domain: Optional[BusinessDomain], 
                      relationships: List[Relationship]):
-        """Save analysis results to cache"""
+        """Save enhanced analysis results"""
         cache_file = self.config.get_cache_path("semantic_analysis.json")
         
         data = {
             'metadata': {
                 'analyzed_at': datetime.now().isoformat(),
-                'version': '3.0-pure-llm',
-                'table_count': len(tables)
+                'version': '3.1-enhanced-columns',
+                'table_count': len(tables),
+                'includes_views': any(t.object_type == 'VIEW' for t in tables)
             },
             'tables': [self._table_to_dict(t) for t in tables],
             'domain': self._domain_to_dict(domain) if domain else None,
@@ -246,7 +429,7 @@ class CacheManager:
         try:
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False, default=str)
-            print(f"   💾 Analysis cached successfully")
+            print(f"   💾 Enhanced analysis cached successfully")
         except Exception as e:
             print(f"   ⚠️ Cache save failed: {e}")
     
@@ -275,8 +458,8 @@ class CacheManager:
             return [], None, []
     
     def _table_to_dict(self, table: TableInfo) -> Dict:
-        """Convert TableInfo to dictionary"""
-        return {
+        """Convert TableInfo to dictionary with enhanced properties"""
+        data = {
             'name': table.name,
             'schema': table.schema,
             'full_name': table.full_name,
@@ -286,17 +469,28 @@ class CacheManager:
             'sample_data': table.sample_data,
             'relationships': table.relationships,
             'entity_type': table.entity_type,
+            'business_role': table.business_role,
+            'confidence': table.confidence,
             'bi_role': getattr(table, 'bi_role', 'dimension'),
             'measures': getattr(table, 'measures', []),
             'entity_keys': getattr(table, 'entity_keys', []),
             'name_columns': getattr(table, 'name_columns', []),
             'time_columns': getattr(table, 'time_columns', []),
             'business_priority': getattr(table, 'business_priority', 'medium'),
-            'confidence': table.confidence
+            'data_type': getattr(table, 'data_type', 'reference'),
+            'grain': getattr(table, 'grain', 'unknown')
         }
+        
+        # Add enhanced properties if available
+        if hasattr(table, 'category_columns'):
+            data['category_columns'] = table.category_columns
+        if hasattr(table, 'data_quality'):
+            data['data_quality'] = table.data_quality
+        
+        return data
     
     def _dict_to_table(self, data: Dict) -> TableInfo:
-        """Convert dictionary to TableInfo"""
+        """Convert dictionary to TableInfo with enhanced properties"""
         table = TableInfo(
             name=data['name'],
             schema=data['schema'],
@@ -311,13 +505,21 @@ class CacheManager:
             confidence=data.get('confidence', 0.0)
         )
         
-        # Apply LLM analysis results
+        # Apply enhanced analysis results
         table.bi_role = data.get('bi_role', 'dimension')
         table.measures = data.get('measures', [])
         table.entity_keys = data.get('entity_keys', [])
         table.name_columns = data.get('name_columns', [])
         table.time_columns = data.get('time_columns', [])
         table.business_priority = data.get('business_priority', 'medium')
+        table.data_type = data.get('data_type', 'reference')
+        table.grain = data.get('grain', 'unknown')
+        
+        # Enhanced properties
+        if 'category_columns' in data:
+            table.category_columns = data['category_columns']
+        if 'data_quality' in data:
+            table.data_quality = data['data_quality']
         
         return table
     
@@ -362,7 +564,7 @@ class CacheManager:
         )
 
 class SemanticAnalyzer:
-    """Main semantic analyzer - Pure LLM approach"""
+    """Main semantic analyzer with enhanced table+column+view analysis"""
     
     def __init__(self, config: Config):
         self.config = config
@@ -376,7 +578,7 @@ class SemanticAnalyzer:
             request_timeout=60,
         )
         
-        # Initialize components
+        # Initialize enhanced components
         self.table_analyzer = LLMTableAnalyzer(self.llm)
         self.domain_analyzer = DomainAnalyzer()
         self.cache_manager = CacheManager(config)
@@ -386,34 +588,42 @@ class SemanticAnalyzer:
         self.relationships: List[Relationship] = []
         self.domain: Optional[BusinessDomain] = None
         
-        print("✅ Pure LLM Semantic Analyzer initialized")
+        print("✅ Enhanced LLM Semantic Analyzer initialized")
+        print("   🧠 Deep table+column analysis")
+        print("   👁️ View integration")
     
-    async def analyze_tables(self, tables: List[TableInfo]) -> bool:
-        """Main analysis method using pure LLM approach"""
-        print("🧠 Pure LLM Semantic Analysis")
+    async def analyze_tables(self, tables: List[TableInfo], discovery=None) -> bool:
+        """Enhanced analysis including tables and views"""
+        print("🧠 Enhanced Semantic Analysis")
         print("=" * 40)
         
         try:
             start_time = time.time()
             
-            # Pure LLM table analysis
-            self.tables = await self.table_analyzer.analyze_tables(tables)
+            # Get view information if discovery available
+            view_info = {}
+            if discovery and hasattr(discovery, 'get_view_info'):
+                view_info = discovery.get_view_info()
+                print(f"   👁️ Including {len(view_info)} views in analysis")
             
-            # Simple domain analysis
+            # Enhanced LLM analysis with views
+            self.tables = await self.table_analyzer.analyze_tables_and_views(tables, view_info)
+            
+            # Enhanced domain analysis
             self.domain = self.domain_analyzer.determine_domain(self.tables)
             
-            # Extract relationships from table metadata
+            # Extract relationships
             self.relationships = self._extract_relationships()
             
-            # Save to cache
+            # Save enhanced cache
             self.cache_manager.save_analysis(self.tables, self.domain, self.relationships)
             
-            # Show summary
-            self._show_summary(time.time() - start_time)
+            # Show enhanced summary
+            self._show_enhanced_summary(time.time() - start_time)
             
             return True
         except Exception as e:
-            print(f"❌ Analysis failed: {e}")
+            print(f"❌ Enhanced analysis failed: {e}")
             return False
     
     def load_from_cache(self) -> bool:
@@ -450,24 +660,30 @@ class SemanticAnalyzer:
         
         return relationships
     
-    def _show_summary(self, elapsed_time: float):
-        """Show analysis summary"""
-        customer_tables = len([t for t in self.tables if t.entity_type == 'Customer'])
-        payment_tables = len([t for t in self.tables if t.entity_type == 'Payment'])
+    def _show_enhanced_summary(self, elapsed_time: float):
+        """Show enhanced analysis summary"""
+        customer_objects = len([t for t in self.tables if t.entity_type == 'Customer'])
+        payment_objects = len([t for t in self.tables if t.entity_type == 'Payment'])
         fact_tables = len([t for t in self.tables if getattr(t, 'bi_role', '') == 'fact'])
+        view_objects = len([t for t in self.tables if t.object_type == 'VIEW'])
         tables_with_names = len([t for t in self.tables if getattr(t, 'name_columns', [])])
+        tables_with_measures = len([t for t in self.tables if getattr(t, 'measures', [])])
         
-        print(f"\n✅ PURE LLM ANALYSIS COMPLETED:")
+        print(f"\n✅ ENHANCED SEMANTIC ANALYSIS COMPLETED:")
         print(f"   ⏱️ Time: {elapsed_time:.1f}s")
-        print(f"   📊 Total tables: {len(self.tables)}")
-        print(f"   👥 Customer tables: {customer_tables}")
-        print(f"   💳 Payment tables: {payment_tables}")
+        print(f"   📊 Total objects: {len(self.tables)} (tables + views)")
+        print(f"   📋 Tables: {len(self.tables) - view_objects}")
+        print(f"   👁️ Views: {view_objects}")
+        print(f"   👥 Customer objects: {customer_objects}")
+        print(f"   💳 Payment objects: {payment_objects}")
         print(f"   📈 Fact tables: {fact_tables}")
-        print(f"   📝 Tables with names: {tables_with_names}")
+        print(f"   📝 Objects with names: {tables_with_names}")
+        print(f"   📊 Objects with measures: {tables_with_measures}")
         print(f"   🔗 Relationships: {len(self.relationships)}")
         
         if self.domain:
             print(f"   🎯 Domain: {self.domain.domain_type}")
+            print(f"   💡 Capabilities: {len(self.domain.capabilities)} features")
     
     # Public API
     def get_tables(self) -> List[TableInfo]:
@@ -480,16 +696,19 @@ class SemanticAnalyzer:
         return self.domain
     
     def get_analysis_stats(self) -> Dict[str, Any]:
-        customer_tables = len([t for t in self.tables if t.entity_type == 'Customer'])
-        payment_tables = len([t for t in self.tables if t.entity_type == 'Payment'])
+        customer_objects = len([t for t in self.tables if t.entity_type == 'Customer'])
+        payment_objects = len([t for t in self.tables if t.entity_type == 'Payment'])
         fact_tables = len([t for t in self.tables if getattr(t, 'bi_role', '') == 'fact'])
+        view_objects = len([t for t in self.tables if t.object_type == 'VIEW'])
         
         return {
-            'total_tables': len(self.tables),
-            'customer_tables': customer_tables,
-            'payment_tables': payment_tables,
+            'total_objects': len(self.tables),
+            'total_tables': len(self.tables) - view_objects,
+            'total_views': view_objects,
+            'customer_tables': customer_objects,
+            'payment_tables': payment_objects,
             'fact_tables': fact_tables,
             'total_relationships': len(self.relationships),
             'domain_type': self.domain.domain_type if self.domain else None,
-            'analysis_method': 'pure_llm'
+            'analysis_method': 'enhanced_llm_with_views'
         }
