@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Utility Functions - Enhanced and Smart
-Simple, readable, maintainable - Essential utilities with intelligence
+Enhanced Utility Functions with SQL Safety Validation
+Architecture: sqlglot integration, SQL Server support, enhanced validation
+Simple, Readable, Maintainable - DRY, SOLID, YAGNI principles
 """
 
 import json
@@ -12,8 +13,15 @@ from typing import Dict, Any, Union, List, Optional
 from datetime import datetime
 from functools import wraps
 
+# SQLGlot for SQL safety validation (Architecture requirement)
+try:
+    import sqlglot
+    HAS_SQLGLOT = True
+except ImportError:
+    HAS_SQLGLOT = False
+
 def parse_json_response(response: str) -> Dict[str, Any]:
-    """Parse JSON from LLM response with intelligent cleaning"""
+    """Parse JSON from LLM response with enhanced cleaning"""
     if not response or not response.strip():
         return {}
     
@@ -24,37 +32,43 @@ def parse_json_response(response: str) -> Dict[str, Any]:
             
         parsed = json.loads(cleaned)
         
-        # Validate parsed data structure
+        # Enhanced validation for expected structures
         if isinstance(parsed, dict):
             return parsed
-        elif isinstance(parsed, list) and len(parsed) > 0 and isinstance(parsed[0], dict):
-            # Sometimes LLM returns array, take first dict
-            return parsed[0]
+        elif isinstance(parsed, list) and len(parsed) > 0:
+            # Handle array responses - take first valid dict
+            for item in parsed:
+                if isinstance(item, dict):
+                    return item
+            return {}
         else:
             return {}
             
-    except (json.JSONDecodeError, AttributeError, KeyError):
+    except (json.JSONDecodeError, AttributeError, KeyError, TypeError):
         return {}
 
 def _clean_json_response(response: str) -> str:
-    """Intelligently clean response text for JSON parsing"""
+    """Enhanced JSON cleaning with better pattern matching"""
     cleaned = response.strip()
     
-    # Remove common LLM prefixes/suffixes
+    # Remove common LLM prefixes/suffixes (enhanced patterns)
     prefixes_to_remove = [
         "here's the json:", "here is the json:", "json:", "```json", "```",
-        "the response is:", "result:", "analysis:"
+        "the response is:", "result:", "analysis:", "here's the analysis:",
+        "the json response:", "json response:", "response:"
     ]
     
     for prefix in prefixes_to_remove:
-        if cleaned.lower().startswith(prefix):
-            cleaned = cleaned[len(prefix):].strip()
+        pattern = prefix.replace(":", r"\s*:")
+        if re.match(rf"^\s*{pattern}", cleaned, re.IGNORECASE):
+            cleaned = re.sub(rf"^\s*{pattern}\s*", "", cleaned, flags=re.IGNORECASE)
+            break
     
-    # Remove markdown code blocks
+    # Enhanced markdown code block removal
     code_block_patterns = [
         r'```json\s*(.*?)\s*```',
         r'```\s*(.*?)\s*```',
-        r'`(.*?)`'
+        r'`([^`]*\{[^`]*\}[^`]*)`'  # Single backticks with JSON
     ]
     
     for pattern in code_block_patterns:
@@ -63,35 +77,49 @@ def _clean_json_response(response: str) -> str:
             cleaned = match.group(1).strip()
             break
     
-    # Extract JSON content between first { and last }
+    # Extract JSON content between braces with better handling
+    brace_matches = []
+    depth = 0
+    start_pos = -1
+    
+    for i, char in enumerate(cleaned):
+        if char == '{':
+            if depth == 0:
+                start_pos = i
+            depth += 1
+        elif char == '}':
+            depth -= 1
+            if depth == 0 and start_pos != -1:
+                brace_matches.append(cleaned[start_pos:i+1])
+    
+    if brace_matches:
+        # Return the longest valid JSON object
+        longest_match = max(brace_matches, key=len)
+        return longest_match
+    
+    # Fallback: extract between first { and last }
     first_brace = cleaned.find('{')
     last_brace = cleaned.rfind('}')
     
     if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
-        cleaned = cleaned[first_brace:last_brace + 1]
-    
-    # Extract JSON content between first [ and last ] (for arrays)
-    if not cleaned.startswith('{'):
-        first_bracket = cleaned.find('[')
-        last_bracket = cleaned.rfind(']')
-        
-        if first_bracket != -1 and last_bracket != -1 and last_bracket > first_bracket:
-            cleaned = cleaned[first_bracket:last_bracket + 1]
+        return cleaned[first_brace:last_brace + 1]
     
     return cleaned.strip()
 
 def clean_sql_query(response: str) -> str:
-    """Extract and clean SQL query from LLM response with smart detection"""
+    """Enhanced SQL query extraction with T-SQL support"""
     if not response or not response.strip():
         return ""
     
     cleaned = response.strip()
     
-    # Remove markdown formatting
+    # Enhanced SQL extraction patterns
     sql_patterns = [
         r'```sql\s*(.*?)\s*```',
-        r'```\s*(.*?)\s*```',
-        r'`([^`]*SELECT[^`]*)`'
+        r'```tsql\s*(.*?)\s*```',
+        r'```\s*(SELECT\s+.*?)\s*```',
+        r'```\s*(WITH\s+.*?)\s*```',
+        r'`([^`]*(?:SELECT|WITH)[^`]*)`'
     ]
     
     for pattern in sql_patterns:
@@ -100,150 +128,287 @@ def clean_sql_query(response: str) -> str:
             cleaned = match.group(1).strip()
             break
     
-    # Extract SQL statements intelligently
+    # Enhanced SQL statement extraction
     lines = cleaned.split('\n')
     sql_lines = []
     in_sql = False
+    sql_keywords = ['SELECT', 'WITH', 'INSERT', 'UPDATE', 'DELETE']
     
     for line in lines:
         line = line.strip()
         
-        # Start of SQL
-        if line.upper().startswith(('SELECT', 'WITH', 'INSERT', 'UPDATE', 'DELETE')):
+        # Start of SQL statement
+        if any(line.upper().startswith(keyword) for keyword in sql_keywords):
             in_sql = True
             sql_lines.append(line)
         elif in_sql:
-            # Continue SQL until we hit a clear end
+            # Continue SQL statement
             if line.endswith(';'):
                 sql_lines.append(line.rstrip(';'))
                 break
-            elif line and not line.startswith(('--', '//', '#')):
+            elif line and not line.startswith(('--', '//', '#', '/*')):
                 sql_lines.append(line)
-            elif not line:
-                # Empty line might end SQL
-                if sql_lines and any(keyword in ' '.join(sql_lines).upper() 
-                                   for keyword in ['FROM', 'WHERE', 'SELECT']):
+            elif not line and sql_lines:
+                # Empty line might end SQL if we have a complete statement
+                current_sql = '\n'.join(sql_lines).upper()
+                if 'FROM' in current_sql and ('SELECT' in current_sql or 'WITH' in current_sql):
                     break
     
     if sql_lines:
-        return '\n'.join(sql_lines).strip()
+        result = '\n'.join(sql_lines).strip()
+        # Clean up common artifacts
+        result = re.sub(r'\s+', ' ', result)  # Normalize whitespace
+        return result
     
-    # Fallback: regex extraction
-    sql_patterns = [
-        r'(SELECT\s+.*?)(?:;|\n\s*\n|$)',
-        r'(WITH\s+.*?)(?:;|\n\s*\n|$)',
+    # Enhanced fallback regex patterns for T-SQL
+    fallback_patterns = [
+        r'(SELECT\s+(?:TOP\s*\(\s*\d+\s*\)\s+)?.*?FROM\s+.*?)(?:;|\n\s*\n|$)',
+        r'(WITH\s+.*?SELECT\s+.*?FROM\s+.*?)(?:;|\n\s*\n|$)',
     ]
     
-    for pattern in sql_patterns:
+    for pattern in fallback_patterns:
         match = re.search(pattern, response, re.DOTALL | re.IGNORECASE)
         if match:
-            return match.group(1).strip()
+            result = match.group(1).strip()
+            return re.sub(r'\s+', ' ', result)
     
     return cleaned
 
 def validate_sql_safety(sql: str) -> bool:
-    """Enhanced SQL safety validation"""
+    """Enhanced SQL safety validation with sqlglot integration (Architecture requirement)"""
     if not sql or len(sql.strip()) < 5:
         return False
     
-    sql_upper = sql.upper().strip()
+    sql_normalized = ' ' + sql.upper().strip() + ' '
     
-    # Must start with safe operations
-    safe_starts = ['SELECT', 'WITH']
-    if not any(sql_upper.startswith(start) for start in safe_starts):
+    # Basic safety checks first
+    safe_starts = [' SELECT ', ' WITH ']
+    if not any(sql_normalized.startswith(start.strip()) for start in safe_starts):
         return False
     
-    # Check for dangerous operations (comprehensive list)
-    dangerous_keywords = [
-        # Data modification
-        'INSERT', 'UPDATE', 'DELETE', 'MERGE', 'REPLACE',
-        # Schema modification  
-        'DROP', 'CREATE', 'ALTER', 'TRUNCATE',
+    # Enhanced dangerous keyword detection
+    dangerous_patterns = [
+        # Data modification operations
+        r'\b(?:INSERT|UPDATE|DELETE|MERGE|REPLACE)\b',
+        # Schema modification operations  
+        r'\b(?:DROP|CREATE|ALTER|TRUNCATE)\b',
         # System operations
-        'EXEC', 'EXECUTE', 'SP_', 'XP_', 'DBCC',
-        # Security risks
-        'GRANT', 'REVOKE', 'DENY',
+        r'\b(?:EXEC|EXECUTE|SP_|XP_|DBCC)\b',
+        # Security operations
+        r'\b(?:GRANT|REVOKE|DENY)\b',
         # Bulk operations
-        'BULK', 'OPENROWSET', 'OPENDATASOURCE'
+        r'\b(?:BULK|OPENROWSET|OPENDATASOURCE)\b',
+        # Dynamic SQL
+        r'\b(?:EXEC\s*\(|EXECUTE\s*\()\b',
+        # System functions that could be dangerous
+        r'\bXP_CMDSHELL\b',
+        # File operations
+        r'\b(?:BACKUP|RESTORE)\b'
     ]
     
-    # Check each dangerous keyword
-    for keyword in dangerous_keywords:
-        if f' {keyword} ' in f' {sql_upper} ':
-            return False
-        if f' {keyword}(' in f' {sql_upper} ':
+    for pattern in dangerous_patterns:
+        if re.search(pattern, sql_normalized, re.IGNORECASE):
             return False
     
-    # Additional safety checks
-    if '--' in sql and 'xp_' in sql.lower():
-        return False  # Potential command injection
+    # Check for multiple statements (semicolon not at end)
+    sql_clean = sql.strip().rstrip(';')
+    if ';' in sql_clean:
+        return False
     
+    # Enhanced sqlglot validation if available (Architecture requirement)
+    if HAS_SQLGLOT:
+        try:
+            # Parse with T-SQL dialect for SQL Server
+            parsed = sqlglot.parse_one(sql, dialect="tsql")
+            if not parsed:
+                return False
+            
+            # Must be a SELECT statement
+            if not isinstance(parsed, sqlglot.expressions.Select):
+                return False
+            
+            # Additional safety checks with sqlglot
+            
+            # Check for subqueries with dangerous operations
+            for node in parsed.walk():
+                if isinstance(node, (sqlglot.expressions.Insert, 
+                                   sqlglot.expressions.Update, 
+                                   sqlglot.expressions.Delete)):
+                    return False
+            
+            # Check for function calls that might be dangerous
+            for func in parsed.find_all(sqlglot.expressions.Function):
+                func_name = func.this.upper() if func.this else ""
+                if any(dangerous in func_name for dangerous in ['XP_', 'SP_', 'OPENROWSET', 'OPENDATASOURCE']):
+                    return False
+            
+            return True
+            
+        except Exception:
+            # If sqlglot parsing fails, fall back to basic validation
+            return len(dangerous_patterns) == 0  # If no dangerous patterns found
+    
+    # If sqlglot not available, use basic validation
     return True
 
 def safe_database_value(value: Any) -> Union[str, int, float, bool, None]:
-    """Convert database value to safe JSON-serializable format with intelligence"""
+    """Enhanced database value conversion with better type handling"""
     if value is None:
         return None
     elif isinstance(value, bool):
         return value
     elif isinstance(value, (int, float)):
-        # Handle special float values
+        # Enhanced handling of special numeric values
         if isinstance(value, float):
-            if value != value:  # NaN
+            if value != value:  # NaN check
                 return None
             if value == float('inf') or value == float('-inf'):
                 return None
+            # Handle very large/small numbers
+            if abs(value) > 1e15:
+                return str(value)  # Convert to string to preserve precision
         return value
     elif isinstance(value, str):
+        # Enhanced string handling with length limits
+        if len(value) > 1000:
+            return value[:1000] + "..."
         return value
     elif isinstance(value, datetime):
-        return value.isoformat()
+        # Enhanced datetime formatting
+        try:
+            return value.isoformat()
+        except:
+            return str(value)
     elif isinstance(value, bytes):
+        # Enhanced binary data handling
         try:
             # Try UTF-8 decode first
             decoded = value.decode('utf-8')
-            return decoded[:500] if len(decoded) > 500 else decoded
+            if len(decoded) > 200:
+                return decoded[:200] + "..."
+            return decoded
         except UnicodeDecodeError:
             try:
-                # Try latin-1 as fallback
+                # Try latin-1 as fallback for international characters
                 decoded = value.decode('latin-1', errors='replace')
-                return f"[Binary: {decoded[:50]}...]" if len(decoded) > 50 else f"[Binary: {decoded}]"
+                return f"[Binary: {decoded[:100]}...]" if len(decoded) > 100 else f"[Binary: {decoded}]"
             except:
                 return "[Binary Data]"
     else:
-        # Convert other types to string with length limit
+        # Enhanced handling of other types
         try:
             str_value = str(value)
             return str_value[:500] if len(str_value) > 500 else str_value
         except:
             return "[Unprintable Data]"
 
+def should_exclude_table(table_name: str, schema_name: str = None, 
+                        exclusion_patterns: List[str] = None) -> bool:
+    """Enhanced table exclusion with SQL Server specific patterns"""
+    if not table_name:
+        return True
+    
+    name_lower = table_name.lower()
+    
+    # Enhanced SQL Server exclusion patterns
+    if exclusion_patterns is None:
+        exclusion_patterns = [
+            # SQL Server system tables
+            'msreplication', 'syscommittab', 'sysdiagrams', 'dtproperties',
+            'mspeer_', 'msdistribution_', 'msmerge_', 'mssubscription_',
+            # Backup/temp patterns
+            'backup', 'temp_', 'tmp_', 'staging_', 'etl_', 'import_', 'export_',
+            # Test patterns  
+            'test_', 'testing_', 'demo_', 'sample_', 'example_',
+            # Archive patterns
+            'old_', 'archive_', 'historical_', 'deleted_', 'obsolete_',
+            # System/maintenance
+            'log_', 'audit_', 'trace_', 'sync_', 'queue_',
+            # SQL Server specific
+            'aspnet_', 'elmah_', '__mig', '__ef'
+        ]
+    
+    # Check exclusion patterns
+    for pattern in exclusion_patterns:
+        if pattern.lower() in name_lower:
+            return True
+    
+    # Enhanced date suffix detection (SQL Server common patterns)
+    date_patterns = [
+        r'\d{8}$',                    # YYYYMMDD
+        r'\d{6}$',                    # YYYYMM  
+        r'\d{4}$',                    # YYYY
+        r'_\d{4}_\d{2}_\d{2}$',      # _YYYY_MM_DD
+        r'_\d{4}\d{2}\d{2}$',        # _YYYYMMDD
+        r'_backup$', r'_bak$',        # Backup suffixes
+        r'_copy$', r'_old$', r'_new$'
+    ]
+    
+    for pattern in date_patterns:
+        if re.search(pattern, name_lower):
+            return True
+    
+    # Enhanced system schema detection for SQL Server
+    if schema_name:
+        system_schemas = [
+            'sys', 'information_schema', 'db_owner', 'db_accessadmin', 
+            'db_backupoperator', 'db_datareader', 'db_datawriter', 
+            'db_ddladmin', 'db_denydatareader', 'db_denydatawriter',
+            'guest', 'INFORMATION_SCHEMA'
+        ]
+        if schema_name.lower() in [s.lower() for s in system_schemas]:
+            return True
+    
+    return False
+
+def normalize_table_name(schema: str, table: str) -> str:
+    """Enhanced table name normalization for SQL Server"""
+    # Handle already bracketed names
+    clean_schema = schema.strip('[]')
+    clean_table = table.strip('[]')
+    
+    # Validate names (basic SQL Server identifier rules)
+    identifier_pattern = r'^[a-zA-Z_][a-zA-Z0-9_]*$'
+    
+    if not re.match(identifier_pattern, clean_schema):
+        clean_schema = f'"{clean_schema}"'  # Use quotes for non-standard identifiers
+    if not re.match(identifier_pattern, clean_table):
+        clean_table = f'"{clean_table}"'
+    
+    return f"[{clean_schema}].[{clean_table}]"
+
 def format_number(value: Union[int, float], precision: int = 2) -> str:
-    """Smart number formatting with locale awareness"""
+    """Enhanced number formatting with locale awareness and better scaling"""
     if not isinstance(value, (int, float)):
         return str(value)
     
     if isinstance(value, float) and (value != value or value == float('inf')):
         return "N/A"
     
-    # Handle very large numbers
-    if abs(value) >= 1_000_000_000:
+    # Enhanced scaling for different number ranges
+    abs_value = abs(value)
+    
+    if abs_value >= 1_000_000_000_000:  # Trillions
+        return f"{value / 1_000_000_000_000:.1f}T"
+    elif abs_value >= 1_000_000_000:     # Billions
         return f"{value / 1_000_000_000:.1f}B"
-    elif abs(value) >= 1_000_000:
+    elif abs_value >= 1_000_000:         # Millions
         return f"{value / 1_000_000:.1f}M"
-    elif abs(value) >= 1000:
+    elif abs_value >= 1000:              # Thousands
         if isinstance(value, int):
             return f"{value:,}"
         else:
             return f"{value:,.{precision}f}"
     else:
-        if isinstance(value, int):
-            return str(value)
+        if isinstance(value, int) or value.is_integer():
+            return str(int(value))
         else:
-            return f"{value:.{precision}f}".rstrip('0').rstrip('.')
+            # Smart precision - reduce trailing zeros
+            formatted = f"{value:.{precision}f}"
+            return formatted.rstrip('0').rstrip('.')
 
 def truncate_text(text: str, max_length: int = 40, smart_truncate: bool = True) -> str:
-    """Smart text truncation with word boundary awareness"""
+    """Enhanced text truncation with Unicode support"""
     if not isinstance(text, str):
         text = str(text)
     
@@ -254,19 +419,106 @@ def truncate_text(text: str, max_length: int = 40, smart_truncate: bool = True) 
         # Try to truncate at word boundary
         words = text[:max_length - 3].split()
         if len(words) > 1:
-            return ' '.join(words[:-1]) + "..."
+            truncated = ' '.join(words[:-1])
+            # Check if we saved meaningful space
+            if len(truncated) >= max_length * 0.7:
+                return truncated + "..."
     
-    return text[:max_length - 3] + "..."
+    # Enhanced Unicode-aware truncation
+    try:
+        # Ensure we don't break in the middle of a Unicode character
+        truncated = text.encode('utf-8')[:max_length - 3].decode('utf-8', errors='ignore')
+        return truncated + "..."
+    except:
+        return text[:max_length - 3] + "..."
 
-def extract_keywords(text: str, min_length: int = 3, max_keywords: int = 10) -> List[str]:
-    """Extract meaningful keywords with business intelligence"""
+def classify_confidence(score: float) -> str:
+    """Enhanced confidence classification with business context"""
+    if score >= 0.95:
+        return "Excellent"
+    elif score >= 0.90:
+        return "Very High"
+    elif score >= 0.80:
+        return "High"
+    elif score >= 0.65:
+        return "Good"
+    elif score >= 0.50:
+        return "Medium"
+    elif score >= 0.35:
+        return "Low"
+    else:
+        return "Very Low"
+
+def detect_data_quality(sample_data: List[Dict[str, Any]]) -> str:
+    """Enhanced data quality detection from sample data"""
+    if not sample_data:
+        return "unknown"
+    
+    # Analyze sample values for quality indicators
+    test_indicators = 0
+    production_indicators = 0
+    
+    for row in sample_data[:3]:  # Check first 3 rows
+        for key, value in row.items():
+            if key.startswith('__'):
+                continue
+                
+            if isinstance(value, str):
+                value_lower = value.lower()
+                
+                # Test data indicators
+                if any(test_word in value_lower for test_word in 
+                      ['test', 'lorem', 'ipsum', 'example', 'sample', 'dummy', 'fake']):
+                    test_indicators += 1
+                elif any(test_pattern in value_lower for test_pattern in 
+                        ['@example.com', 'test@', '123-45-6789']):
+                    test_indicators += 1
+                
+                # Production data indicators
+                elif len(value) > 10 and not any(char.isdigit() for char in value):
+                    production_indicators += 1
+                elif '@' in value and '.' in value and 'test' not in value_lower:
+                    production_indicators += 1
+            
+            elif isinstance(value, (int, float)) and value > 0:
+                # Realistic numeric values
+                if isinstance(value, float) and 0.01 < value < 1000000:
+                    production_indicators += 1
+                elif isinstance(value, int) and 1 < value < 10000000:
+                    production_indicators += 1
+    
+    # Determine quality based on indicators
+    if test_indicators > production_indicators:
+        return "test"
+    elif production_indicators > 0:
+        return "production"
+    else:
+        return "unknown"
+
+def extract_business_keywords(text: str, entity_type: str = None) -> List[str]:
+    """Enhanced keyword extraction with business context"""
     if not text:
         return []
     
-    # Normalize text
     text_lower = text.lower()
     
-    # Extract words using improved pattern
+    # Enhanced business keyword patterns by entity type
+    business_patterns = {
+        'Customer': ['customer', 'client', 'account', 'contact', 'user', 'member'],
+        'Payment': ['payment', 'transaction', 'invoice', 'billing', 'revenue', 'amount'],
+        'Contract': ['contract', 'agreement', 'deal', 'terms', 'συμβόλαια'],
+        'Order': ['order', 'purchase', 'sale', 'quote', 'request'],
+        'Employee': ['employee', 'staff', 'worker', 'personnel', 'user'],
+        'Product': ['product', 'item', 'catalog', 'inventory', 'sku']
+    }
+    
+    # General business keywords
+    general_keywords = [
+        'name', 'title', 'description', 'amount', 'total', 'count', 'date',
+        'created', 'modified', 'status', 'type', 'category', 'active', 'id'
+    ]
+    
+    # Extract using improved pattern matching
     word_pattern = r'\b[a-zA-Z][a-zA-Z0-9_]*\b'
     words = re.findall(word_pattern, text_lower)
     
@@ -275,288 +527,157 @@ def extract_keywords(text: str, min_length: int = 3, max_keywords: int = 10) -> 
         'the', 'and', 'are', 'for', 'with', 'this', 'that', 'from', 'what', 'how',
         'but', 'not', 'you', 'all', 'can', 'had', 'has', 'have', 'her', 'was',
         'one', 'our', 'out', 'day', 'get', 'use', 'man', 'new', 'now', 'old',
-        'see', 'him', 'two', 'way', 'who', 'boy', 'did', 'its', 'let', 'put',
-        'say', 'she', 'too', 'may'
+        'see', 'him', 'two', 'way', 'who', 'boy', 'did', 'its', 'let', 'put'
     }
     
-    # Business-relevant words get priority
-    business_priority_words = {
-        'customer', 'payment', 'order', 'product', 'revenue', 'sales', 'amount',
-        'total', 'count', 'sum', 'average', 'name', 'date', 'time', 'id'
-    }
-    
-    # Filter and score words
+    # Score and filter keywords
     keyword_scores = {}
     for word in words:
-        if (len(word) >= min_length and 
-            word not in stop_words and 
-            not word.isdigit()):
-            
-            # Score based on relevance
+        if len(word) >= 3 and word not in stop_words and not word.isdigit():
             score = 1
-            if word in business_priority_words:
+            
+            # Entity-specific scoring
+            if entity_type and entity_type in business_patterns:
+                if word in business_patterns[entity_type]:
+                    score += 3
+            
+            # General business relevance
+            if word in general_keywords:
                 score += 2
+            
+            # Pattern-based scoring
             if word.endswith('_id') or word.endswith('id'):
-                score += 1
+                score += 2
             if any(term in word for term in ['amount', 'total', 'count', 'sum']):
-                score += 1
+                score += 2
             
             keyword_scores[word] = keyword_scores.get(word, 0) + score
     
-    # Return top keywords sorted by score
+    # Return top scored keywords
     sorted_keywords = sorted(keyword_scores.items(), key=lambda x: x[1], reverse=True)
-    return [word for word, score in sorted_keywords[:max_keywords]]
+    return [word for word, score in sorted_keywords[:10]]
 
-def normalize_table_name(schema: str, table: str) -> str:
-    """Create properly formatted table name"""
-    # Handle already bracketed names
-    if schema.startswith('[') and schema.endswith(']'):
-        clean_schema = schema[1:-1]
-    else:
-        clean_schema = schema
+def log_performance_metric(operation: str, duration: float, 
+                          details: Dict[str, Any] = None, 
+                          success: bool = True):
+    """Enhanced performance logging with structured metrics"""
+    status_emoji = "✅" if success else "❌"
     
-    if table.startswith('[') and table.endswith(']'):
-        clean_table = table[1:-1]
-    else:
-        clean_table = table
-    
-    return f"[{clean_schema}].[{clean_table}]"
-
-def should_exclude_table(table_name: str, schema_name: str = None, 
-                        exclusion_patterns: List[str] = None) -> bool:
-    """Smart table exclusion with pattern matching"""
-    if not table_name:
-        return True
-    
-    name_lower = table_name.lower()
-    
-    # Default exclusion patterns (comprehensive)
-    if exclusion_patterns is None:
-        exclusion_patterns = [
-            # System tables
-            'msreplication', 'syscommittab', 'sysdiagrams', 'dtproperties',
-            # Backup/temp patterns
-            'backup', 'temp_', 'tmp_', 'staging_', 'etl_', 'import_', 'export_',
-            # Test patterns
-            'test_', 'testing_', 'demo_', 'sample_',
-            # Archive patterns
-            'old_', 'archive_', 'historical_', 'deleted_',
-            # System/maintenance
-            'log_', 'audit_', 'trace_', 'sync_'
-        ]
-    
-    # Check patterns
-    for pattern in exclusion_patterns:
-        if pattern.lower() in name_lower:
-            return True
-    
-    # Check for date suffixes (likely archive tables)
-    date_patterns = [
-        r'\d{8}$',      # YYYYMMDD
-        r'\d{6}$',      # YYYYMM
-        r'\d{4}$',      # YYYY
-        r'_\d{4}_\d{2}_\d{2}$',  # _YYYY_MM_DD
-        r'_backup$',
-        r'_copy$'
-    ]
-    
-    for pattern in date_patterns:
-        if re.search(pattern, name_lower):
-            return True
-    
-    # Check system schemas
-    if schema_name:
-        system_schemas = ['sys', 'information_schema', 'db_owner', 'db_accessadmin']
-        if schema_name.lower() in system_schemas:
-            return True
-    
-    return False
-
-def calculate_confidence_score(factors: Dict[str, float], 
-                             weights: Dict[str, float] = None,
-                             boost_factors: List[str] = None) -> float:
-    """Calculate intelligent weighted confidence score"""
-    if not factors:
-        return 0.0
-    
-    # Smart default weights based on importance
-    if weights is None:
-        weights = {}
-        for factor in factors.keys():
-            if 'entity' in factor or 'type' in factor:
-                weights[factor] = 2.0  # Entity matching is most important
-            elif 'purpose' in factor or 'business' in factor:
-                weights[factor] = 1.5  # Business purpose is important
-            elif 'quality' in factor:
-                weights[factor] = 1.2  # Quality matters
-            else:
-                weights[factor] = 1.0  # Default weight
-    
-    # Apply boost factors for special cases
-    if boost_factors:
-        for factor in boost_factors:
-            if factor in factors:
-                factors[factor] *= 1.2  # 20% boost
-    
-    weighted_sum = 0.0
-    total_weight = 0.0
-    
-    for factor, value in factors.items():
-        weight = weights.get(factor, 1.0)
-        weighted_sum += value * weight
-        total_weight += weight
-    
-    if total_weight == 0:
-        return 0.0
-    
-    score = weighted_sum / total_weight
-    return max(0.0, min(1.0, score))  # Clamp between 0 and 1
-
-def classify_confidence(score: float) -> str:
-    """Classify confidence score with business context"""
-    if score >= 0.95:
-        return "Excellent"
-    elif score >= 0.85:
-        return "Very High"
-    elif score >= 0.70:
-        return "High"
-    elif score >= 0.50:
-        return "Medium"
-    elif score >= 0.30:
-        return "Low"
-    else:
-        return "Very Low"
-
-def detect_duplicate_similarity(name1: str, name2: str, threshold: float = 0.8) -> bool:
-    """Detect if two table names are likely duplicates"""
-    if not name1 or not name2:
-        return False
-    
-    name1_clean = name1.lower().strip()
-    name2_clean = name2.lower().strip()
-    
-    # Exact match
-    if name1_clean == name2_clean:
-        return True
-    
-    # One contains the other
-    if name1_clean in name2_clean or name2_clean in name1_clean:
-        return True
-    
-    # Remove common suffixes and compare
-    suffixes = [
-        r'\d{8}$', r'\d{6}$', r'\d{4}$',  # Date patterns
-        r'_copy$', r'_backup$', r'_old$', r'_new$',
-        r'_temp$', r'_tmp$', r'_archive$'
-    ]
-    
-    clean1 = name1_clean
-    clean2 = name2_clean
-    
-    for suffix in suffixes:
-        clean1 = re.sub(suffix, '', clean1)
-        clean2 = re.sub(suffix, '', clean2)
-    
-    if clean1 == clean2:
-        return True
-    
-    # Calculate similarity ratio
-    similarity = _calculate_string_similarity(clean1, clean2)
-    return similarity >= threshold
-
-def _calculate_string_similarity(str1: str, str2: str) -> float:
-    """Calculate string similarity using simple algorithm"""
-    if not str1 or not str2:
-        return 0.0
-    
-    if str1 == str2:
-        return 1.0
-    
-    # Simple character-based similarity
-    longer = str1 if len(str1) > len(str2) else str2
-    shorter = str2 if len(str1) > len(str2) else str1
-    
-    if len(longer) == 0:
-        return 1.0
-    
-    matches = sum(1 for i, char in enumerate(shorter) 
-                  if i < len(longer) and char == longer[i])
-    
-    return matches / len(longer)
-
-def safe_execute(func, *args, default=None, log_errors: bool = True, **kwargs):
-    """Safely execute function with comprehensive error handling"""
-    try:
-        return func(*args, **kwargs)
-    except Exception as e:
-        if log_errors:
-            print(f"⚠️ Error in {func.__name__}: {e}")
-        return default
-
-def timing_decorator(func):
-    """Enhanced timing decorator with memory tracking"""
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        start_time = time.time()
-        
-        try:
-            result = func(*args, **kwargs)
-            execution_time = time.time() - start_time
-            
-            if execution_time > 1.0:
-                print(f"⏱️ {func.__name__} took {execution_time:.2f}s")
-            
-            return result
-        except Exception as e:
-            execution_time = time.time() - start_time
-            print(f"❌ {func.__name__} failed after {execution_time:.2f}s: {e}")
-            raise
-    
-    return wrapper
-
-def batch_processor(items: List[Any], batch_size: int = 5, delay: float = 0.1):
-    """Process items in batches with intelligent delays"""
-    for i in range(0, len(items), batch_size):
-        batch = items[i:i + batch_size]
-        yield batch
-        
-        # Add delay between batches (except for last batch)
-        if i + batch_size < len(items) and delay > 0:
-            time.sleep(delay)
-
-def format_table_summary(table_info) -> str:
-    """Format table information for display"""
-    if not table_info:
-        return "No table information"
-    
-    name = getattr(table_info, 'name', 'Unknown')
-    entity_type = getattr(table_info, 'entity_type', 'Unknown')
-    row_count = getattr(table_info, 'row_count', 0)
-    
-    parts = [f"{name} ({entity_type})"]
-    
-    if row_count > 0:
-        parts.append(f"{row_count:,} rows")
-    
-    quality = getattr(table_info, 'table_quality', 'unknown')
-    if quality != 'production':
-        parts.append(f"[{quality}]")
-    
-    return " - ".join(parts)
-
-def log_performance(operation: str, duration: float, details: Dict[str, Any] = None):
-    """Log performance metrics in a structured way"""
-    log_parts = [f"⏱️ {operation}: {duration:.2f}s"]
+    log_parts = [f"{status_emoji} {operation}: {duration:.2f}s"]
     
     if details:
         detail_parts = []
         for key, value in details.items():
             if isinstance(value, (int, float)):
-                detail_parts.append(f"{key}={value}")
+                if key.endswith('_count') or key.endswith('_size'):
+                    detail_parts.append(f"{key}={value:,}")
+                else:
+                    detail_parts.append(f"{key}={value}")
             else:
-                detail_parts.append(f"{key}={str(value)[:20]}")
+                detail_parts.append(f"{key}={str(value)[:30]}")
         
         if detail_parts:
             log_parts.append(f"({', '.join(detail_parts)})")
     
     print(" ".join(log_parts))
+
+def validate_sql_server_identifier(identifier: str) -> bool:
+    """Validate SQL Server identifier according to naming rules"""
+    if not identifier:
+        return False
+    
+    # SQL Server identifier rules:
+    # - First character must be letter, underscore, or @, # for temp objects
+    # - Subsequent characters can be letters, digits, underscores, @, #, $
+    # - Cannot be a reserved word (simplified check)
+    
+    reserved_words = {
+        'select', 'from', 'where', 'insert', 'update', 'delete', 'create', 
+        'drop', 'alter', 'table', 'index', 'view', 'procedure', 'function',
+        'database', 'schema', 'user', 'login', 'role', 'grant', 'revoke'
+    }
+    
+    if identifier.lower() in reserved_words:
+        return False
+    
+    # Basic pattern check
+    pattern = r'^[a-zA-Z_@#][a-zA-Z0-9_@#$]*$'
+    return bool(re.match(pattern, identifier)) and len(identifier) <= 128
+
+def timing_decorator(include_args: bool = False):
+    """Enhanced timing decorator with optional argument logging"""
+    def decorator(func):
+        @wraps(func)
+        async def async_wrapper(*args, **kwargs):
+            start_time = time.time()
+            
+            try:
+                if asyncio.iscoroutinefunction(func):
+                    result = await func(*args, **kwargs)
+                else:
+                    result = func(*args, **kwargs)
+                    
+                execution_time = time.time() - start_time
+                
+                details = {}
+                if include_args and args:
+                    details['args_count'] = len(args)
+                if include_args and kwargs:
+                    details['kwargs_count'] = len(kwargs)
+                
+                log_performance_metric(func.__name__, execution_time, details, True)
+                return result
+                
+            except Exception as e:
+                execution_time = time.time() - start_time
+                log_performance_metric(func.__name__, execution_time, {'error': str(e)[:50]}, False)
+                raise
+        
+        @wraps(func)
+        def sync_wrapper(*args, **kwargs):
+            start_time = time.time()
+            
+            try:
+                result = func(*args, **kwargs)
+                execution_time = time.time() - start_time
+                
+                details = {}
+                if include_args and args:
+                    details['args_count'] = len(args)
+                if include_args and kwargs:
+                    details['kwargs_count'] = len(kwargs)
+                
+                log_performance_metric(func.__name__, execution_time, details, True)
+                return result
+                
+            except Exception as e:
+                execution_time = time.time() - start_time
+                log_performance_metric(func.__name__, execution_time, {'error': str(e)[:50]}, False)
+                raise
+        
+        # Return appropriate wrapper
+        import asyncio
+        if asyncio.iscoroutinefunction(func):
+            return async_wrapper
+        else:
+            return sync_wrapper
+    
+    return decorator
+
+def safe_execute_with_retry(func, max_retries: int = 3, delay: float = 1.0, 
+                           *args, **kwargs):
+    """Enhanced safe execution with retry logic"""
+    last_exception = None
+    
+    for attempt in range(max_retries):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            last_exception = e
+            if attempt < max_retries - 1:
+                time.sleep(delay * (attempt + 1))  # Exponential backoff
+                print(f"   ⚠️ Attempt {attempt + 1} failed, retrying: {e}")
+            else:
+                print(f"   ❌ All {max_retries} attempts failed: {e}")
+    
+    raise last_exception
