@@ -1,0 +1,1184 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Report xmlns="http://schemas.microsoft.com/sqlserver/reporting/2008/01/reportdefinition" xmlns:rd="http://schemas.microsoft.com/SQLServer/reporting/reportdesigner">
+  <Body>
+    <ReportItems>
+      <Chart Name="Chart1">
+        <ChartCategoryHierarchy>
+          <ChartMembers>
+            <ChartMember>
+              <Group Name="Chart1_CategoryGroup">
+                <GroupExpressions>
+                  <GroupExpression>=Fields!taskCreatedOn.Value</GroupExpression>
+                </GroupExpressions>
+              </Group>
+              <SortExpressions>
+                <SortExpression>
+                  <Value>=Fields!taskCreatedOn.Value</Value>
+                </SortExpression>
+              </SortExpressions>
+              <Label>=Fields!taskCreatedOn.Value</Label>
+            </ChartMember>
+          </ChartMembers>
+        </ChartCategoryHierarchy>
+        <ChartSeriesHierarchy>
+          <ChartMembers>
+            <ChartMember>
+              <Group Name="Chart1_SeriesGroup">
+                <GroupExpressions>
+                  <GroupExpression>=Fields!type.Value</GroupExpression>
+                </GroupExpressions>
+                <Filters>
+                  <Filter>
+                    <FilterExpression>=Fields!type.Value</FilterExpression>
+                    <Operator>LessThanOrEqual</Operator>
+                    <FilterValues>
+                      <FilterValue>d</FilterValue>
+                    </FilterValues>
+                  </Filter>
+                </Filters>
+              </Group>
+              <SortExpressions>
+                <SortExpression>
+                  <Value>=Fields!type.Value</Value>
+                </SortExpression>
+              </SortExpressions>
+              <Label>=Fields!type.Value</Label>
+            </ChartMember>
+          </ChartMembers>
+        </ChartSeriesHierarchy>
+        <ChartData>
+          <ChartSeriesCollection>
+            <ChartSeries Name="ContractId">
+              <ChartDataPoints>
+                <ChartDataPoint>
+                  <ChartDataPointValues>
+                    <Y>=IIf(IsNothing(Count(Fields!ContractId.Value)),0,Count(Fields!ContractId.Value))</Y>
+                  </ChartDataPointValues>
+                  <ChartDataLabel>
+                    <Style>
+                      <Border>
+                        <Color>White</Color>
+                      </Border>
+                      <Color>=Switch(Fields!type.Value="a","LimeGreen"  ,Fields!type.Value="b","Black",
+Fields!type.Value="c","Black",Fields!type.Value="c","Red",true,"Red")</Color>
+                    </Style>
+                    <UseValueAsLabel>true</UseValueAsLabel>
+                    <Visible>true</Visible>
+                  </ChartDataLabel>
+                  <Style>
+                    <Border>
+                      <Color>#00ffffff</Color>
+                      <Width>2pt</Width>
+                    </Border>
+                  </Style>
+                  <ChartMarker>
+                    <Style />
+                  </ChartMarker>
+                  <DataElementOutput>Output</DataElementOutput>
+                </ChartDataPoint>
+              </ChartDataPoints>
+              <Type>Line</Type>
+              <Style />
+              <ChartEmptyPoints>
+                <Style />
+                <ChartMarker>
+                  <Style />
+                </ChartMarker>
+                <ChartDataLabel>
+                  <Style />
+                </ChartDataLabel>
+              </ChartEmptyPoints>
+              <ValueAxisName>Primary</ValueAxisName>
+              <CategoryAxisName>Primary</CategoryAxisName>
+              <ChartSmartLabel>
+                <CalloutLineColor>Black</CalloutLineColor>
+                <MinMovingDistance>0pt</MinMovingDistance>
+              </ChartSmartLabel>
+            </ChartSeries>
+          </ChartSeriesCollection>
+        </ChartData>
+        <ChartAreas>
+          <ChartArea Name="Default">
+            <ChartCategoryAxes>
+              <ChartAxis Name="Primary">
+                <Style>
+                  <FontSize>8pt</FontSize>
+                  <Format>dd/MM/yyyy</Format>
+                </Style>
+                <ChartAxisTitle>
+                  <Caption />
+                  <Style>
+                    <FontSize>8pt</FontSize>
+                  </Style>
+                </ChartAxisTitle>
+                <Interval>1</Interval>
+                <IntervalType>Days</IntervalType>
+                <ChartMajorGridLines>
+                  <Enabled>False</Enabled>
+                  <Style>
+                    <Border>
+                      <Color>Gainsboro</Color>
+                    </Border>
+                  </Style>
+                </ChartMajorGridLines>
+                <ChartMinorGridLines>
+                  <Style>
+                    <Border>
+                      <Color>Gainsboro</Color>
+                      <Style>Dotted</Style>
+                    </Border>
+                  </Style>
+                </ChartMinorGridLines>
+                <ChartMinorTickMarks>
+                  <Length>0.5</Length>
+                </ChartMinorTickMarks>
+                <CrossAt>NaN</CrossAt>
+                <Minimum>NaN</Minimum>
+                <Maximum>NaN</Maximum>
+                <ChartAxisScaleBreak>
+                  <Style />
+                </ChartAxisScaleBreak>
+              </ChartAxis>
+              <ChartAxis Name="Secondary">
+                <Style>
+                  <FontSize>8pt</FontSize>
+                </Style>
+                <ChartAxisTitle>
+                  <Caption>Axis Title</Caption>
+                  <Style>
+                    <FontSize>8pt</FontSize>
+                  </Style>
+                </ChartAxisTitle>
+                <ChartMajorGridLines>
+                  <Enabled>False</Enabled>
+                  <Style>
+                    <Border>
+                      <Color>Gainsboro</Color>
+                    </Border>
+                  </Style>
+                </ChartMajorGridLines>
+                <ChartMinorGridLines>
+                  <Style>
+                    <Border>
+                      <Color>Gainsboro</Color>
+                      <Style>Dotted</Style>
+                    </Border>
+                  </Style>
+                </ChartMinorGridLines>
+                <ChartMinorTickMarks>
+                  <Length>0.5</Length>
+                </ChartMinorTickMarks>
+                <CrossAt>NaN</CrossAt>
+                <Location>Opposite</Location>
+                <Minimum>NaN</Minimum>
+                <Maximum>NaN</Maximum>
+                <ChartAxisScaleBreak>
+                  <Style />
+                </ChartAxisScaleBreak>
+              </ChartAxis>
+            </ChartCategoryAxes>
+            <ChartValueAxes>
+              <ChartAxis Name="Primary">
+                <Style>
+                  <FontSize>8pt</FontSize>
+                </Style>
+                <ChartAxisTitle>
+                  <Caption />
+                  <Style>
+                    <FontSize>8pt</FontSize>
+                  </Style>
+                </ChartAxisTitle>
+                <ChartMajorGridLines>
+                  <Style>
+                    <Border>
+                      <Color>Gainsboro</Color>
+                    </Border>
+                  </Style>
+                </ChartMajorGridLines>
+                <ChartMinorGridLines>
+                  <Style>
+                    <Border>
+                      <Color>Gainsboro</Color>
+                      <Style>Dotted</Style>
+                    </Border>
+                  </Style>
+                </ChartMinorGridLines>
+                <ChartMinorTickMarks>
+                  <Length>0.5</Length>
+                </ChartMinorTickMarks>
+                <CrossAt>NaN</CrossAt>
+                <Minimum>NaN</Minimum>
+                <Maximum>NaN</Maximum>
+                <ChartAxisScaleBreak>
+                  <Style />
+                </ChartAxisScaleBreak>
+              </ChartAxis>
+              <ChartAxis Name="Secondary">
+                <Style>
+                  <FontSize>8pt</FontSize>
+                </Style>
+                <ChartAxisTitle>
+                  <Caption>Axis Title</Caption>
+                  <Style>
+                    <FontSize>8pt</FontSize>
+                  </Style>
+                </ChartAxisTitle>
+                <ChartMajorGridLines>
+                  <Style>
+                    <Border>
+                      <Color>Gainsboro</Color>
+                    </Border>
+                  </Style>
+                </ChartMajorGridLines>
+                <ChartMinorGridLines>
+                  <Style>
+                    <Border>
+                      <Color>Gainsboro</Color>
+                      <Style>Dotted</Style>
+                    </Border>
+                  </Style>
+                </ChartMinorGridLines>
+                <ChartMinorTickMarks>
+                  <Length>0.5</Length>
+                </ChartMinorTickMarks>
+                <CrossAt>NaN</CrossAt>
+                <Location>Opposite</Location>
+                <Minimum>NaN</Minimum>
+                <Maximum>NaN</Maximum>
+                <ChartAxisScaleBreak>
+                  <Style />
+                </ChartAxisScaleBreak>
+              </ChartAxis>
+            </ChartValueAxes>
+            <Style>
+              <BackgroundGradientType>None</BackgroundGradientType>
+            </Style>
+            <ChartElementPosition>
+              <Top>12.947</Top>
+              <Height>84.053</Height>
+              <Width>94</Width>
+            </ChartElementPosition>
+          </ChartArea>
+        </ChartAreas>
+        <ChartTitles>
+          <ChartTitle Name="Default">
+            <Caption>Παρακολούθηση Συμβολαίων Παραγωγής Ανά Ημέρα - Εισαγωγές/Επιστροφές</Caption>
+            <Style>
+              <BackgroundGradientType>None</BackgroundGradientType>
+              <FontWeight>Bold</FontWeight>
+              <TextAlign>General</TextAlign>
+              <VerticalAlign>Top</VerticalAlign>
+            </Style>
+          </ChartTitle>
+        </ChartTitles>
+        <Palette>Custom</Palette>
+        <ChartCustomPaletteColors>
+          <ChartCustomPaletteColor>LimeGreen</ChartCustomPaletteColor>
+          <ChartCustomPaletteColor>LightGrey</ChartCustomPaletteColor>
+          <ChartCustomPaletteColor>Orange</ChartCustomPaletteColor>
+          <ChartCustomPaletteColor>Red</ChartCustomPaletteColor>
+        </ChartCustomPaletteColors>
+        <ChartBorderSkin>
+          <Style>
+            <BackgroundColor>Gray</BackgroundColor>
+            <BackgroundGradientType>None</BackgroundGradientType>
+            <Color>White</Color>
+          </Style>
+        </ChartBorderSkin>
+        <ChartNoDataMessage Name="NoDataMessage">
+          <Caption>No Data Available</Caption>
+          <Style>
+            <BackgroundGradientType>None</BackgroundGradientType>
+            <TextAlign>General</TextAlign>
+            <VerticalAlign>Top</VerticalAlign>
+          </Style>
+        </ChartNoDataMessage>
+        <DataSetName>DataSet1</DataSetName>
+        <Left>0.23171in</Left>
+        <Height>3.09375in</Height>
+        <Width>20.77083in</Width>
+        <Style>
+          <Border>
+            <Color>LightGrey</Color>
+            <Style>Solid</Style>
+          </Border>
+          <BackgroundColor>White</BackgroundColor>
+          <BackgroundGradientType>LeftRight</BackgroundGradientType>
+          <BackgroundHatchType>None</BackgroundHatchType>
+        </Style>
+      </Chart>
+      <Tablix Name="Tablix2">
+        <TablixBody>
+          <TablixColumns>
+            <TablixColumn>
+              <Width>0.54861in</Width>
+            </TablixColumn>
+          </TablixColumns>
+          <TablixRows>
+            <TablixRow>
+              <Height>0.20236in</Height>
+              <TablixCells>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="ContractId">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Count(Fields!ContractId.Value)</Value>
+                              <Style>
+                                <FontWeight>Bold</FontWeight>
+                                <Format>n0</Format>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style>
+                            <TextAlign>Right</TextAlign>
+                          </Style>
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>ContractId</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+              </TablixCells>
+            </TablixRow>
+          </TablixRows>
+        </TablixBody>
+        <TablixColumnHierarchy>
+          <TablixMembers>
+            <TablixMember />
+          </TablixMembers>
+        </TablixColumnHierarchy>
+        <TablixRowHierarchy>
+          <TablixMembers>
+            <TablixMember>
+              <Group Name="type">
+                <GroupExpressions>
+                  <GroupExpression>=Fields!type.Value</GroupExpression>
+                </GroupExpressions>
+              </Group>
+              <SortExpressions>
+                <SortExpression>
+                  <Value>=Fields!type.Value</Value>
+                </SortExpression>
+              </SortExpressions>
+              <TablixHeader>
+                <Size>0.49167in</Size>
+                <CellContents>
+                  <Rectangle Name="Rectangle2">
+                    <ReportItems>
+                      <Line Name="Line5">
+                        <Top>0.10639in</Top>
+                        <Left>0.03333in</Left>
+                        <Height>0in</Height>
+                        <Width>0.42917in</Width>
+                        <Style>
+                          <Border>
+                            <Color>=Switch(Fields!type.Value="a","LimeGreen"  ,Fields!type.Value="b","LightGrey",
+Fields!type.Value="c","Orange",Fields!type.Value="d","Red")</Color>
+                            <Style>Solid</Style>
+                            <Width>2pt</Width>
+                          </Border>
+                        </Style>
+                      </Line>
+                    </ReportItems>
+                    <KeepTogether>true</KeepTogether>
+                    <Style>
+                      <Border>
+                        <Color>LightGrey</Color>
+                        <Style>Solid</Style>
+                      </Border>
+                    </Style>
+                  </Rectangle>
+                </CellContents>
+              </TablixHeader>
+              <TablixMembers>
+                <TablixMember>
+                  <TablixHeader>
+                    <Size>4.43194in</Size>
+                    <CellContents>
+                      <Textbox Name="type">
+                        <CanGrow>true</CanGrow>
+                        <KeepTogether>true</KeepTogether>
+                        <Paragraphs>
+                          <Paragraph>
+                            <TextRuns>
+                              <TextRun>
+                                <Value>=Switch(Fields!type.Value="a","Αριθμός συμβολαίων που μπήκαν σε έλεγχο πληρότητας:"  ,Fields!type.Value="b","Αριθμός συμβολαίων που μπήκαν σε έλεγχο πληρότητας και είναι ολοκληρωμένα(περιέχονται και ακυρωμένες προβολές): ",
+Fields!type.Value="c","Αριθμός συμβολαίων που επέστρεψαν σε back office: ",Fields!type.Value="d"," Αριθμός συμβολαίων που έστω και μία προβολή τους επέστρεψε σε back office: ")</Value>
+                                <Style>
+                                  <FontSize>8pt</FontSize>
+                                </Style>
+                              </TextRun>
+                            </TextRuns>
+                            <Style />
+                          </Paragraph>
+                        </Paragraphs>
+                        <rd:DefaultName>type</rd:DefaultName>
+                        <Style>
+                          <Border>
+                            <Color>LightGrey</Color>
+                            <Style>Solid</Style>
+                          </Border>
+                          <PaddingLeft>2pt</PaddingLeft>
+                          <PaddingRight>2pt</PaddingRight>
+                          <PaddingTop>2pt</PaddingTop>
+                          <PaddingBottom>2pt</PaddingBottom>
+                        </Style>
+                      </Textbox>
+                    </CellContents>
+                  </TablixHeader>
+                  <TablixMembers>
+                    <TablixMember />
+                  </TablixMembers>
+                </TablixMember>
+              </TablixMembers>
+            </TablixMember>
+          </TablixMembers>
+        </TablixRowHierarchy>
+        <DataSetName>DataSet1</DataSetName>
+        <Top>3.16319in</Top>
+        <Left>1.06379in</Left>
+        <Height>0.20236in</Height>
+        <Width>5.47222in</Width>
+        <ZIndex>1</ZIndex>
+        <Style>
+          <Border>
+            <Style>None</Style>
+          </Border>
+        </Style>
+      </Tablix>
+      <Textbox Name="Textbox1">
+        <CanGrow>true</CanGrow>
+        <KeepTogether>true</KeepTogether>
+        <Paragraphs>
+          <Paragraph>
+            <TextRuns>
+              <TextRun>
+                <Value>OperationContractsPerDay</Value>
+                <Style>
+                  <FontSize>8pt</FontSize>
+                  <Color>Gray</Color>
+                </Style>
+              </TextRun>
+            </TextRuns>
+            <Style />
+          </Paragraph>
+        </Paragraphs>
+        <rd:DefaultName>Textbox1</rd:DefaultName>
+        <Top>16.67547cm</Top>
+        <Left>0.58854cm</Left>
+        <Height>0.51153cm</Height>
+        <Width>4.74896cm</Width>
+        <ZIndex>2</ZIndex>
+        <Style>
+          <Border>
+            <Style>None</Style>
+          </Border>
+          <PaddingLeft>2pt</PaddingLeft>
+          <PaddingRight>2pt</PaddingRight>
+          <PaddingTop>2pt</PaddingTop>
+          <PaddingBottom>2pt</PaddingBottom>
+        </Style>
+      </Textbox>
+      <Tablix Name="Tablix3">
+        <TablixBody>
+          <TablixColumns>
+            <TablixColumn>
+              <Width>1.07986in</Width>
+            </TablixColumn>
+          </TablixColumns>
+          <TablixRows>
+            <TablixRow>
+              <Height>0.20236in</Height>
+              <TablixCells>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="ContractId2">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Sum(Fields!value.Value)</Value>
+                              <Style>
+                                <FontWeight>Bold</FontWeight>
+                                <Format>n2</Format>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style>
+                            <TextAlign>Right</TextAlign>
+                          </Style>
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>ContractId</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+              </TablixCells>
+            </TablixRow>
+          </TablixRows>
+        </TablixBody>
+        <TablixColumnHierarchy>
+          <TablixMembers>
+            <TablixMember />
+          </TablixMembers>
+        </TablixColumnHierarchy>
+        <TablixRowHierarchy>
+          <TablixMembers>
+            <TablixMember>
+              <Group Name="type2">
+                <GroupExpressions>
+                  <GroupExpression>=Fields!type.Value</GroupExpression>
+                </GroupExpressions>
+              </Group>
+              <SortExpressions>
+                <SortExpression>
+                  <Value>=Fields!type.Value</Value>
+                </SortExpression>
+              </SortExpressions>
+              <TablixHeader>
+                <Size>0.49167in</Size>
+                <CellContents>
+                  <Rectangle Name="Rectangle3">
+                    <ReportItems>
+                      <Line Name="Line6">
+                        <Top>0.10639in</Top>
+                        <Left>0.03333in</Left>
+                        <Height>0in</Height>
+                        <Width>0.42917in</Width>
+                        <Style>
+                          <Border>
+                            <Color>=Switch(Fields!type.Value="a","LimeGreen"  ,Fields!type.Value="b","LightGrey",
+Fields!type.Value="c","Orange",Fields!type.Value="d","Red")</Color>
+                            <Style>Solid</Style>
+                            <Width>2pt</Width>
+                          </Border>
+                        </Style>
+                      </Line>
+                    </ReportItems>
+                    <KeepTogether>true</KeepTogether>
+                    <Style>
+                      <Border>
+                        <Color>LightGrey</Color>
+                        <Style>Solid</Style>
+                      </Border>
+                    </Style>
+                  </Rectangle>
+                </CellContents>
+              </TablixHeader>
+              <TablixMembers>
+                <TablixMember>
+                  <TablixHeader>
+                    <Size>4.43194in</Size>
+                    <CellContents>
+                      <Textbox Name="type2">
+                        <CanGrow>true</CanGrow>
+                        <KeepTogether>true</KeepTogether>
+                        <Paragraphs>
+                          <Paragraph>
+                            <TextRuns>
+                              <TextRun>
+                                <Value>=Switch(Fields!type.Value="a","Αριθμός συμβολαίων που μπήκαν σε έλεγχο πληρότητας:"  ,Fields!type.Value="b","Αριθμός συμβολαίων που μπήκαν σε έλεγχο πληρότητας και είναι ολοκληρωμένα(περιέχονται και ακυρωμένες προβολές): ",
+Fields!type.Value="c","Αριθμός συμβολαίων που επέστρεψαν σε back office: ",Fields!type.Value="d"," Αριθμός συμβολαίων που έστω και μία προβολή τους επέστρεψε σε back office: ")</Value>
+                                <Style>
+                                  <FontSize>8pt</FontSize>
+                                </Style>
+                              </TextRun>
+                            </TextRuns>
+                            <Style />
+                          </Paragraph>
+                        </Paragraphs>
+                        <rd:DefaultName>type</rd:DefaultName>
+                        <Style>
+                          <Border>
+                            <Color>LightGrey</Color>
+                            <Style>Solid</Style>
+                          </Border>
+                          <PaddingLeft>2pt</PaddingLeft>
+                          <PaddingRight>2pt</PaddingRight>
+                          <PaddingTop>2pt</PaddingTop>
+                          <PaddingBottom>2pt</PaddingBottom>
+                        </Style>
+                      </Textbox>
+                    </CellContents>
+                  </TablixHeader>
+                  <TablixMembers>
+                    <TablixMember />
+                  </TablixMembers>
+                </TablixMember>
+              </TablixMembers>
+            </TablixMember>
+          </TablixMembers>
+        </TablixRowHierarchy>
+        <DataSetName>DataSet2</DataSetName>
+        <Top>7.72507in</Top>
+        <Left>1.09296in</Left>
+        <Height>0.20236in</Height>
+        <Width>6.00347in</Width>
+        <ZIndex>3</ZIndex>
+        <Style>
+          <Border>
+            <Style>None</Style>
+          </Border>
+        </Style>
+      </Tablix>
+      <Chart Name="Chart3">
+        <ChartCategoryHierarchy>
+          <ChartMembers>
+            <ChartMember>
+              <Group Name="Chart1_CategoryGroup3">
+                <GroupExpressions>
+                  <GroupExpression>=Fields!taskCreatedOn.Value</GroupExpression>
+                </GroupExpressions>
+              </Group>
+              <SortExpressions>
+                <SortExpression>
+                  <Value>=Fields!taskCreatedOn.Value</Value>
+                </SortExpression>
+              </SortExpressions>
+              <Label>=Fields!taskCreatedOn.Value</Label>
+            </ChartMember>
+          </ChartMembers>
+        </ChartCategoryHierarchy>
+        <ChartSeriesHierarchy>
+          <ChartMembers>
+            <ChartMember>
+              <Group Name="Chart1_SeriesGroup3">
+                <GroupExpressions>
+                  <GroupExpression>=Fields!type.Value</GroupExpression>
+                </GroupExpressions>
+                <Filters>
+                  <Filter>
+                    <FilterExpression>=Fields!type.Value</FilterExpression>
+                    <Operator>LessThanOrEqual</Operator>
+                    <FilterValues>
+                      <FilterValue>d</FilterValue>
+                    </FilterValues>
+                  </Filter>
+                </Filters>
+              </Group>
+              <SortExpressions>
+                <SortExpression>
+                  <Value>=Fields!type.Value</Value>
+                </SortExpression>
+              </SortExpressions>
+              <Label>=Fields!type.Value</Label>
+            </ChartMember>
+          </ChartMembers>
+        </ChartSeriesHierarchy>
+        <ChartData>
+          <ChartSeriesCollection>
+            <ChartSeries Name="ContractId">
+              <ChartDataPoints>
+                <ChartDataPoint>
+                  <ChartDataPointValues>
+                    <Y>=IIf(IsNothing(Sum(Fields!value.Value)),0,Sum(Fields!value.Value))</Y>
+                  </ChartDataPointValues>
+                  <ChartDataLabel>
+                    <Style>
+                      <Format>#,0,;(#,0,)</Format>
+                      <Color>=Switch(Fields!type.Value="a","LimeGreen"  ,Fields!type.Value="b","Black",
+Fields!type.Value="c","Black",Fields!type.Value="c","Red",true,"Red")</Color>
+                    </Style>
+                    <UseValueAsLabel>true</UseValueAsLabel>
+                    <Visible>true</Visible>
+                  </ChartDataLabel>
+                  <Style>
+                    <Border>
+                      <Color>#00ffffff</Color>
+                      <Width>2pt</Width>
+                    </Border>
+                  </Style>
+                  <ChartMarker>
+                    <Style />
+                  </ChartMarker>
+                  <DataElementOutput>Output</DataElementOutput>
+                </ChartDataPoint>
+              </ChartDataPoints>
+              <Type>Line</Type>
+              <Style />
+              <ChartEmptyPoints>
+                <Style />
+                <ChartMarker>
+                  <Style />
+                </ChartMarker>
+                <ChartDataLabel>
+                  <Style />
+                </ChartDataLabel>
+              </ChartEmptyPoints>
+              <ValueAxisName>Primary</ValueAxisName>
+              <CategoryAxisName>Primary</CategoryAxisName>
+              <ChartSmartLabel>
+                <CalloutLineColor>Black</CalloutLineColor>
+                <MinMovingDistance>0pt</MinMovingDistance>
+              </ChartSmartLabel>
+            </ChartSeries>
+          </ChartSeriesCollection>
+        </ChartData>
+        <ChartAreas>
+          <ChartArea Name="Default">
+            <ChartCategoryAxes>
+              <ChartAxis Name="Primary">
+                <Style>
+                  <FontSize>8pt</FontSize>
+                  <Format>dd/MM/yyyy</Format>
+                </Style>
+                <ChartAxisTitle>
+                  <Caption />
+                  <Style>
+                    <FontSize>8pt</FontSize>
+                  </Style>
+                </ChartAxisTitle>
+                <Interval>1</Interval>
+                <IntervalType>Days</IntervalType>
+                <ChartMajorGridLines>
+                  <Enabled>False</Enabled>
+                  <Style>
+                    <Border>
+                      <Color>Gainsboro</Color>
+                    </Border>
+                  </Style>
+                </ChartMajorGridLines>
+                <ChartMinorGridLines>
+                  <Style>
+                    <Border>
+                      <Color>Gainsboro</Color>
+                      <Style>Dotted</Style>
+                    </Border>
+                  </Style>
+                </ChartMinorGridLines>
+                <ChartMinorTickMarks>
+                  <Length>0.5</Length>
+                </ChartMinorTickMarks>
+                <CrossAt>NaN</CrossAt>
+                <Minimum>NaN</Minimum>
+                <Maximum>NaN</Maximum>
+                <ChartAxisScaleBreak>
+                  <Style />
+                </ChartAxisScaleBreak>
+              </ChartAxis>
+              <ChartAxis Name="Secondary">
+                <Style>
+                  <FontSize>8pt</FontSize>
+                </Style>
+                <ChartAxisTitle>
+                  <Caption>Axis Title</Caption>
+                  <Style>
+                    <FontSize>8pt</FontSize>
+                  </Style>
+                </ChartAxisTitle>
+                <ChartMajorGridLines>
+                  <Enabled>False</Enabled>
+                  <Style>
+                    <Border>
+                      <Color>Gainsboro</Color>
+                    </Border>
+                  </Style>
+                </ChartMajorGridLines>
+                <ChartMinorGridLines>
+                  <Style>
+                    <Border>
+                      <Color>Gainsboro</Color>
+                      <Style>Dotted</Style>
+                    </Border>
+                  </Style>
+                </ChartMinorGridLines>
+                <ChartMinorTickMarks>
+                  <Length>0.5</Length>
+                </ChartMinorTickMarks>
+                <CrossAt>NaN</CrossAt>
+                <Location>Opposite</Location>
+                <Minimum>NaN</Minimum>
+                <Maximum>NaN</Maximum>
+                <ChartAxisScaleBreak>
+                  <Style />
+                </ChartAxisScaleBreak>
+              </ChartAxis>
+            </ChartCategoryAxes>
+            <ChartValueAxes>
+              <ChartAxis Name="Primary">
+                <Style>
+                  <FontSize>8pt</FontSize>
+                </Style>
+                <ChartAxisTitle>
+                  <Caption />
+                  <Style>
+                    <FontSize>8pt</FontSize>
+                  </Style>
+                </ChartAxisTitle>
+                <ChartMajorGridLines>
+                  <Style>
+                    <Border>
+                      <Color>Gainsboro</Color>
+                    </Border>
+                  </Style>
+                </ChartMajorGridLines>
+                <ChartMinorGridLines>
+                  <Style>
+                    <Border>
+                      <Color>Gainsboro</Color>
+                      <Style>Dotted</Style>
+                    </Border>
+                  </Style>
+                </ChartMinorGridLines>
+                <ChartMinorTickMarks>
+                  <Length>0.5</Length>
+                </ChartMinorTickMarks>
+                <CrossAt>NaN</CrossAt>
+                <Minimum>NaN</Minimum>
+                <Maximum>NaN</Maximum>
+                <ChartAxisScaleBreak>
+                  <Style />
+                </ChartAxisScaleBreak>
+              </ChartAxis>
+              <ChartAxis Name="Secondary">
+                <Style>
+                  <FontSize>8pt</FontSize>
+                </Style>
+                <ChartAxisTitle>
+                  <Caption>Axis Title</Caption>
+                  <Style>
+                    <FontSize>8pt</FontSize>
+                  </Style>
+                </ChartAxisTitle>
+                <ChartMajorGridLines>
+                  <Style>
+                    <Border>
+                      <Color>Gainsboro</Color>
+                    </Border>
+                  </Style>
+                </ChartMajorGridLines>
+                <ChartMinorGridLines>
+                  <Style>
+                    <Border>
+                      <Color>Gainsboro</Color>
+                      <Style>Dotted</Style>
+                    </Border>
+                  </Style>
+                </ChartMinorGridLines>
+                <ChartMinorTickMarks>
+                  <Length>0.5</Length>
+                </ChartMinorTickMarks>
+                <CrossAt>NaN</CrossAt>
+                <Location>Opposite</Location>
+                <Minimum>NaN</Minimum>
+                <Maximum>NaN</Maximum>
+                <ChartAxisScaleBreak>
+                  <Style />
+                </ChartAxisScaleBreak>
+              </ChartAxis>
+            </ChartValueAxes>
+            <Style>
+              <BackgroundGradientType>None</BackgroundGradientType>
+            </Style>
+            <ChartElementPosition>
+              <Top>12.947</Top>
+              <Height>84.053</Height>
+              <Width>94</Width>
+            </ChartElementPosition>
+          </ChartArea>
+        </ChartAreas>
+        <ChartTitles>
+          <ChartTitle Name="Default">
+            <Caption>Παρακολούθηση Συμβολαίων Παραγωγής Ανά Ημέρα - Εισαγωγές/Επιστροφές(Τζίρος)</Caption>
+            <Style>
+              <BackgroundGradientType>None</BackgroundGradientType>
+              <FontWeight>Bold</FontWeight>
+              <TextAlign>General</TextAlign>
+              <VerticalAlign>Top</VerticalAlign>
+            </Style>
+          </ChartTitle>
+        </ChartTitles>
+        <Palette>Custom</Palette>
+        <ChartCustomPaletteColors>
+          <ChartCustomPaletteColor>LimeGreen</ChartCustomPaletteColor>
+          <ChartCustomPaletteColor>LightGrey</ChartCustomPaletteColor>
+          <ChartCustomPaletteColor>Orange</ChartCustomPaletteColor>
+          <ChartCustomPaletteColor>Red</ChartCustomPaletteColor>
+        </ChartCustomPaletteColors>
+        <ChartBorderSkin>
+          <Style>
+            <BackgroundColor>Gray</BackgroundColor>
+            <BackgroundGradientType>None</BackgroundGradientType>
+            <Color>White</Color>
+          </Style>
+        </ChartBorderSkin>
+        <ChartNoDataMessage Name="NoDataMessage">
+          <Caption>No Data Available</Caption>
+          <Style>
+            <BackgroundGradientType>None</BackgroundGradientType>
+            <TextAlign>General</TextAlign>
+            <VerticalAlign>Top</VerticalAlign>
+          </Style>
+        </ChartNoDataMessage>
+        <DataSetName>DataSet2</DataSetName>
+        <Top>11.53637cm</Top>
+        <Left>0.17315in</Left>
+        <Height>3.09375in</Height>
+        <Width>20.77083in</Width>
+        <ZIndex>4</ZIndex>
+        <Style>
+          <Border>
+            <Color>LightGrey</Color>
+            <Style>Solid</Style>
+          </Border>
+          <BackgroundColor>White</BackgroundColor>
+          <BackgroundGradientType>LeftRight</BackgroundGradientType>
+          <BackgroundHatchType>None</BackgroundHatchType>
+        </Style>
+      </Chart>
+    </ReportItems>
+    <Height>9.4775in</Height>
+    <Style />
+  </Body>
+  <Width>21.11713in</Width>
+  <Page>
+    <LeftMargin>1in</LeftMargin>
+    <RightMargin>1in</RightMargin>
+    <TopMargin>1in</TopMargin>
+    <BottomMargin>1in</BottomMargin>
+    <Style />
+  </Page>
+  <AutoRefresh>0</AutoRefresh>
+  <DataSources>
+    <DataSource Name="YPS">
+      <DataSourceReference>YPS</DataSourceReference>
+      <rd:SecurityType>None</rd:SecurityType>
+      <rd:DataSourceID>eb921aac-bb27-40bb-80bf-bffd3c16028d</rd:DataSourceID>
+    </DataSource>
+  </DataSources>
+  <DataSets>
+    <DataSet Name="DataSet1">
+      <Query>
+        <DataSourceName>YPS</DataSourceName>
+        <QueryParameters>
+          <QueryParameter Name="@datefrom">
+            <Value>=Parameters!datefrom.Value</Value>
+          </QueryParameter>
+          <QueryParameter Name="@dateto">
+            <Value>=Parameters!dateto.Value</Value>
+          </QueryParameter>
+        </QueryParameters>
+        <CommandText>--declare @datefrom datetime
+--set @datefrom='20150420'
+--declare @dateto datetime
+--set @dateto='20150423'
+
+
+
+
+SELECT DISTINCT 'a' as type, ContractId = tgiv2.AltOfferID , cast(t.CreatedOn  as date) AS taskCreatedOn 
+FROM	dbo.Task t
+		JOIN dbo.[Case] c ON t.CaseID = c.ID
+		JOIN dbo.TargetGroupItemValue tgiv2 ON C.ContextEntityID = TGIV2.ID AND C.ContextEntityType = 'TGIV'
+		JOIN dbo.contract ct ON ct.ID = tgiv2.AltOfferID
+WHERE	t.TaskTypeID=189 
+		AND t.CreatedOn &gt;= @datefrom
+		AND t.CreatedOn &lt; @dateto+1
+		
+union all 
+
+
+SELECT DISTINCT 'c' as type, ContractId = tgiv2.AltOfferID , cast( t.CreatedOn as DATE) AS taskCreatedOn 
+FROM	dbo.Task t
+		JOIN dbo.[Case] c ON t.CaseID = c.ID
+		JOIN dbo.TargetGroupItemValue tgiv2 ON C.ContextEntityID = TGIV2.ID AND C.ContextEntityType = 'TGIV'
+		JOIN dbo.contract ct ON ct.ID = tgiv2.AltOfferID
+WHERE	t.TaskTypeID=190
+		AND t.CreatedOn &gt;= @datefrom
+		AND t.CreatedOn &lt; @dateto+1
+
+		
+union all	
+		
+select distinct 'd' as type,cp.RelatedContractID as contractid, cast(t.CreatedOn  as date) AS taskCreatedOn 
+from yps.dbo.[Case] c
+        JOIN yps.dbo.[Case] cc ON cc.MasterCaseID = c.ID
+        JOIN yps.dbo.Task t  ON t.CaseID = cc.ID
+        join yps.dbo.Advertisement adv  on adv.ID=cc.ContextEntityID and cc.ContextEntityType='adv' 
+       	join yps.dbo.ContractProduct cp  on cp.id= adv.ContractProductID
+ WHERE	t.TaskTypeID=508
+		AND t.CreatedOn &gt;= @datefrom
+		AND t.CreatedOn &lt; @dateto+1
+		
+
+
+
+union all
+
+	
+SELECT DISTINCT 'b' as type, ContractId = tgiv2.AltOfferID , cast(t.CreatedOn  as date) AS taskCreatedOn 
+FROM	dbo.Task t
+		JOIN dbo.[Case] c ON t.CaseID = c.ID
+		JOIN dbo.TargetGroupItemValue tgiv2 ON C.ContextEntityID = TGIV2.ID AND C.ContextEntityType = 'TGIV'
+		JOIN dbo.contract ct ON ct.ID = tgiv2.AltOfferID
+WHERE	t.TaskTypeID=189 
+and  (not exists (Select 1 from dbo.Advertisement adv join ContractProduct cp on cp.ID=adv.ContractProductID where cp.RelatedContractID=ct.ID and adv.QA=0)
+		or 
+	  exists (Select 1 from dbo.Advertisement adv join ContractProduct cp on cp.ID=adv.ContractProductID where cp.RelatedContractID=ct.ID and adv.QA=0and cp.State in (3,6,7) )
+	  )
+	 	AND t.CreatedOn &gt;= @datefrom
+		AND t.CreatedOn &lt; @dateto+1
+			
+
+order by 1,3</CommandText>
+        <rd:UseGenericDesigner>true</rd:UseGenericDesigner>
+      </Query>
+      <Fields>
+        <Field Name="type">
+          <DataField>type</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="ContractId">
+          <DataField>ContractId</DataField>
+          <rd:TypeName>System.Int32</rd:TypeName>
+        </Field>
+        <Field Name="taskCreatedOn">
+          <DataField>taskCreatedOn</DataField>
+          <rd:TypeName>System.DateTime</rd:TypeName>
+        </Field>
+      </Fields>
+    </DataSet>
+    <DataSet Name="DataSet2">
+      <Query>
+        <DataSourceName>YPS</DataSourceName>
+        <QueryParameters>
+          <QueryParameter Name="@datefrom">
+            <Value>=Parameters!datefrom.Value</Value>
+          </QueryParameter>
+          <QueryParameter Name="@dateto">
+            <Value>=Parameters!dateto.Value</Value>
+          </QueryParameter>
+        </QueryParameters>
+        <CommandText>--declare @datefrom datetime
+--set @datefrom='20150420'
+--declare @dateto datetime
+--set @dateto='20150423'
+
+
+
+
+SELECT DISTINCT 'a' as type, ContractId = tgiv2.AltOfferID , cast(t.CreatedOn  as date) AS taskCreatedOn ,
+       value=(select cast(sum(CASE WHEN cp.[state]  IN (3,4) THEN cp.AlteredAmount ELSE  cp.[Price] - cp.[Discount] - cp.[RulesDiscount]	END ) as float)
+                from dbo.ContractProduct cp where cp.RelatedContractID=ct.ID)   
+FROM	dbo.Task t
+		JOIN dbo.[Case] c ON t.CaseID = c.ID
+		JOIN dbo.TargetGroupItemValue tgiv2 ON C.ContextEntityID = TGIV2.ID AND C.ContextEntityType = 'TGIV'
+		JOIN dbo.contract ct ON ct.ID = tgiv2.AltOfferID
+WHERE	t.TaskTypeID=189 
+		AND t.CreatedOn &gt;= @datefrom
+		AND t.CreatedOn &lt; @dateto+1
+		
+union all 
+
+
+SELECT DISTINCT 'c' as type, ContractId = tgiv2.AltOfferID , cast( t.CreatedOn as DATE) AS taskCreatedOn ,
+       value=(select cast(sum(CASE WHEN cp.[state]  IN (3,4) THEN isnull(cp.AlteredAmount,0) ELSE  cp.[Price] - cp.[Discount] - cp.[RulesDiscount]	END )as float)
+                from dbo.ContractProduct cp where cp.RelatedContractID=ct.ID) 
+FROM	dbo.Task t
+		JOIN dbo.[Case] c ON t.CaseID = c.ID
+		JOIN dbo.TargetGroupItemValue tgiv2 ON C.ContextEntityID = TGIV2.ID AND C.ContextEntityType = 'TGIV'
+		JOIN dbo.contract ct ON ct.ID = tgiv2.AltOfferID
+WHERE	t.TaskTypeID=190
+		AND t.CreatedOn &gt;= @datefrom
+		AND t.CreatedOn &lt; @dateto+1
+
+		
+union all	
+
+select *,
+        value=(select CAST( sum(CASE WHEN cp.[state] IN (3,4) THEN isnull(cp.AlteredAmount,0) ELSE  cp.[Price] - cp.[Discount] - cp.[RulesDiscount]	END ) as float)
+                from dbo.ContractProduct cp where cp.RelatedContractID=x.contractid) 
+from(		
+select distinct 'd' as type,cp.RelatedContractID as contractid, cast(t.CreatedOn  as date) AS taskCreatedOn
+from yps.dbo.[Case] c
+        JOIN yps.dbo.[Case] cc ON cc.MasterCaseID = c.ID
+        JOIN yps.dbo.Task t  ON t.CaseID = cc.ID
+        join yps.dbo.Advertisement adv  on adv.ID=cc.ContextEntityID and cc.ContextEntityType='adv' 
+       	join yps.dbo.ContractProduct cp  on cp.id= adv.ContractProductID
+ WHERE	t.TaskTypeID=508
+		AND t.CreatedOn &gt;= @datefrom
+		AND t.CreatedOn &lt; @dateto+1
+)x
+
+union all
+
+	
+SELECT DISTINCT 'b' as type, ContractId = tgiv2.AltOfferID , cast(t.CreatedOn  as date) AS taskCreatedOn ,
+       value=(select CAST( sum(CASE WHEN cp.[state] IN (3,4) THEN cp.AlteredAmount ELSE  cp.[Price] - cp.[Discount] - cp.[RulesDiscount]	END ) as float)
+                from dbo.ContractProduct cp where cp.RelatedContractID=ct.ID) 
+FROM	dbo.Task t
+		JOIN dbo.[Case] c ON t.CaseID = c.ID
+		JOIN dbo.TargetGroupItemValue tgiv2 ON C.ContextEntityID = TGIV2.ID AND C.ContextEntityType = 'TGIV'
+		JOIN dbo.contract ct ON ct.ID = tgiv2.AltOfferID
+WHERE	t.TaskTypeID=189 
+and  (not exists (Select 1 from dbo.Advertisement adv join ContractProduct cp on cp.ID=adv.ContractProductID where cp.RelatedContractID=ct.ID and adv.QA=0)
+		or 
+	  exists (Select 1 from dbo.Advertisement adv join ContractProduct cp on cp.ID=adv.ContractProductID where cp.RelatedContractID=ct.ID and adv.QA=0and cp.State in (3,6,7) )
+	  )
+	 	AND t.CreatedOn &gt;= @datefrom
+		AND t.CreatedOn &lt; @dateto+1
+			
+			order by 2</CommandText>
+      </Query>
+      <Fields>
+        <Field Name="type">
+          <DataField>type</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="ContractId">
+          <DataField>ContractId</DataField>
+          <rd:TypeName>System.Int32</rd:TypeName>
+        </Field>
+        <Field Name="taskCreatedOn">
+          <DataField>taskCreatedOn</DataField>
+          <rd:TypeName>System.DateTime</rd:TypeName>
+        </Field>
+        <Field Name="value">
+          <DataField>value</DataField>
+          <rd:TypeName>System.Double</rd:TypeName>
+        </Field>
+      </Fields>
+    </DataSet>
+  </DataSets>
+  <ReportParameters>
+    <ReportParameter Name="datefrom">
+      <DataType>DateTime</DataType>
+      <Prompt>Απο Ημερ.</Prompt>
+    </ReportParameter>
+    <ReportParameter Name="dateto">
+      <DataType>DateTime</DataType>
+      <Prompt>'Εως Ημερ.</Prompt>
+    </ReportParameter>
+  </ReportParameters>
+  <Language>el-GR</Language>
+  <ConsumeContainerWhitespace>true</ConsumeContainerWhitespace>
+  <rd:ReportUnitType>Inch</rd:ReportUnitType>
+  <rd:ReportID>9ed26189-9462-494c-b0ee-7763dcc78aa1</rd:ReportID>
+</Report>

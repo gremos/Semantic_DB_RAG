@@ -1,0 +1,1970 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Report xmlns="http://schemas.microsoft.com/sqlserver/reporting/2008/01/reportdefinition" xmlns:rd="http://schemas.microsoft.com/SQLServer/reporting/reportdesigner">
+  <Body>
+    <ReportItems>
+      <Tablix Name="table1">
+        <TablixBody>
+          <TablixColumns>
+            <TablixColumn>
+              <Width>1.27083in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>2in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>1in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>2in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>1.125in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>1in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>2in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>2in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>2in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>2in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>1in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>1in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>1in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>1in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>1in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>1in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>2in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>1in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>2in</Width>
+            </TablixColumn>
+          </TablixColumns>
+          <TablixRows>
+            <TablixRow>
+              <Height>0.47in</Height>
+              <TablixCells>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Textbox3">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Κωδ ΕΣ</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Textbox3</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>SteelBlue</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Textbox5">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Επωνυμία</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Textbox5</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>SteelBlue</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Textbox7">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Κωδ Αιτήματος</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Textbox7</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>SteelBlue</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Textbox9">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Τύπος Aιτήματος</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Textbox9</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>SteelBlue</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Textbox11">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Προτεραιότητα Aιτήματος</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Textbox11</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>SteelBlue</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Textbox16">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Κωδ Συμβολαίου</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Textbox16</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>SteelBlue</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Textbox18">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Προϊόν</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Textbox18</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>SteelBlue</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Textbox20">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Ημ Προώθησης από CRM</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Textbox20</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>SteelBlue</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Textbox22">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Ημερομ Ολοκλήρ από τον Έλεγχο</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Textbox22</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>SteelBlue</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Textbox24">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Ημερομ Ολοκλήρ από Παραγωγή</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Textbox24</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>SteelBlue</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Textbox26">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Ημέρες σε Παραγωγή</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Textbox26</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>SteelBlue</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Textbox28">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Κατάσταση</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Textbox28</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>SteelBlue</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Textbox30">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Ολοκλήρωση εντός 1 εβδομάδας</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Textbox30</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>SteelBlue</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Textbox32">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Ολοκλήρωση 1-2 εβδομάδες</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Textbox32</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>SteelBlue</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Textbox34">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Ολοκλήρωση 3-4 εβδομάδες</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Textbox34</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>SteelBlue</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Textbox36">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Ολοκλήρωση &gt; 4 εβδομάδες</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Textbox36</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>SteelBlue</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Textbox38">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Βήμα</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Textbox38</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>SteelBlue</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Textbox40">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Ημέρες Ολοκλήρωσης</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Textbox40</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>SteelBlue</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Textbox42">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Όλοι οι Χρήστες</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Textbox42</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>SteelBlue</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+              </TablixCells>
+            </TablixRow>
+            <TablixRow>
+              <Height>0.31417in</Height>
+              <TablixCells>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Κωδ__ΕΣ">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Κωδ__ΕΣ.Value</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Κωδ__ΕΣ</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Επωνυμία">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Επωνυμία.Value</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Επωνυμία</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Κωδ__Αιτήματος">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Κωδ__Αιτήματος.Value</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Κωδ__Αιτήματος</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Τύπος_Aιτήματος">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Τύπος_Aιτήματος.Value</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Τύπος_Aιτήματος</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Προτεραιότητα_Aιτήματος">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Προτεραιότητα_Aιτήματος.Value</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Προτεραιότητα_Aιτήματος</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Κωδ__Συμβολαίου">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Κωδ__Συμβολαίου.Value</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Κωδ__Συμβολαίου</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Προϊόν">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Προϊόν.Value</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Προϊόν</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Ημ__Προώθησης_από_CRM">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Ημ__Προώθησης_από_CRM.Value</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                                <Format>dd/MM/yyyy HH:mm:ss</Format>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Ημ__Προώθησης_από_CRM</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Ημερομ__Ολοκλήρ__από_τον_Έλεγχο">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Ημερομ__Ολοκλήρ__από_τον_Έλεγχο.Value</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                                <Format>dd/MM/yyyy HH:mm:ss</Format>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Ημερομ__Ολοκλήρ__από_τον_Έλεγχο</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Ημερομ__Ολοκλήρ__από_Παραγωγή">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Ημερομ__Ολοκλήρ__από_Παραγωγή.Value</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                                <Format>dd/MM/yyyy HH:mm:ss</Format>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Ημερομ__Ολοκλήρ__από_Παραγωγή</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Ημέρες_σε_Παραγωγή">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Ημέρες_σε_Παραγωγή.Value</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Ημέρες_σε_Παραγωγή</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Κατάσταση">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Κατάσταση.Value</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Κατάσταση</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Ολοκλήρωση_εντός_1_εβδομάδας">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Ολοκλήρωση_εντός_1_εβδομάδας.Value</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Ολοκλήρωση_εντός_1_εβδομάδας</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Ολοκλήρωση_1_2_εβδομάδες">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Ολοκλήρωση_1_2_εβδομάδες.Value</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Ολοκλήρωση_1_2_εβδομάδες</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Ολοκλήρωση_3_4_εβδομάδες">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Ολοκλήρωση_3_4_εβδομάδες.Value</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Ολοκλήρωση_3_4_εβδομάδες</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Ολοκλήρωση___4_εβδομάδες">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Ολοκλήρωση___4_εβδομάδες.Value</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Ολοκλήρωση___4_εβδομάδες</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Βήμα">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Βήμα.Value</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Βήμα</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Ημέρες_Ολοκλήρωσης">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Ημέρες_Ολοκλήρωσης.Value</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Ημέρες_Ολοκλήρωσης</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Όλοι_οι_Χρήστες">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Όλοι_οι_Χρήστες.Value</Value>
+                              <Style>
+                                <FontFamily>Calibri</FontFamily>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Όλοι_οι_Χρήστες</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+              </TablixCells>
+            </TablixRow>
+          </TablixRows>
+        </TablixBody>
+        <TablixColumnHierarchy>
+          <TablixMembers>
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+          </TablixMembers>
+        </TablixColumnHierarchy>
+        <TablixRowHierarchy>
+          <TablixMembers>
+            <TablixMember>
+              <KeepWithGroup>After</KeepWithGroup>
+              <RepeatOnNewPage>true</RepeatOnNewPage>
+              <KeepTogether>true</KeepTogether>
+            </TablixMember>
+            <TablixMember>
+              <Group Name="table1_Details_Group">
+                <DataElementName>Detail</DataElementName>
+              </Group>
+              <TablixMembers>
+                <TablixMember />
+              </TablixMembers>
+              <DataElementName>Detail_Collection</DataElementName>
+              <DataElementOutput>Output</DataElementOutput>
+              <KeepTogether>true</KeepTogether>
+            </TablixMember>
+          </TablixMembers>
+        </TablixRowHierarchy>
+        <DataSetName>DataSet1</DataSetName>
+        <Top>0.36in</Top>
+        <Height>0.78417in</Height>
+        <Width>27.39583in</Width>
+        <Style />
+      </Tablix>
+      <Textbox Name="textbox1">
+        <CanGrow>true</CanGrow>
+        <KeepTogether>true</KeepTogether>
+        <Paragraphs>
+          <Paragraph>
+            <TextRuns>
+              <TextRun>
+                <Value>Διαχείριση Αιτημάτων από CRM: </Value>
+                <Style>
+                  <FontStyle>Normal</FontStyle>
+                  <FontFamily>Calibri</FontFamily>
+                  <FontSize>18pt</FontSize>
+                  <FontWeight>Normal</FontWeight>
+                  <TextDecoration>None</TextDecoration>
+                  <Color>#1c3a70</Color>
+                </Style>
+              </TextRun>
+              <TextRun>
+                <Value>=Format(Parameters!datefrom.Value,"dd/MM/yy")</Value>
+                <Style>
+                  <FontStyle>Normal</FontStyle>
+                  <FontFamily>Calibri</FontFamily>
+                  <FontSize>18pt</FontSize>
+                  <FontWeight>Normal</FontWeight>
+                  <TextDecoration>None</TextDecoration>
+                  <Color>Brown</Color>
+                </Style>
+              </TextRun>
+              <TextRun>
+                <Value> - </Value>
+                <Style>
+                  <FontStyle>Normal</FontStyle>
+                  <FontFamily>Calibri</FontFamily>
+                  <FontSize>18pt</FontSize>
+                  <FontWeight>Normal</FontWeight>
+                  <TextDecoration>None</TextDecoration>
+                  <Color>#1c3a70</Color>
+                </Style>
+              </TextRun>
+              <TextRun>
+                <Value>=Format(Parameters!dateto.Value,"dd/MM/yy")</Value>
+                <Style>
+                  <FontStyle>Normal</FontStyle>
+                  <FontFamily>Calibri</FontFamily>
+                  <FontSize>18pt</FontSize>
+                  <FontWeight>Normal</FontWeight>
+                  <TextDecoration>None</TextDecoration>
+                  <Color>Brown</Color>
+                </Style>
+              </TextRun>
+            </TextRuns>
+            <Style />
+          </Paragraph>
+        </Paragraphs>
+        <rd:DefaultName>textbox1</rd:DefaultName>
+        <Height>0.36in</Height>
+        <Width>27.27083in</Width>
+        <ZIndex>1</ZIndex>
+        <Style>
+          <PaddingLeft>2pt</PaddingLeft>
+          <PaddingRight>2pt</PaddingRight>
+          <PaddingTop>2pt</PaddingTop>
+          <PaddingBottom>2pt</PaddingBottom>
+        </Style>
+      </Textbox>
+    </ReportItems>
+    <Height>1.14417in</Height>
+    <Style />
+  </Body>
+  <Width>27.39583in</Width>
+  <Page>
+    <PageFooter>
+      <Height>0.53483in</Height>
+      <PrintOnFirstPage>true</PrintOnFirstPage>
+      <PrintOnLastPage>true</PrintOnLastPage>
+      <ReportItems>
+        <Textbox Name="Textbox2">
+          <CanGrow>true</CanGrow>
+          <KeepTogether>true</KeepTogether>
+          <Paragraphs>
+            <Paragraph>
+              <TextRuns>
+                <TextRun>
+                  <Value>CRMTicketsProduction</Value>
+                  <Style>
+                    <FontFamily>Calibri</FontFamily>
+                    <FontSize>8pt</FontSize>
+                    <Color>Gray</Color>
+                  </Style>
+                </TextRun>
+              </TextRuns>
+              <Style />
+            </Paragraph>
+          </Paragraphs>
+          <rd:DefaultName>Textbox1</rd:DefaultName>
+          <Top>0.70556cm</Top>
+          <Height>0.6cm</Height>
+          <Width>5cm</Width>
+          <Style>
+            <Border>
+              <Style>None</Style>
+            </Border>
+            <PaddingLeft>2pt</PaddingLeft>
+            <PaddingRight>2pt</PaddingRight>
+            <PaddingTop>2pt</PaddingTop>
+            <PaddingBottom>2pt</PaddingBottom>
+          </Style>
+        </Textbox>
+        <Textbox Name="Textbox244">
+          <CanGrow>true</CanGrow>
+          <KeepTogether>true</KeepTogether>
+          <Paragraphs>
+            <Paragraph>
+              <TextRuns>
+                <TextRun>
+                  <Value>Ημ Εκτέλεσης: </Value>
+                  <Style>
+                    <FontFamily>calibri</FontFamily>
+                    <FontSize>8pt</FontSize>
+                  </Style>
+                </TextRun>
+                <TextRun>
+                  <Value>=Globals!ExecutionTime</Value>
+                  <Style>
+                    <FontFamily>calibri</FontFamily>
+                    <FontSize>8pt</FontSize>
+                    <Format>dd/MM/yyyy HH:mm</Format>
+                  </Style>
+                </TextRun>
+              </TextRuns>
+              <Style />
+            </Paragraph>
+          </Paragraphs>
+          <rd:DefaultName>Textbox244</rd:DefaultName>
+          <Top>0.035cm</Top>
+          <Height>0.6cm</Height>
+          <Width>5cm</Width>
+          <ZIndex>1</ZIndex>
+          <Style>
+            <Border>
+              <Style>None</Style>
+            </Border>
+            <PaddingLeft>2pt</PaddingLeft>
+            <PaddingRight>2pt</PaddingRight>
+            <PaddingTop>2pt</PaddingTop>
+            <PaddingBottom>2pt</PaddingBottom>
+          </Style>
+        </Textbox>
+      </ReportItems>
+      <Style>
+        <Border>
+          <Style>None</Style>
+        </Border>
+      </Style>
+    </PageFooter>
+    <LeftMargin>1in</LeftMargin>
+    <RightMargin>1in</RightMargin>
+    <TopMargin>1in</TopMargin>
+    <BottomMargin>1in</BottomMargin>
+    <Style />
+  </Page>
+  <AutoRefresh>0</AutoRefresh>
+  <DataSources>
+    <DataSource Name="YPS">
+      <DataSourceReference>YPS</DataSourceReference>
+      <rd:SecurityType>None</rd:SecurityType>
+      <rd:DataSourceID>3a0a15da-3691-4abd-8961-c9c571b01877</rd:DataSourceID>
+    </DataSource>
+  </DataSources>
+  <DataSets>
+    <DataSet Name="DataSet1">
+      <Query>
+        <DataSourceName>YPS</DataSourceName>
+        <QueryParameters>
+          <QueryParameter Name="@Medium">
+            <Value>=Parameters!Medium.Value</Value>
+          </QueryParameter>
+          <QueryParameter Name="@datefrom">
+            <Value>=Parameters!datefrom.Value</Value>
+          </QueryParameter>
+          <QueryParameter Name="@dateto">
+            <Value>=Parameters!dateto.Value</Value>
+          </QueryParameter>
+        </QueryParameters>
+        <CommandText>--Κωδ. ΕΣ
+--Επωνυμία
+--Κωδ. Αιτήματος
+--Τύπος αιτήματος
+--Κωδ. Συμβολαίου
+--Προϊόν
+--Ημ. Προώθησης από CRM
+--Ημερομ. Ολοκλήρ. από τον Έλεγχο
+--Ημερομ. Ολοκλήρ. από Παραγωγή
+--Ημέρες Ολοκλήρωσης
+--Βήμα
+--Όλοι οι Χρήστες
+
+--Κριτήρια:
+--1. Ημ/νία όπως το σημερινό
+--2. Μέσο
+--Στοιχεία:
+--ότι στο σημερινό με επιπλέον:
+--1. Ημέρες σε Παραγωγή: ημ/νία ολοκλήρωσης από έλεχγο μέχρι την ημ ολοκλήρωσης. Αν δεν είναι ολοκληρωμένο, τότε θα είναι η ημ/νία ολοκλήρωσης από έλεχγο μέχρι την τρέχουσα ημέρα
+--2. Κατάσταση: Ολοκληρωμένο / Σε εκκρεμότητα
+--3. Ολοκλήρωση εντός 1 εβδομάδας : NAI, όταν ισχύει αλλιώς κενό
+--4. Ολοκλήρωση 1-2 εβδομάδες : NAI, όταν ισχύει αλλιώς κενό
+--5. Ολοκλήρωση 3-4 εβδομάδες : NAI, όταν ισχύει αλλιώς κενό
+--6. Ολοκλήρωση &gt; 4 εβδομάδες : NAI, όταν ισχύει αλλιώς κενό
+--7. Προτεραιότητα : από το crm ticket
+
+
+IF OBJECT_ID('tempdb..#CRMProdTaskTypes') IS NOT NULL DROP TABLE #CRMProdTaskTypes
+SELECT t.ID taskID , tt.id TaskTypeID--,t.ActualOwnerID--,r.Description
+into #CRMProdTaskTypes
+FROM Task t 
+JOIN TaskType tt on t.TaskTypeID = tt.id
+--join TaskAssignment ta on ta.TaskID = t.ID
+--join role r on r.id = ta.RoleID
+where tt.id in (
+				537,193,509,511,512,513,514,516,517,519,520,522,523,524,525,527,528,529,192,194,    ---Παλιό Flow Παραγωγής 
+				743,744,748,749,750,751,752,753,754,                                                ---Webs Planet ProdWorkflow	
+				719,720,724,725,726,727,														    ---PPC -||-
+				670,671,675,676,677,678,                                                            ---XO Print 1 -||-
+    			679,680,684,685,686,687,688,689,690,691,                                            ---XO Print 2  -||-
+                797,798,802,803,804,806,807,808,                                                    ---SEO Δημιουργία περιεχομένου -||-
+                809,810,814,815,816,817,818,819,820,821,822,823,824,825,826,                        ---Μετάφραση Websites -||-
+                788,789,793,794,795,796,                                                            ---Audit SEO -||-
+                728,729,733,734,735,736,737,738,739,740,741,742,                                    ---FB Banners &amp; GADS Banners -||-
+                761,762,766,767,768,769,770,771,772,773,774,775,776,777,778,779,780,781,            ---Wordpress -||-
+                782,783,787,                                                                        ---Ανανέωση Website -||-
+				692,693,697,698,699,700,701,702,703,704,705,706,707,708,709,710,711,712,713,714,715,716,718,---Κατασκευή Προβολής Website Support
+				827,828,832,833,834,835																---Κατασκευή ΠροβολήςEmailMarketing            		                                                   
+				--903,904,905,906,907,908,909,910,911,912,913,914                                     ---CRM Workflow      
+			)                                             
+
+
+--DECLARE @Medium nvarchar(50);
+--set @Medium = '[10] XO.GR' 
+
+IF OBJECT_ID('tempdb..#alldata') IS NOT NULL DROP TABLE #alldata
+select * into #alldata
+from (
+select  t.id as ticketcode,
+		t.TicketTypeID,
+		tt.Description ticketType,
+		t.RelatedContractID contractid , 
+		ic.ID as caseid, mc.ID as mastercaseid,
+        taskid = ta.id ,
+		TaskTypeId = ta.TaskTypeID ,
+		usr.UserName,ta.Status TskSt, 
+		ta.Description Task, 
+        ta.DynamicDescription TaskDescription,
+		ta.CreatedOn TaskCreatedOn, 
+		ta.CompletedOn TaskCompletedOn,  
+		ta.Outcome,
+        bp.Code as bpcode,
+		bp.BrandName as bpName,
+		t.RelatedAdvertisementID,
+		pr.code as productcode,
+		tp.[Description] as tktDescription
+from   dbo.Ticket t
+       join dbo.TicketType tt on tt.ID=t.TicketTypeID
+	   left join dbo.TicketPriority tp on tp.id = t.PriorityID --- added
+	   JOIN dbo.[Case] ic ON t.ID = ic.ContextEntityID AND ic.ContextEntityType = 'TICKET'
+	   JOIN dbo.[Case] mc ON mc.MasterCaseID = ic.id
+	   JOIN dbo.CaseType ct ON mc.CaseTypeID = ct.ID
+	   JOIN dbo.Task ta ON ta.CaseID = mc.ID
+	   join dbo.BusinessPoint bp on bp.ID=t.BusinessPointID
+	   join #CRMProdTaskTypes cptt on cptt.taskID = ta.ID
+	   left join dbo.[User] usr on usr.id=ta.ActualOwnerID
+	  join Advertisement adv on mc.ContextEntityID = adv.id and mc.ContextEntityType = 'ADV' 
+	  join dbo.Product pr on pr.ID=adv.ProductID
+	  JOIN VersionSection vs ON vs.ID = adv.VersionSectionID
+	  JOIN MediumVersion mv ON mv.ID = vs.MediumVersionID
+	  JOIN Medium m ON m.ID = mv.MediumID
+	
+where  ('[' + m.code + '] ' + m.Name) in (@Medium)
+--order by ta.ID desc
+union 
+
+select  t.id as ticketcode,
+		t.TicketTypeID,
+		tt.Description ticketType,
+		t.RelatedContractID contractid,
+		ic.ID as caseid,
+		mc.ID as mastercaseid,
+        taskid = ta.id,
+		TaskTypeId = ta.TaskTypeID,
+		usr.UserName,
+		ta.Status TskSt,
+		ta.Description Task, 
+        ta.DynamicDescription TaskDescription,
+		ta.CreatedOn TaskCreatedOn,
+		ta.CompletedOn TaskCompletedOn,
+		ta.Outcome,
+        bp.Code as bpcode,
+		bp.BrandName as bpName ,
+		t.RelatedAdvertisementID,
+		NULL as productcode,
+		tp.[Description] as tktDescription
+from   dbo.Ticket t
+       join dbo.TicketType tt on tt.ID=t.TicketTypeID
+	   left JOIN dbo.TicketPriority tp on tp.id = t.PriorityID--added
+	   JOIN dbo.[Case] ic ON t.ID = ic.ContextEntityID AND ic.ContextEntityType = 'TICKET'
+	   JOIN dbo.[Case] mc ON mc.MasterCaseID = ic.id
+	   JOIN dbo.CaseType ct ON mc.CaseTypeID = ct.ID
+	   JOIN dbo.Task ta ON ta.CaseID = mc.ID 
+	   JOIN dbo.TaskAssignment tas ON ta.id = tas.TaskID
+	   JOIN dbo.Role r ON	tas.RoleID = r.ID
+	   join dbo.BusinessPoint bp on bp.ID=t.BusinessPointID
+	   left join dbo.[User] usr on usr.id=ta.ActualOwnerID
+where r.ID in (114,655) --tas.roleid in (114,655)  'Προϊστάμενος Οργανωτικής Μονάδας Production' ,'Προϊστάμενος Οργανωτικής Μονάδας Website Constr.'
+and ta.TaskTypeID in (227)
+
+)xx
+
+IF OBJECT_ID('tempdb..#users') IS NOT NULL DROP TABLE #users
+Select Main.ticketcode,
+       case when len(main.users)&gt;0 then Left(Main.users,Len(Main.users)-1) else main.users end As [users]
+into #users
+From
+    (
+        Select distinct ST2.ticketcode, 
+            (
+                Select distinct ST1.UserName + '/' AS [text()]
+                From #alldata ST1
+                Where ST1.ticketcode= ST2.ticketcode
+                For XML PATH ('')
+            ) [users]
+        From #alldata ST2
+    ) [Main]
+
+
+
+
+
+--DECLARE @DateFrom DATETIME ;
+--DECLARE @DateTo DATETIME ;
+
+
+
+--set @DateFrom = '2017-03-01'
+--set @DateTo ='2017-03-09'
+   
+    
+;with main as (    
+select 
+		a.bpcode,
+		bpName,
+		ticketcode, 
+		ticketType, 
+		contractid,
+		productcode,
+		MIN(taskcreatedon) taskCreatedon,
+        PCCompletedon= (select Min(t.completedon) 
+						from [case] c 
+						join task t on t.CaseID = c.id  
+						where t.TaskTypeID in (537,543) and t.Outcome&lt;&gt;'ΕΠΙΣΤΡΟΦΗ' 
+						and t.Status =1 and c.ContextEntityType = 'TICKET'  
+						and c.ContextEntityID = a.ticketcode),
+        maxtaskid=(select MAX(taskid) from #alldata b where b.ticketcode=a.ticketcode),
+	    tktDescription ,
+		max(TaskCompletedOn) taskcompletedOn
+       
+from #alldata a
+group by a.bpcode , bpName, ticketcode, ticketType, contractid,productcode,tktDescription--,TaskCompletedOn
+
+)
+
+
+
+select 
+		[Κωδ. ΕΣ] =m.bpcode,
+		[Επωνυμία] = m.bpName,
+		[Κωδ. Αιτήματος] = m.ticketcode, 
+		[Τύπος Aιτήματος] = m.ticketType,
+		[Προτεραιότητα Aιτήματος] = m.tktDescription,--added
+		[Κωδ. Συμβολαίου] = m.contractid,
+		[Προϊόν] = m.productcode,
+		[Ημ. Προώθησης από CRM] = taskCreatedon ,
+		[Ημερομ. Ολοκλήρ. από τον Έλεγχο] = m.PCCompletedon,
+		[Ημερομ. Ολοκλήρ. από Παραγωγή] = (select taskcompletedon from #alldata  a where a.taskid=m.maxtaskid),
+		[Ημέρες σε Παραγωγή] =  case when(select taskcompletedon from #alldata  a where a.taskid=m.maxtaskid) is not null 
+								then DATEDIFF(dd,taskCreatedon,(select taskcompletedon from #alldata  a where a.taskid=m.maxtaskid)) 
+								else DATEDIFF(dd,taskCreatedon,getdate()) end ,--ημ/νία ολοκλήρωσης από έλεχγο μέχρι την ημ ολοκλήρωσης. Αν δεν είναι ολοκληρωμένο, τότε θα είναι η ημ/νία ολοκλήρωσης από έλεχγο μέχρι την τρέχουσα ημέρα
+		[Κατάσταση] = case when (Case when (select taskcompletedon from #alldata  a where a.taskid=m.maxtaskid) IS not null 
+			then DATEDIFF(dd,taskCreatedon,(select taskcompletedon from #alldata  a where a.taskid=m.maxtaskid)) end)  is not null then 'Ολοκληρωμένο' else 'Σε εκκρεμότητα' end ,
+		[Ολοκλήρωση εντός 1 εβδομάδας] = case when (Case when (select taskcompletedon from #alldata  a where a.taskid=m.maxtaskid) IS not null 
+			then DATEDIFF(dd,taskCreatedon,(select taskcompletedon from #alldata  a where a.taskid=m.maxtaskid)) end) &lt; 7 then 'ΝΑΙ' else null end,
+		[Ολοκλήρωση 1-2 εβδομάδες] = case when (Case when (select taskcompletedon from #alldata  a where a.taskid=m.maxtaskid) IS not null 
+			then DATEDIFF(dd,taskCreatedon,(select taskcompletedon from #alldata  a where a.taskid=m.maxtaskid)) end) between 7 and 14 then 'ΝΑΙ' else null end,
+		[Ολοκλήρωση 3-4 εβδομάδες] = case when (Case when (select taskcompletedon from #alldata  a where a.taskid=m.maxtaskid) IS not null 
+			then DATEDIFF(dd,taskCreatedon,(select taskcompletedon from #alldata  a where a.taskid=m.maxtaskid)) end) between 21 and 28 then 'ΝΑΙ' else null end,
+		[Ολοκλήρωση &gt; 4 εβδομάδες] = case when (Case when (select taskcompletedon from #alldata  a where a.taskid=m.maxtaskid) IS not null 
+			then DATEDIFF(dd,taskCreatedon,(select taskcompletedon from #alldata  a where a.taskid=m.maxtaskid)) end) &gt; 28 then 'ΝΑΙ' else null end,
+		[Βήμα]=(select task from #alldata  a where a.taskid=m.maxtaskid),
+		[Ημέρες Ολοκλήρωσης] = Case when (select taskcompletedon from #alldata  a where a.taskid=m.maxtaskid) IS not null 
+			then DATEDIFF(dd,taskCreatedon,(select taskcompletedon from #alldata  a where a.taskid=m.maxtaskid)) end, 
+		[Όλοι οι Χρήστες] =(select  UserS from #users usr where usr.ticketcode=m.ticketcode)
+from main m
+where taskCreatedon &gt;= @datefrom
+and taskCreatedon &lt; @dateto+1
+--and m.ticketcode = 758329
+
+order by taskCreatedon
+
+
+--select [Medium] = ('[' + m.code + '] ' + m.Name) 
+--	from Medium m
+--where m.IsActive = 1
+
+--select tt.*,r.Description
+--  from TicketTypeRoles  ttr
+--  join TicketType tt on tt.id = ttr.TicketTypeID
+--  join [role] r on r.id = ttr.RoleID
+-- where ttr.roleid in (114,655)
+ 
+-- select distinct tt.*
+-- from ticket t 
+-- join TicketType tt on tt.id = t.TicketTypeID
+-- where tt.id = 713 
+
+-- select * from TicketType where Description = 'ΠΛΗΡΩΜΕΝΗ ΠΡΟΒΟΛΗ/ ΔΙΟΡΘΩΣΗ ΠΡΟΒΟΛΗΣ ΠΡΟΪΟNΤΩΝ xo.gr'
+  </CommandText>
+        <rd:UseGenericDesigner>true</rd:UseGenericDesigner>
+      </Query>
+      <Fields>
+        <Field Name="Κωδ__ΕΣ">
+          <DataField>Κωδ. ΕΣ</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Επωνυμία">
+          <DataField>Επωνυμία</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Κωδ__Αιτήματος">
+          <DataField>Κωδ. Αιτήματος</DataField>
+          <rd:TypeName>System.Int32</rd:TypeName>
+        </Field>
+        <Field Name="Τύπος_Aιτήματος">
+          <DataField>Τύπος Aιτήματος</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Προτεραιότητα_Aιτήματος">
+          <DataField>Προτεραιότητα Aιτήματος</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Κωδ__Συμβολαίου">
+          <DataField>Κωδ. Συμβολαίου</DataField>
+          <rd:TypeName>System.Int32</rd:TypeName>
+        </Field>
+        <Field Name="Προϊόν">
+          <DataField>Προϊόν</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Ημ__Προώθησης_από_CRM">
+          <DataField>Ημ. Προώθησης από CRM</DataField>
+          <rd:TypeName>System.DateTime</rd:TypeName>
+        </Field>
+        <Field Name="Ημερομ__Ολοκλήρ__από_τον_Έλεγχο">
+          <DataField>Ημερομ. Ολοκλήρ. από τον Έλεγχο</DataField>
+          <rd:TypeName>System.DateTime</rd:TypeName>
+        </Field>
+        <Field Name="Ημερομ__Ολοκλήρ__από_Παραγωγή">
+          <DataField>Ημερομ. Ολοκλήρ. από Παραγωγή</DataField>
+          <rd:TypeName>System.DateTime</rd:TypeName>
+        </Field>
+        <Field Name="Ημέρες_σε_Παραγωγή">
+          <DataField>Ημέρες σε Παραγωγή</DataField>
+          <rd:TypeName>System.Int32</rd:TypeName>
+        </Field>
+        <Field Name="Κατάσταση">
+          <DataField>Κατάσταση</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Ολοκλήρωση_εντός_1_εβδομάδας">
+          <DataField>Ολοκλήρωση εντός 1 εβδομάδας</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Ολοκλήρωση_1_2_εβδομάδες">
+          <DataField>Ολοκλήρωση 1-2 εβδομάδες</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Ολοκλήρωση_3_4_εβδομάδες">
+          <DataField>Ολοκλήρωση 3-4 εβδομάδες</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Ολοκλήρωση___4_εβδομάδες">
+          <DataField>Ολοκλήρωση &gt; 4 εβδομάδες</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Βήμα">
+          <DataField>Βήμα</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Ημέρες_Ολοκλήρωσης">
+          <DataField>Ημέρες Ολοκλήρωσης</DataField>
+          <rd:TypeName>System.Int32</rd:TypeName>
+        </Field>
+        <Field Name="Όλοι_οι_Χρήστες">
+          <DataField>Όλοι οι Χρήστες</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+      </Fields>
+    </DataSet>
+    <DataSet Name="Medium">
+      <Query>
+        <DataSourceName>YPS</DataSourceName>
+        <CommandText>
+select [Medium] = ('[' + m.code + '] ' + m.Name) 
+	from Medium m
+where m.IsActive = 1</CommandText>
+      </Query>
+      <Fields>
+        <Field Name="Medium">
+          <DataField>Medium</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+      </Fields>
+    </DataSet>
+  </DataSets>
+  <ReportParameters>
+    <ReportParameter Name="datefrom">
+      <DataType>DateTime</DataType>
+      <Prompt>Απο Ημερ.</Prompt>
+    </ReportParameter>
+    <ReportParameter Name="dateto">
+      <DataType>DateTime</DataType>
+      <Prompt>'Εως Ημερ.</Prompt>
+    </ReportParameter>
+    <ReportParameter Name="Medium">
+      <DataType>String</DataType>
+      <Prompt>Μέσο</Prompt>
+      <ValidValues>
+        <DataSetReference>
+          <DataSetName>Medium</DataSetName>
+          <ValueField>Medium</ValueField>
+          <LabelField>Medium</LabelField>
+        </DataSetReference>
+      </ValidValues>
+      <MultiValue>true</MultiValue>
+    </ReportParameter>
+  </ReportParameters>
+  <Language>el-GR</Language>
+  <ConsumeContainerWhitespace>true</ConsumeContainerWhitespace>
+  <rd:ReportUnitType>Inch</rd:ReportUnitType>
+  <rd:ReportID>85fa5c7d-1f20-43d6-b418-e55eb0e52f3a</rd:ReportID>
+</Report>

@@ -1,0 +1,1589 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Report xmlns="http://schemas.microsoft.com/sqlserver/reporting/2008/01/reportdefinition" xmlns:rd="http://schemas.microsoft.com/SQLServer/reporting/reportdesigner">
+  <Body>
+    <ReportItems>
+      <Tablix Name="BundleReportDounisBetweenVersionRRRTable">
+        <TablixBody>
+          <TablixColumns>
+            <TablixColumn>
+              <Width>1.5625in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>1.67708in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>2in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>2.94792in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>1.5in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>2.08333in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>1.77084in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>1.67708in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>3.54167in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>2.5625in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>1in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>2.64583in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>1.86458in</Width>
+            </TablixColumn>
+          </TablixColumns>
+          <TablixRows>
+            <TablixRow>
+              <Height>0.22in</Height>
+              <TablixCells>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="textbox2">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Κωδ. ΕΣ</Value>
+                              <Style>
+                                <FontStyle>Normal</FontStyle>
+                                <FontFamily>Tahoma</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <TextDecoration>None</TextDecoration>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style>
+                            <TextAlign>Left</TextAlign>
+                          </Style>
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>textbox2</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>DimGray</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>#1c3a70</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="textbox3">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Κωδ. Συμβολαίου</Value>
+                              <Style>
+                                <FontStyle>Normal</FontStyle>
+                                <FontFamily>Tahoma</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <TextDecoration>None</TextDecoration>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style>
+                            <TextAlign>Left</TextAlign>
+                          </Style>
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>textbox3</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>DimGray</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>#1c3a70</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="textbox4">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Ημερ. Υπογραφής Συμβ.</Value>
+                              <Style>
+                                <FontStyle>Normal</FontStyle>
+                                <FontFamily>Tahoma</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <TextDecoration>None</TextDecoration>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style>
+                            <TextAlign>Left</TextAlign>
+                          </Style>
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>textbox4</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>DimGray</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>#1c3a70</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="textbox5">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Ημερ. Δημιουργίας Συμβ.</Value>
+                              <Style>
+                                <FontStyle>Normal</FontStyle>
+                                <FontFamily>Tahoma</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <TextDecoration>None</TextDecoration>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style>
+                            <TextAlign>Left</TextAlign>
+                          </Style>
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>textbox5</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>DimGray</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>#1c3a70</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="textbox6">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Αρχική Αξία Συμβολαίου</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style>
+                            <TextAlign>Left</TextAlign>
+                          </Style>
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>textbox6</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>DimGray</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>#1c3a70</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="textbox7">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Τελική Αξία Συμβολαίου (μετά έκπτωσης)</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style>
+                            <TextAlign>Left</TextAlign>
+                          </Style>
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>textbox7</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>DimGray</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>#1c3a70</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="textbox8">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Τελική Αξία Internet (Bundle Προιόντος) </Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style>
+                            <TextAlign>Left</TextAlign>
+                          </Style>
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>textbox8</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>DimGray</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>#1c3a70</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="textbox9">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Τελική Αξία Print (Bundle Προιόντος)</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style>
+                            <TextAlign>Left</TextAlign>
+                          </Style>
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>textbox9</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>DimGray</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>#1c3a70</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="textbox10">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Bundle</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style>
+                            <TextAlign>Left</TextAlign>
+                          </Style>
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>textbox10</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>DimGray</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>#1c3a70</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="textbox11">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Ημερομηνία Έναρξης Προβολής</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style>
+                            <TextAlign>Left</TextAlign>
+                          </Style>
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>textbox11</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>DimGray</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>#1c3a70</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="textbox12">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Έκδοση</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style>
+                            <TextAlign>Left</TextAlign>
+                          </Style>
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>textbox12</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>DimGray</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>#1c3a70</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="textbox13">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Μέσο</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style>
+                            <TextAlign>Left</TextAlign>
+                          </Style>
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>textbox13</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>DimGray</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>#1c3a70</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="textbox14">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Καμπάνια</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style>
+                            <TextAlign>Left</TextAlign>
+                          </Style>
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>textbox14</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>DimGray</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>#1c3a70</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+              </TablixCells>
+            </TablixRow>
+            <TablixRow>
+              <Height>0.21in</Height>
+              <TablixCells>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Κωδ__Επιχ__Σημείου">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Κωδ__Επιχ__Σημείου.Value</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Κωδ__Επιχ__Σημείου</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>DimGray</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Συμβόλαιο">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Συμβόλαιο.Value</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Συμβόλαιο</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>DimGray</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Ημ__Υπογ__Συμβολαίου">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Ημ__Υπογ__Συμβολαίου.Value</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                                <Format>dd/MM/yyyy</Format>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Ημ__Υπογ__Συμβολαίου</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>DimGray</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Ημ__Δημ__Σμβολαίου">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Ημ__Δημ__Σμβολαίου.Value</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                                <Format>dd/MM/yyyy</Format>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Ημ__Δημ__Σμβολαίου</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>DimGray</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Ποσό_Συμβολαίου">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Ποσό_Συμβολαίου.Value</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                                <Format>#,0.00'€';(#,0.00'€')</Format>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style>
+                            <TextAlign>Right</TextAlign>
+                          </Style>
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Ποσό_Συμβολαίου</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>DimGray</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                        <rd:FormatSymbolCulture>el-GR</rd:FormatSymbolCulture>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Τελικό_Ποσό_Συμβολαίου">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Τελικό_Ποσό_Συμβολαίου.Value</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                                <Format>#,0.00'€';(#,0.00'€')</Format>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style>
+                            <TextAlign>Right</TextAlign>
+                          </Style>
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Τελικό_Ποσό_Συμβολαίου</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>DimGray</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                        <rd:FormatSymbolCulture>el-GR</rd:FormatSymbolCulture>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Ποσό_Internet">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Ποσό_Internet.Value</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                                <Format>#,0.00'€';(#,0.00'€')</Format>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style>
+                            <TextAlign>Right</TextAlign>
+                          </Style>
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Ποσό_Internet</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>DimGray</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                        <rd:FormatSymbolCulture>el-GR</rd:FormatSymbolCulture>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Ποσό_Print">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Ποσό_Print.Value</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                                <Format>#,0.00'€';(#,0.00'€')</Format>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style>
+                            <TextAlign>Right</TextAlign>
+                          </Style>
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Ποσό_Print</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>DimGray</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                        <rd:FormatSymbolCulture>el-GR</rd:FormatSymbolCulture>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Bundle">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Bundle.Value</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Bundle</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>DimGray</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Ημ__Έναρξης_Προβολής">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Ημ__Έναρξης_Προβολής.Value</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                                <Format>dd/MM/yyyy</Format>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Ημ__Έναρξης_Προβολής</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>DimGray</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Έκδοση">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Έκδοση.Value</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Έκδοση</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>DimGray</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Μέσο">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Μέσο.Value</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Μέσο</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>DimGray</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Καμπάνια">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Καμπάνια.Value</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Καμπάνια</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>DimGray</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+              </TablixCells>
+            </TablixRow>
+          </TablixRows>
+        </TablixBody>
+        <TablixColumnHierarchy>
+          <TablixMembers>
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+          </TablixMembers>
+        </TablixColumnHierarchy>
+        <TablixRowHierarchy>
+          <TablixMembers>
+            <TablixMember>
+              <KeepWithGroup>After</KeepWithGroup>
+              <RepeatOnNewPage>true</RepeatOnNewPage>
+              <KeepTogether>true</KeepTogether>
+            </TablixMember>
+            <TablixMember>
+              <Group Name="table1_Details_Group">
+                <DataElementName>Detail</DataElementName>
+              </Group>
+              <TablixMembers>
+                <TablixMember />
+              </TablixMembers>
+              <DataElementName>Detail_Collection</DataElementName>
+              <DataElementOutput>Output</DataElementOutput>
+              <KeepTogether>true</KeepTogether>
+            </TablixMember>
+          </TablixMembers>
+        </TablixRowHierarchy>
+        <DataSetName>BundleReportDounisBetweenVersionRRRDataSet</DataSetName>
+        <Top>0.33in</Top>
+        <Height>0.43in</Height>
+        <Width>26.83333in</Width>
+        <Style />
+      </Tablix>
+      <Textbox Name="textbox1">
+        <CanGrow>true</CanGrow>
+        <KeepTogether>true</KeepTogether>
+        <Paragraphs>
+          <Paragraph>
+            <TextRuns>
+              <TextRun>
+                <Value>Report Πωλήσεων Bundle Προϊόντων</Value>
+                <Style>
+                  <FontFamily>Tahoma</FontFamily>
+                  <FontSize>18pt</FontSize>
+                  <Color>#1c3a70</Color>
+                </Style>
+              </TextRun>
+            </TextRuns>
+            <Style />
+          </Paragraph>
+        </Paragraphs>
+        <rd:DefaultName>textbox1</rd:DefaultName>
+        <Height>0.33in</Height>
+        <Width>26.83333in</Width>
+        <ZIndex>1</ZIndex>
+        <Style>
+          <PaddingLeft>2pt</PaddingLeft>
+          <PaddingRight>2pt</PaddingRight>
+          <PaddingTop>2pt</PaddingTop>
+          <PaddingBottom>2pt</PaddingBottom>
+        </Style>
+      </Textbox>
+    </ReportItems>
+    <Height>0.76in</Height>
+    <Style />
+  </Body>
+  <Width>26.83333in</Width>
+  <Page>
+    <PageFooter>
+      <Height>0.27777in</Height>
+      <PrintOnFirstPage>true</PrintOnFirstPage>
+      <PrintOnLastPage>true</PrintOnLastPage>
+      <ReportItems>
+        <Textbox Name="Textbox15">
+          <CanGrow>true</CanGrow>
+          <KeepTogether>true</KeepTogether>
+          <Paragraphs>
+            <Paragraph>
+              <TextRuns>
+                <TextRun>
+                  <Value>BundleReport_BetweenVersionRRR</Value>
+                  <Style>
+                    <FontSize>8pt</FontSize>
+                    <Color>Silver</Color>
+                  </Style>
+                </TextRun>
+              </TextRuns>
+              <Style />
+            </Paragraph>
+          </Paragraphs>
+          <rd:DefaultName>Textbox15</rd:DefaultName>
+          <Top>0.06944in</Top>
+          <Height>0.20833in</Height>
+          <Width>2.8125in</Width>
+          <Style>
+            <Border>
+              <Style>None</Style>
+            </Border>
+            <PaddingLeft>2pt</PaddingLeft>
+            <PaddingRight>2pt</PaddingRight>
+            <PaddingTop>2pt</PaddingTop>
+            <PaddingBottom>2pt</PaddingBottom>
+          </Style>
+        </Textbox>
+      </ReportItems>
+      <Style>
+        <Border>
+          <Style>None</Style>
+        </Border>
+      </Style>
+    </PageFooter>
+    <LeftMargin>1in</LeftMargin>
+    <RightMargin>1in</RightMargin>
+    <TopMargin>1in</TopMargin>
+    <BottomMargin>1in</BottomMargin>
+    <Style />
+  </Page>
+  <AutoRefresh>0</AutoRefresh>
+  <DataSources>
+    <DataSource Name="YPS">
+      <DataSourceReference>YPS</DataSourceReference>
+      <rd:SecurityType>None</rd:SecurityType>
+      <rd:DataSourceID>6ff7b22f-e5f3-43f6-be95-82f203c9da47</rd:DataSourceID>
+    </DataSource>
+  </DataSources>
+  <DataSets>
+    <DataSet Name="BundleReportDounisBetweenVersionRRRDataSet">
+      <Query>
+        <DataSourceName>YPS</DataSourceName>
+        <QueryParameters>
+          <QueryParameter Name="@p0">
+            <Value>=Parameters!p0.Value</Value>
+          </QueryParameter>
+          <QueryParameter Name="@p1">
+            <Value>=Parameters!p1.Value</Value>
+          </QueryParameter>
+          <QueryParameter Name="@p2">
+            <Value>=Parameters!p2.Value</Value>
+          </QueryParameter>
+          <QueryParameter Name="@p3">
+            <Value>=Parameters!p3.Value</Value>
+          </QueryParameter>
+          <QueryParameter Name="@p4">
+            <Value>=Parameters!p4.Value</Value>
+          </QueryParameter>
+          <QueryParameter Name="@p5">
+            <Value>=Parameters!p5.Value</Value>
+          </QueryParameter>
+        </QueryParameters>
+        <CommandText>SELECT 
+		[t99].BusinessPointCode AS [Κωδ. Επιχ. Σημείου],
+		[t99].[ID] AS [Συμβόλαιο] ,
+        CONVERT(VARCHAR,[t99].[value],103) AS [Ημ. Υπογ. Συμβολαίου] ,
+        CONVERT(VARCHAR, [t99].[value2], 103) AS [Ημ. Δημ. Σμβολαίου] ,
+        [t99].[value3] AS [Ποσό Συμβολαίου] ,
+        [t99].[value4] AS [Τελικό Ποσό Συμβολαίου] ,
+        [t99].[value5] AS [Ποσό Internet] ,
+        [t99].[value6] AS [Ποσό Print] ,
+        [t99].[value7] AS [Bundle] ,
+        CONVERT(VARCHAR,[t99].[value8],103) AS [Ημ. Έναρξης Προβολής] ,
+        [t99].[value9] AS [Έκδοση] ,
+        [t99].[value10] AS [Μέσο] ,
+        [t99].[value11] AS [Καμπάνια]
+FROM    ( SELECT    [t4].[ID] ,
+							[t4].BusinessPointCode,
+                    ( SELECT    [t10].[SignedDate]
+                      FROM      ( SELECT TOP ( 1 )
+                                            [t5].[RelatedContractID]
+                                  FROM      [ContractProduct] AS [t5]
+                                            LEFT OUTER JOIN [Contract] AS [t6] ON [t6].[ID] = [t5].[RelatedContractID] and [t6].type in (0,2,3,4)
+                                            INNER JOIN [Product] AS [t7] ON [t7].[ID] = [t5].[ProductID]
+                                            CROSS JOIN [Advertisement] AS [t8]
+                                  WHERE     ( [t4].[ID] = [t6].[ID] )
+                                            AND ( [t4].[ProductID] = [t5].[ProductID] )
+                                            AND ( [t6].[SignedDate] IS NOT NULL )
+                                            AND ( [t6].[SignedDate] BETWEEN @p0 AND @p1)
+                                            --AND ( [t6].[SignedDate] &lt;  )
+                                            AND ( [t7].[IsComposite] = 1 )
+                                            AND ( [t6].[State] = @p2 )
+                                            AND ( [t8].[ContractProductID] = [t5].[ID] )
+                                ) AS [t9]
+                                LEFT OUTER JOIN [Contract] AS [t10] ON [t10].[ID] = [t9].[RelatedContractID] and [t10].type in (0,2,3,4)
+                    ) AS [value] ,
+                    ( SELECT    [t16].[CreatedOn]
+                      FROM      ( SELECT TOP ( 1 )
+                                            [t11].[RelatedContractID]
+                                  FROM      [ContractProduct] AS [t11]
+                                            LEFT OUTER JOIN [Contract] AS [t12] ON [t12].[ID] = [t11].[RelatedContractID] and [t12].type in (0,2,3,4)
+                                            INNER JOIN [Product] AS [t13] ON [t13].[ID] = [t11].[ProductID]
+                                            CROSS JOIN [Advertisement] AS [t14]
+                                  WHERE     ( [t4].[ID] = [t12].[ID] )
+                                            AND ( [t4].[ProductID] = [t11].[ProductID] )
+                                            AND ( [t12].[SignedDate] IS NOT NULL )
+                                            AND ( [t12].[SignedDate] BETWEEN  @p0 AND @p1)
+                                           -- AND ( [t12].[SignedDate] &lt;  )
+                                            AND ( [t13].[IsComposite] = 1 )
+                                            AND ( [t12].[State] = @p2 )
+                                            AND ( [t14].[ContractProductID] = [t11].[ID] )
+                                ) AS [t15]
+                                LEFT OUTER JOIN [Contract] AS [t16] ON [t16].[ID] = [t15].[RelatedContractID] and [t16].type in (0,2,3,4)
+                    ) AS [value2] ,
+                    ( SELECT    SUM([t23].[Price])
+                      FROM      ( SELECT TOP ( 1 )
+                                            [t17].[RelatedContractID]
+                                  FROM      [ContractProduct] AS [t17]
+                                            LEFT OUTER JOIN [Contract] AS [t18] ON [t18].[ID] = [t17].[RelatedContractID] and [t18].type in (0,2,3,4)
+                                            INNER JOIN [Product] AS [t19] ON [t19].[ID] = [t17].[ProductID]
+                                            CROSS JOIN [Advertisement] AS [t20]
+                                  WHERE     ( [t4].[ID] = [t18].[ID] )
+                                            AND ( [t4].[ProductID] = [t17].[ProductID] )
+                                            AND ( [t18].[SignedDate] IS NOT NULL )
+                                            AND ( [t18].[SignedDate] BETWEEN  @p0 AND @p1)
+                                            --AND ( [t18].[SignedDate] &lt; @p1 )
+                                            AND ( [t19].[IsComposite] = 1 )
+                                            AND ( [t18].[State] = @p2 )
+                                            AND ( [t20].[ContractProductID] = [t17].[ID] )
+                                ) AS [t21]
+                                LEFT OUTER JOIN [Contract] AS [t22] ON [t22].[ID] = [t21].[RelatedContractID] and [t22].type in (0,2,3,4)
+                                CROSS JOIN [ContractProduct] AS [t23]
+                      WHERE     [t23].[RelatedContractID] = [t22].[ID]
+                    ) AS [value3] ,
+                    ( SELECT    SUM(CASE WHEN [t30].state IN (3,4) AND [t30].AlteredAmount IS NOT NULL THEN [t30].AlteredAmount else [t30].Price - [t30].Discount - [t30].RulesDiscount end)
+                      FROM      ( SELECT TOP ( 1 )
+                                            [t24].[RelatedContractID]
+                                  FROM      [ContractProduct] AS [t24]
+                                            LEFT OUTER JOIN [Contract] AS [t25] ON [t25].[ID] = [t24].[RelatedContractID]
+                                            INNER JOIN [Product] AS [t26] ON [t26].[ID] = [t24].[ProductID]
+                                            CROSS JOIN [Advertisement] AS [t27]
+                                  WHERE     ( [t4].[ID] = [t25].[ID] )
+                                            AND ( [t4].[ProductID] = [t24].[ProductID] )
+                                            AND ( [t25].[SignedDate] IS NOT NULL )
+                                            AND ( [t25].[SignedDate] BETWEEN  @p0 AND @p1)
+                                         --   AND ( [t25].[SignedDate] &lt;  )
+                                            AND ( [t26].[IsComposite] = 1 )
+                                            AND ( [t25].[State] = @p2 )
+                                            AND ( [t27].[ContractProductID] = [t24].[ID] )
+                                ) AS [t28]
+                                LEFT OUTER JOIN [Contract] AS [t29] ON [t29].[ID] = [t28].[RelatedContractID] and [t29].type in (0,2,3,4)
+                                CROSS JOIN [ContractProduct] AS [t30]
+                      WHERE     [t30].[RelatedContractID] = [t29].[ID]
+                    ) AS [value4] ,
+                    ( SELECT    SUM(CASE WHEN [t31].state IN (3,4) AND [t34].AlteredAmount IS NOT NULL THEN [t34].AlteredAmount else [t34].Price - [t34].Discount - [t34].RulesDiscount end)
+                      FROM      [ContractProduct] AS [t31]
+                                LEFT OUTER JOIN [Contract] AS [t32] ON [t32].[ID] = [t31].[RelatedContractID]
+                                INNER JOIN [Product] AS [t33] ON [t33].[ID] = [t31].[ProductID]
+                                CROSS JOIN [Advertisement] AS [t34]
+                                INNER JOIN [VersionSection] AS [t35] ON [t35].[ID] = [t34].[VersionSectionID]
+                                INNER JOIN [MediumVersion] AS [t36] ON [t36].[ID] = [t35].[MediumVersionID]
+                                INNER JOIN [Medium] AS [t37] ON [t37].[ID] = [t36].[MediumID]
+                      WHERE     ( [t37].[MediumTypeID] = @p3 )
+                                AND ( [t4].[ID] = [t32].[ID] )
+                                AND ( [t4].[ProductID] = [t31].[ProductID] )
+                                AND ( [t32].[SignedDate] IS NOT NULL )
+                                AND ( [t32].[SignedDate] BETWEEN  @p0 AND @p1)
+                               -- AND ( [t32].[SignedDate] &lt;  )
+                                AND ( [t33].[IsComposite] = 1 )
+                                AND ( [t32].[State] = @p2 )
+                                AND ( [t34].[ContractProductID] = [t31].[ID] )
+                    ) AS [value5] ,
+                    ( SELECT    SUM(CASE WHEN [t38].state IN (3,4) AND [t41].AlteredAmount IS NOT NULL THEN [t41].AlteredAmount else [t41].Price - [t41].Discount - [t41].RulesDiscount end)
+                      FROM      [ContractProduct] AS [t38]
+                                LEFT OUTER JOIN [Contract] AS [t39] ON [t39].[ID] = [t38].[RelatedContractID] and [t39].type in (0,2,3,4)
+                                INNER JOIN [Product] AS [t40] ON [t40].[ID] = [t38].[ProductID]
+                                CROSS JOIN [Advertisement] AS [t41]
+                                INNER JOIN [VersionSection] AS [t42] ON [t42].[ID] = [t41].[VersionSectionID]
+                                INNER JOIN [MediumVersion] AS [t43] ON [t43].[ID] = [t42].[MediumVersionID]
+                                INNER JOIN [Medium] AS [t44] ON [t44].[ID] = [t43].[MediumID]
+                      WHERE     ( [t44].[MediumTypeID] = @p4 )
+                                AND ( [t4].[ID] = [t39].[ID] )
+                                AND ( [t4].[ProductID] = [t38].[ProductID] )
+                                AND ( [t39].[SignedDate] IS NOT NULL )
+                                AND ( [t39].[SignedDate] BETWEEN @p0 AND @p1)
+                                --AND ( [t39].[SignedDate] &lt;  )
+                                AND ( [t40].[IsComposite] = 1 )
+                                AND ( [t39].[State] = @p2 )
+                                AND ( [t41].[ContractProductID] = [t38].[ID] )
+                    ) AS [value6] ,
+                    ( ( (
+        SELECT  [t50].[Code]
+        FROM    ( SELECT TOP ( 1 )
+                            [t45].[ProductID]
+                  FROM      [ContractProduct] AS [t45]
+                            LEFT OUTER JOIN [Contract] AS [t46] ON [t46].[ID] = [t45].[RelatedContractID] and [t46].type in (0,2,3,4)
+                            INNER JOIN [Product] AS [t47] ON [t47].[ID] = [t45].[ProductID]
+                            CROSS JOIN [Advertisement] AS [t48]
+                  WHERE     ( [t4].[ID] = [t46].[ID] )
+                            AND ( [t4].[ProductID] = [t45].[ProductID] )
+                            AND ( [t46].[SignedDate] IS NOT NULL )
+                            AND ( [t46].[SignedDate] BETWEEN @p0 AND @p1)
+                           -- AND ( [t46].[SignedDate] &lt;  )
+                            AND ( [t47].[IsComposite] = 1 )
+                            AND ( [t46].[State] = @p2 )
+                            AND ( [t48].[ContractProductID] = [t45].[ID] )
+                ) AS [t49]
+                INNER JOIN [Product] AS [t50] ON [t50].[ID] = [t49].[ProductID]   )                ) + ' - ' + @p5 )   
+                + ( (
+        SELECT  [t56].[Name]
+        FROM    ( SELECT TOP ( 1 )
+                            [t51].[ProductID]
+                  FROM      [ContractProduct] AS [t51]
+                            LEFT OUTER JOIN [Contract] AS [t52] ON [t52].[ID] = [t51].[RelatedContractID] and [t52].type in (0,2,3,4)
+                            INNER JOIN [Product] AS [t53] ON [t53].[ID] = [t51].[ProductID]
+                            CROSS JOIN [Advertisement] AS [t54]
+                  WHERE     ( [t4].[ID] = [t52].[ID] )
+                            AND ( [t4].[ProductID] = [t51].[ProductID] )
+                            AND ( [t52].[SignedDate] IS NOT NULL )
+                            AND ( [t52].[SignedDate] BETWEEN @p0 AND @p1)
+                          --  AND ( [t52].[SignedDate] &lt;  )
+                            AND ( [t53].[IsComposite] = 1 )
+                            AND ( [t52].[State] = @p2 )
+                            AND ( [t54].[ContractProductID] = [t51].[ID] )
+                ) AS [t55]
+                INNER JOIN [Product] AS [t56] ON [t56].[ID] = [t55].[ProductID]
+        )
+                      ) AS [value7] ,
+                    ( SELECT    [t61].[AdvBeginDate]
+                      FROM      ( SELECT TOP ( 1 )
+                                            [t60].[AdvBeginDate]
+                                  FROM      [ContractProduct] AS [t57]
+                                            LEFT OUTER JOIN [Contract] AS [t58] ON [t58].[ID] = [t57].[RelatedContractID] and [t58].type in (0,2,3,4)
+                                            INNER JOIN [Product] AS [t59] ON [t59].[ID] = [t57].[ProductID]
+                                            CROSS JOIN [Advertisement] AS [t60]
+                                  WHERE     ( [t60].[ProductID] = [t4].[ProductID] )
+                                            AND ( [t60].[ProductKitID] IS NULL )
+                                            AND ( [t4].[ID] = [t58].[ID] )
+                                            AND ( [t4].[ProductID] = [t57].[ProductID] )
+                                            AND ( [t58].[SignedDate] IS NOT NULL )
+                                            AND ( [t58].[SignedDate] BETWEEN @p0 AND @p1)
+                                          --  AND ( [t58].[SignedDate] &lt;  )
+                                            AND ( [t59].[IsComposite] = 1 )
+                                            AND ( [t58].[State] = @p2 )
+                                            AND ( [t60].[ContractProductID] = [t57].[ID] )
+                                ) AS [t61]
+                    ) AS [value8] ,
+                    ( ( /*@p6
+                        +*/ ( (
+        SELECT  [t68].[Code]
+        FROM    ( SELECT TOP ( 1 )
+                            [t62].[VersionSectionID]
+                  FROM      [ContractProduct] AS [t62]
+                            LEFT OUTER JOIN [Contract] AS [t63] ON [t63].[ID] = [t62].[RelatedContractID] and [t63].type in (0,2,3,4)
+                            INNER JOIN [Product] AS [t64] ON [t64].[ID] = [t62].[ProductID]
+                            CROSS JOIN [Advertisement] AS [t65]
+                  WHERE     ( [t4].[ID] = [t63].[ID] )
+                            AND ( [t4].[ProductID] = [t62].[ProductID] )
+                            AND ( [t63].[SignedDate] IS NOT NULL )
+                            AND ( [t63].[SignedDate]   BETWEEN @p0 and @p1)
+                           -- AND ( [t63].[SignedDate] &lt;  )
+                            AND ( [t64].[IsComposite] = 1 )
+                            AND ( [t63].[State] = @p2 )
+                            AND ( [t65].[ContractProductID] = [t62].[ID] )
+                ) AS [t66]
+                INNER JOIN [VersionSection] AS [t67] ON [t67].[ID] = [t66].[VersionSectionID]
+                INNER JOIN [MediumVersion] AS [t68] ON [t68].[ID] = [t67].[MediumVersionID]
+        )
+                          ) ) /*+ @p7*/ )
+--                    + ( (
+--        SELECT  [t75].[Name]
+--        FROM    ( SELECT TOP ( 1 )
+--                            [t69].[VersionSectionID]
+--                  FROM      [ContractProduct] AS [t69]
+--                            LEFT OUTER JOIN [Contract] AS [t70] ON [t70].[ID] = [t69].[RelatedContractID]
+--                            INNER JOIN [Product] AS [t71] ON [t71].[ID] = [t69].[ProductID]
+--                            CROSS JOIN [Advertisement] AS [t72]
+--                  WHERE     ( [t4].[ID] = [t70].[ID] )
+--                            AND ( [t4].[ProductID] = [t69].[ProductID] )
+--                            AND ( [t70].[SignedDate] IS NOT NULL )
+--                            AND ( [t70].[SignedDate] &gt; @p0 )
+--                            AND ( [t70].[SignedDate] &lt; @p1 )
+--                            AND ( [t71].[IsComposite] = 1 )
+--                            AND ( [t70].[State] = @p2 )
+--                            AND ( [t72].[ContractProductID] = [t69].[ID] )
+--                ) AS [t73]
+--                INNER JOIN [VersionSection] AS [t74] ON [t74].[ID] = [t73].[VersionSectionID]
+--                INNER JOIN [MediumVersion] AS [t75] ON [t75].[ID] = [t74].[MediumVersionID]
+--        )
+--                      ) 
+					AS [value9] ,
+                    ( SELECT    [t83].[Name]
+                      FROM      ( SELECT TOP ( 1 )
+                                            [t76].[VersionSectionID]
+                                  FROM      [ContractProduct] AS [t76]
+                                            LEFT OUTER JOIN [Contract] AS [t77] ON [t77].[ID] = [t76].[RelatedContractID] and [t77].type in (0,2,3,4)
+                                            INNER JOIN [Product] AS [t78] ON [t78].[ID] = [t76].[ProductID]
+                                            CROSS JOIN [Advertisement] AS [t79]
+                                  WHERE     ( [t4].[ID] = [t77].[ID] )
+                                            AND ( [t4].[ProductID] = [t76].[ProductID] )
+                                            AND ( [t77].[SignedDate] IS NOT NULL )
+                                            AND ( [t77].[SignedDate] BETWEEN @p0 AND @p1 )
+                                            --AND ( [t77].[SignedDate] &lt;  )
+                                            AND ( [t78].[IsComposite] = 1 )
+                                            AND ( [t77].[State] = @p2 )
+                                            AND ( [t79].[ContractProductID] = [t76].[ID] )
+                                ) AS [t80]
+                                INNER JOIN [VersionSection] AS [t81] ON [t81].[ID] = [t80].[VersionSectionID]
+                                INNER JOIN [MediumVersion] AS [t82] ON [t82].[ID] = [t81].[MediumVersionID]
+                                INNER JOIN [Medium] AS [t83] ON [t83].[ID] = [t82].[MediumID]
+                    ) AS [value10] ,
+                    ( SELECT '[' + [t98].code + '] ' + [t98].[Name]
+                      FROM      ( SELECT TOP ( 1 )
+                                            [t90].[TargetGroupItemID]
+                                  FROM      ( SELECT TOP ( 1 )
+                                                        [t84].[RelatedContractID]
+                                              FROM      [ContractProduct] AS [t84]
+                                                        LEFT OUTER JOIN [Contract]
+                                                        AS [t85] ON [t85].[ID] = [t84].[RelatedContractID] and [t85].type in (0,2,3,4)
+                                                        INNER JOIN [Product]
+                                                        AS [t86] ON [t86].[ID] = [t84].[ProductID]
+                                                        CROSS JOIN [Advertisement]
+                                                        AS [t87]
+                                              WHERE     ( [t4].[ID] = [t85].[ID] )
+                                                        AND ( [t4].[ProductID] = [t84].[ProductID] )
+                                                        AND ( [t85].[SignedDate] IS NOT NULL )
+                                                        AND ( [t85].[SignedDate] BETWEEN @p0 AND @p1)
+                                                        --AND ( [t85].[SignedDate] &lt;  )
+                                                        AND ( [t86].[IsComposite] = 1 )
+                                                        AND ( [t85].[State] = @p2 )
+                                                        AND ( [t87].[ContractProductID] = [t84].[ID] )
+                                            ) AS [t88]
+                                            LEFT OUTER JOIN [Contract] AS [t89] ON [t89].[ID] = [t88].[RelatedContractID] and [t89].type in (0,2,3,4)
+                                            CROSS JOIN [TargetGroupItemValue]
+                                            AS [t90]
+                                  WHERE     ( [t90].[ContractID] = ( (
+                SELECT  [t95].[RelatedContractID]
+                FROM    ( SELECT TOP ( 1 )
+                                    [t91].[RelatedContractID]
+                          FROM      [ContractProduct] AS [t91]
+                                    LEFT OUTER JOIN [Contract] AS [t92] ON [t92].[ID] = [t91].[RelatedContractID] and [t92].type in (0,2,3,4)
+                                    INNER JOIN [Product] AS [t93] ON [t93].[ID] = [t91].[ProductID]
+                                    CROSS JOIN [Advertisement] AS [t94]
+                          WHERE     ( [t4].[ID] = [t92].[ID] )
+                                    AND ( [t4].[ProductID] = [t91].[ProductID] )
+                                    AND ( [t92].[SignedDate] IS NOT NULL )
+                                    AND ( [t92].[SignedDate] BETWEEN  @p0 AND @p1)
+                                   -- AND ( [t92].[SignedDate] &lt;  )
+                                    AND ( [t93].[IsComposite] = 1 )
+                                    AND ( [t92].[State] = @p2 )
+                                    AND ( [t94].[ContractProductID] = [t91].[ID] )
+                        ) AS [t95]
+                )
+                                                              ) )
+                                            AND ( [t90].[ContractID] = [t89].[ID] )
+                                ) AS [t96]
+                                INNER JOIN [TargetGroupItem] AS [t97] ON [t97].[ID] = [t96].[TargetGroupItemID]
+                                INNER JOIN [Campaign] AS [t98] ON [t98].[ID] = [t97].[CampaignID]
+                    ) AS [value11]
+          FROM      ( SELECT    [t1].[ID] ,
+                                [t0].[ProductID],
+                                [t500].[Code] BusinessPointCode
+                      FROM      [ContractProduct] AS [t0]
+                      LEFT JOIN [BusinessPoint] [t500] ON t0.BusinessPointID = t500.ID
+                                LEFT OUTER JOIN [Contract] AS [t1] ON [t1].[ID] = [t0].[RelatedContractID] and [t1].type in (0,2,3,4)
+                                INNER JOIN [Product] AS [t2] ON [t2].[ID] = [t0].[ProductID]
+                                CROSS JOIN [Advertisement] AS [t3]
+                      WHERE     ( [t1].[SignedDate] IS NOT NULL )
+                                AND ( [t1].[SignedDate] BETWEEN  @p0 AND @p1)
+                               -- AND ( [t1].[SignedDate] &lt;  )
+                                AND ( [t2].[IsComposite] = 1 )
+                                AND ( [t1].[State] = @p2 )
+                                AND ( [t3].[ContractProductID] = [t0].[ID] )
+                      GROUP BY  [t1].[ID] ,
+                                [t0].[ProductID],
+                                [t500].[Code]
+                    ) AS [t4]
+        ) AS [t99]
+        
+--WHERE [t99].[value2] &gt; '20120112'        
+ORDER BY [t99].[ID]</CommandText>
+        <rd:UseGenericDesigner>true</rd:UseGenericDesigner>
+      </Query>
+      <Fields>
+        <Field Name="Κωδ__Επιχ__Σημείου">
+          <DataField>Κωδ. Επιχ. Σημείου</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Συμβόλαιο">
+          <DataField>Συμβόλαιο</DataField>
+          <rd:TypeName>System.Int32</rd:TypeName>
+        </Field>
+        <Field Name="Ημ__Υπογ__Συμβολαίου">
+          <DataField>Ημ. Υπογ. Συμβολαίου</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Ημ__Δημ__Σμβολαίου">
+          <DataField>Ημ. Δημ. Σμβολαίου</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Ποσό_Συμβολαίου">
+          <DataField>Ποσό Συμβολαίου</DataField>
+          <rd:TypeName>System.Decimal</rd:TypeName>
+        </Field>
+        <Field Name="Τελικό_Ποσό_Συμβολαίου">
+          <DataField>Τελικό Ποσό Συμβολαίου</DataField>
+          <rd:TypeName>System.Decimal</rd:TypeName>
+        </Field>
+        <Field Name="Ποσό_Internet">
+          <DataField>Ποσό Internet</DataField>
+          <rd:TypeName>System.Decimal</rd:TypeName>
+        </Field>
+        <Field Name="Ποσό_Print">
+          <DataField>Ποσό Print</DataField>
+          <rd:TypeName>System.Decimal</rd:TypeName>
+        </Field>
+        <Field Name="Bundle">
+          <DataField>Bundle</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Ημ__Έναρξης_Προβολής">
+          <DataField>Ημ. Έναρξης Προβολής</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Έκδοση">
+          <DataField>Έκδοση</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Μέσο">
+          <DataField>Μέσο</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Καμπάνια">
+          <DataField>Καμπάνια</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+      </Fields>
+    </DataSet>
+  </DataSets>
+  <ReportParameters>
+    <ReportParameter Name="p0">
+      <DataType>DateTime</DataType>
+      <Prompt>Ημ. Από</Prompt>
+    </ReportParameter>
+    <ReportParameter Name="p1">
+      <DataType>DateTime</DataType>
+      <Prompt>Ημ. Έως</Prompt>
+    </ReportParameter>
+    <ReportParameter Name="p2">
+      <DataType>String</DataType>
+      <DefaultValue>
+        <Values>
+          <Value>1</Value>
+        </Values>
+      </DefaultValue>
+      <Prompt>p2</Prompt>
+      <Hidden>true</Hidden>
+    </ReportParameter>
+    <ReportParameter Name="p3">
+      <DataType>String</DataType>
+      <DefaultValue>
+        <Values>
+          <Value>2</Value>
+        </Values>
+      </DefaultValue>
+      <Prompt>p3</Prompt>
+      <Hidden>true</Hidden>
+    </ReportParameter>
+    <ReportParameter Name="p4">
+      <DataType>String</DataType>
+      <DefaultValue>
+        <Values>
+          <Value>3</Value>
+        </Values>
+      </DefaultValue>
+      <Prompt>p4</Prompt>
+      <Hidden>true</Hidden>
+    </ReportParameter>
+    <ReportParameter Name="p5">
+      <DataType>String</DataType>
+      <DefaultValue>
+        <Values>
+          <Value />
+        </Values>
+      </DefaultValue>
+      <AllowBlank>true</AllowBlank>
+      <Prompt>p5</Prompt>
+      <Hidden>true</Hidden>
+    </ReportParameter>
+  </ReportParameters>
+  <Language>el-GR</Language>
+  <ConsumeContainerWhitespace>true</ConsumeContainerWhitespace>
+  <rd:ReportUnitType>Inch</rd:ReportUnitType>
+  <rd:ReportID>c177ac07-efbf-48d9-83c8-c5bc257bd7b4</rd:ReportID>
+</Report>

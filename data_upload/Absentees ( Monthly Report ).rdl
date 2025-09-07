@@ -1,0 +1,588 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Report xmlns="http://schemas.microsoft.com/sqlserver/reporting/2008/01/reportdefinition" xmlns:rd="http://schemas.microsoft.com/SQLServer/reporting/reportdesigner">
+  <Body>
+    <ReportItems>
+      <Tablix Name="AbsenteesTable">
+        <TablixBody>
+          <TablixColumns>
+            <TablixColumn>
+              <Width>1.61458in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>2.16667in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>1.21875in</Width>
+            </TablixColumn>
+            <TablixColumn>
+              <Width>1.27083in</Width>
+            </TablixColumn>
+          </TablixColumns>
+          <TablixRows>
+            <TablixRow>
+              <Height>0.22in</Height>
+              <TablixCells>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="textbox2">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Personnel Number</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>textbox2</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>#1c3a70</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="textbox3">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>LAST NAME</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>textbox3</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>#1c3a70</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="textbox4">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>FIRST NAME</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>textbox4</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>#1c3a70</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="textbox5">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>Day Absent</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                                <FontSize>11pt</FontSize>
+                                <FontWeight>Bold</FontWeight>
+                                <Color>White</Color>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style>
+                            <TextAlign>Right</TextAlign>
+                          </Style>
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>textbox5</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <BackgroundColor>#1c3a70</BackgroundColor>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+              </TablixCells>
+            </TablixRow>
+            <TablixRow>
+              <Height>0.21in</Height>
+              <TablixCells>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="Personnel_Number">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!Personnel_Number.Value</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>Personnel_Number</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="LAST_NAME">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!LAST_NAME.Value</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>LAST_NAME</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="FIRST_NAME">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!FIRST_NAME.Value</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style />
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>FIRST_NAME</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+                <TablixCell>
+                  <CellContents>
+                    <Textbox Name="DayAbsent">
+                      <CanGrow>true</CanGrow>
+                      <KeepTogether>true</KeepTogether>
+                      <Paragraphs>
+                        <Paragraph>
+                          <TextRuns>
+                            <TextRun>
+                              <Value>=Fields!DayAbsent.Value</Value>
+                              <Style>
+                                <FontFamily>Tahoma</FontFamily>
+                                <Format>dd/MM/yyyy</Format>
+                              </Style>
+                            </TextRun>
+                          </TextRuns>
+                          <Style>
+                            <TextAlign>Right</TextAlign>
+                          </Style>
+                        </Paragraph>
+                      </Paragraphs>
+                      <rd:DefaultName>DayAbsent</rd:DefaultName>
+                      <Style>
+                        <Border>
+                          <Color>LightGrey</Color>
+                          <Style>Solid</Style>
+                        </Border>
+                        <PaddingLeft>2pt</PaddingLeft>
+                        <PaddingRight>2pt</PaddingRight>
+                        <PaddingTop>2pt</PaddingTop>
+                        <PaddingBottom>2pt</PaddingBottom>
+                      </Style>
+                    </Textbox>
+                  </CellContents>
+                </TablixCell>
+              </TablixCells>
+            </TablixRow>
+          </TablixRows>
+        </TablixBody>
+        <TablixColumnHierarchy>
+          <TablixMembers>
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+            <TablixMember />
+          </TablixMembers>
+        </TablixColumnHierarchy>
+        <TablixRowHierarchy>
+          <TablixMembers>
+            <TablixMember>
+              <KeepWithGroup>After</KeepWithGroup>
+              <RepeatOnNewPage>true</RepeatOnNewPage>
+              <KeepTogether>true</KeepTogether>
+            </TablixMember>
+            <TablixMember>
+              <Group Name="table1_Details_Group">
+                <DataElementName>Detail</DataElementName>
+              </Group>
+              <TablixMembers>
+                <TablixMember />
+              </TablixMembers>
+              <DataElementName>Detail_Collection</DataElementName>
+              <DataElementOutput>Output</DataElementOutput>
+              <KeepTogether>true</KeepTogether>
+            </TablixMember>
+          </TablixMembers>
+        </TablixRowHierarchy>
+        <DataSetName>AbsenteesDataset</DataSetName>
+        <Top>0.36in</Top>
+        <Height>0.43in</Height>
+        <Width>6.27083in</Width>
+        <Style />
+      </Tablix>
+      <Textbox Name="textbox1">
+        <CanGrow>true</CanGrow>
+        <KeepTogether>true</KeepTogether>
+        <Paragraphs>
+          <Paragraph>
+            <TextRuns>
+              <TextRun>
+                <Value>Absentees ( Monthly Report )</Value>
+                <Style>
+                  <FontFamily>Tahoma</FontFamily>
+                  <FontSize>18pt</FontSize>
+                  <FontWeight>Bold</FontWeight>
+                  <Color>#1c3a70</Color>
+                </Style>
+              </TextRun>
+            </TextRuns>
+            <Style />
+          </Paragraph>
+        </Paragraphs>
+        <rd:DefaultName>textbox1</rd:DefaultName>
+        <Height>0.36in</Height>
+        <Width>5in</Width>
+        <ZIndex>1</ZIndex>
+        <RepeatWith>AbsenteesTable</RepeatWith>
+        <Style>
+          <Border>
+            <Style>None</Style>
+          </Border>
+          <PaddingLeft>2pt</PaddingLeft>
+          <PaddingRight>2pt</PaddingRight>
+          <PaddingTop>2pt</PaddingTop>
+          <PaddingBottom>2pt</PaddingBottom>
+        </Style>
+      </Textbox>
+      <Textbox Name="Textbox6">
+        <CanGrow>true</CanGrow>
+        <KeepTogether>true</KeepTogether>
+        <Paragraphs>
+          <Paragraph>
+            <TextRuns>
+              <TextRun>
+                <Value>Absentees ( Monthly Report )</Value>
+                <Style>
+                  <FontFamily>Tahoma</FontFamily>
+                  <FontSize>8pt</FontSize>
+                  <Color>Gray</Color>
+                </Style>
+              </TextRun>
+            </TextRuns>
+            <Style />
+          </Paragraph>
+        </Paragraphs>
+        <rd:DefaultName>Textbox6</rd:DefaultName>
+        <Top>1.2175in</Top>
+        <Height>0.25in</Height>
+        <Width>2.02083in</Width>
+        <ZIndex>2</ZIndex>
+        <Style>
+          <Border>
+            <Style>None</Style>
+          </Border>
+          <PaddingLeft>2pt</PaddingLeft>
+          <PaddingRight>2pt</PaddingRight>
+          <PaddingTop>2pt</PaddingTop>
+          <PaddingBottom>2pt</PaddingBottom>
+        </Style>
+      </Textbox>
+    </ReportItems>
+    <Height>1.4675in</Height>
+    <Style />
+  </Body>
+  <Width>9.72917in</Width>
+  <Page>
+    <LeftMargin>1in</LeftMargin>
+    <RightMargin>1in</RightMargin>
+    <TopMargin>1in</TopMargin>
+    <BottomMargin>1in</BottomMargin>
+    <Style />
+  </Page>
+  <AutoRefresh>0</AutoRefresh>
+  <DataSources>
+    <DataSource Name="Datasource1">
+      <ConnectionProperties>
+        <DataProvider>SQL</DataProvider>
+        <ConnectString>Data Source=OWL01\VERITRAX;Initial Catalog=AxTrax1</ConnectString>
+      </ConnectionProperties>
+      <rd:SecurityType>DataBase</rd:SecurityType>
+      <rd:DataSourceID>73253d89-f1ee-4f59-8c68-5b5a2c79b37d</rd:DataSourceID>
+    </DataSource>
+  </DataSources>
+  <DataSets>
+    <DataSet Name="AbsenteesDataset">
+      <Query>
+        <DataSourceName>Datasource1</DataSourceName>
+        <QueryParameters>
+          <QueryParameter Name="@dateto">
+            <Value>=Parameters!dateto.Value</Value>
+          </QueryParameter>
+          <QueryParameter Name="@datefrom">
+            <Value>=Parameters!datefrom.Value</Value>
+          </QueryParameter>
+        </QueryParameters>
+        <CommandText>--declare @dateto datetime,
+--        @datefrom datetime
+        
+--set @dateto = '2021-03-31';
+--set @datefrom = '2021-03-01'; 
+ 
+ IF OBJECT_ID('tempdb..#xo_jc_lavi_temp') IS NOT NULL DROP TABLE #xo_jc_lavi_temp;
+
+SELECT     ABSENCES.PERSON_CD, PERSONS.LAST_NAME, PERSONS.FIRST_NAME, ABSENCES.DATE_INI, ABSENCES.DATE_FIN, ABSENCES.PERIOD
+into #xo_jc_lavi_temp
+FROM         cardinal12.HrMaster.dbo.T0X_PRSDAT AS PERSONDATA INNER JOIN
+			 cardinal12.HrMaster.dbo.T0X_PERSON AS PERSONS ON PERSONDATA.PERSON_CD = PERSONS.CODE INNER JOIN
+			 cardinal12.HrMaster.dbo.T9X_PRSABS AS ABSENCES ON PERSONS.CODE = ABSENCES.PERSON_CD
+WHERE PERSONDATA.NOTICE_DATE &gt; DATEADD(year, 10, @dateto)
+AND (DATE_INI &gt;= @datefrom  or DATE_FIN &gt;= @datefrom  )
+AND (DATE_INI &lt;= @dateto  or DATE_FIN &lt;= @dateto  )
+
+ IF OBJECT_ID('tempdb..#xo_jc_badd_temp') IS NOT NULL DROP TABLE #xo_jc_badd_temp;
+select distinct Code, LAST_NAME, FIRST_NAME 
+into #xo_jc_badd_temp
+from cardinal12.HrMaster.dbo.T0X_PERSON AS PERSONS
+
+
+select [Personnel Number], xo_jc_badd.LAST_NAME, xo_jc_badd.FIRST_NAME,   DayAbsent 
+from (
+select [Personnel Number], LAST_NAME, FIRST_NAME,   DayAbsent 
+from (	
+	select distinct [Personnel Number], LAST_NAME, FIRST_NAME, cast(Day as datetime) as DayAbsent,
+	max(case when cast(xo_jc_nonpres.Day as datetime) &gt;= cast(xo_jc_lavi.DATE_INI  as datetime) AND cast(xo_jc_nonpres.Day  as datetime) &lt;= cast(xo_jc_lavi.DATE_FIN  as datetime) then 1 else 0 end ) as maxflag
+	from
+	(
+		select sentoni.[Personnel Number], sentoni.Day,  max(sentoni.presence) as mpr from (
+			select distinct [Personnel Number], Day,  presence  from 
+			(
+				select distinct workers.[Personnel Number], working_days.Day, 0 as presence
+				from 
+				(
+					select  distinct   
+					ca.tIdentification AS [Personnel Number], ev.dtEventReal
+					from 
+					dbo.tblEvents as ev INNER JOIN
+					dbo.tblEmployees as ca
+					ON ev.IdEmpNum = ca.iEmployeeNum
+					where 
+					ev.dtEventReal &gt;=	@datefrom  
+					and ev.dtEventReal &lt;= DateAdd(day, 1, @dateto ) 
+					and ca.tIdentification &lt;&gt; ''
+				) as workers,
+				(
+					select  distinct   
+					'20' + SUBSTRING(REPLACE(CONVERT(VARCHAR(10), ev.dtEventReal, 4), '.', '/'), 7, 2) 
+						+ '-' + SUBSTRING(REPLACE(CONVERT(VARCHAR(10), ev.dtEventReal, 4), '.', '/'), 4, 2) 
+						+ '-' + SUBSTRING(REPLACE(CONVERT(VARCHAR(10), ev.dtEventReal, 4), '.', '/'), 1, 2) AS Day
+					from 
+					dbo.tblEvents as ev INNER JOIN
+					dbo.tblEmployees as ca
+					ON ev.IdEmpNum = ca.iEmployeeNum
+					where 
+					ev.dtEventReal &gt;=	@datefrom  
+					and ev.dtEventReal &lt;=		DateAdd(day, 1, @dateto ) 
+					and datepart(weekday, 
+						SUBSTRING(REPLACE(CONVERT(VARCHAR(10), ev.dtEventReal, 4), '.', '/'), 4, 2)
+						+ '/' + SUBSTRING(REPLACE(CONVERT(VARCHAR(10), ev.dtEventReal, 4), '.', '/'), 1, 2)
+						+ '/' + '20' + SUBSTRING(REPLACE(CONVERT(VARCHAR(10), ev.dtEventReal, 4), '.', '/'), 7, 2) 
+					) not in (1,7)
+				) as working_days
+			) as a
+			union all
+			(
+				select  distinct   
+				ca.tIdentification AS [Personnel Number], 
+				'20' + SUBSTRING(REPLACE(CONVERT(VARCHAR(10), ev.dtEventReal, 4), '.', '/'), 7, 2) 
+					+ '-' + SUBSTRING(REPLACE(CONVERT(VARCHAR(10), ev.dtEventReal, 4), '.', '/'), 4, 2) 
+					+ '-' + SUBSTRING(REPLACE(CONVERT(VARCHAR(10), ev.dtEventReal, 4), '.', '/'), 1, 2) AS Day, 1 as presence
+				from 
+				dbo.tblEvents as ev INNER JOIN
+				dbo.tblEmployees as ca
+					ON ev.IdEmpNum = ca.iEmployeeNum
+				where 
+				ev.dtEventReal &gt;=	@datefrom  
+				and ev.dtEventReal &lt;=		DateAdd(day, 1, @dateto ) 
+				and ca.tIdentification &lt;&gt; ''
+				and datepart(weekday, 
+					SUBSTRING(REPLACE(CONVERT(VARCHAR(10), ev.dtEventReal, 4), '.', '/'), 4, 2)
+					+ '/' + SUBSTRING(REPLACE(CONVERT(VARCHAR(10), ev.dtEventReal, 4), '.', '/'), 1, 2)
+					+ '/' + '20' + SUBSTRING(REPLACE(CONVERT(VARCHAR(10), ev.dtEventReal, 4), '.', '/'), 7, 2) 
+				) not in (1,7)
+			) 
+		) as sentoni
+		group by sentoni.[Personnel Number], sentoni.Day
+		having max(sentoni.presence) = 0
+	) as xo_jc_nonpres								
+	LEFT OUTER JOIN  #xo_jc_lavi_temp xo_jc_lavi										
+	on  xo_jc_nonpres.[Personnel Number] = xo_jc_lavi.PERSON_CD
+	--where xo_jc_nonpres.[Personnel Number] not in (select * from  dbo.XO_Excepted_AMYs)
+	group by  [Personnel Number], LAST_NAME, FIRST_NAME, Day 
+) as outter_rim
+where maxflag = 0
+) as even_outter,#xo_jc_badd_temp as xo_jc_badd				
+where even_outter.[Personnel Number] = xo_jc_badd.Code
+--and [Personnel Number] not in (select * from  dbo.XO_Excepted_AMYs)
+order by DayAbsent
+
+drop table #xo_jc_lavi_temp
+drop table #xo_jc_badd_temp</CommandText>
+        <rd:UseGenericDesigner>true</rd:UseGenericDesigner>
+      </Query>
+      <Fields>
+        <Field Name="Personnel_Number">
+          <DataField>Personnel Number</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="LAST_NAME">
+          <DataField>LAST_NAME</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="FIRST_NAME">
+          <DataField>FIRST_NAME</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="DayAbsent">
+          <DataField>DayAbsent</DataField>
+          <rd:TypeName>System.DateTime</rd:TypeName>
+        </Field>
+      </Fields>
+    </DataSet>
+  </DataSets>
+  <ReportParameters>
+    <ReportParameter Name="datefrom">
+      <DataType>DateTime</DataType>
+      <Prompt>Ημ. Από</Prompt>
+    </ReportParameter>
+    <ReportParameter Name="dateto">
+      <DataType>DateTime</DataType>
+      <Prompt>Ημ. Έως</Prompt>
+    </ReportParameter>
+  </ReportParameters>
+  <Language>en-US</Language>
+  <ConsumeContainerWhitespace>true</ConsumeContainerWhitespace>
+  <rd:ReportUnitType>Inch</rd:ReportUnitType>
+  <rd:ReportID>1a5bad25-dc84-436c-bc81-8e1079784eb3</rd:ReportID>
+</Report>

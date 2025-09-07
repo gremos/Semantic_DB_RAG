@@ -1,0 +1,1552 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Report xmlns="http://schemas.microsoft.com/sqlserver/reporting/2016/01/reportdefinition" xmlns:rd="http://schemas.microsoft.com/SQLServer/reporting/reportdesigner" xmlns:am="http://schemas.microsoft.com/sqlserver/reporting/authoringmetadata">
+  <am:AuthoringMetadata>
+    <am:CreatedBy>
+      <am:Name>SSDTRS</am:Name>
+      <am:Version>17.12.35707.178</am:Version>
+    </am:CreatedBy>
+    <am:UpdatedBy>
+      <am:Name>SSDTRS</am:Name>
+      <am:Version>17.12.35707.178</am:Version>
+    </am:UpdatedBy>
+    <am:LastModifiedTimestamp>2025-02-07T07:14:17.8843882Z</am:LastModifiedTimestamp>
+  </am:AuthoringMetadata>
+  <AutoRefresh>0</AutoRefresh>
+  <DataSources>
+    <DataSource Name="ItApps">
+      <DataSourceReference>ITApps</DataSourceReference>
+      <rd:SecurityType>None</rd:SecurityType>
+      <rd:DataSourceID>2ef6d708-a2a2-4b18-b203-1d92b26499be</rd:DataSourceID>
+    </DataSource>
+  </DataSources>
+  <DataSets>
+    <DataSet Name="MainDataset">
+      <Query>
+        <DataSourceName>ItApps</DataSourceName>
+        <QueryParameters>
+          <QueryParameter Name="@yearfrom">
+            <Value>=Parameters!yearfrom.Value</Value>
+          </QueryParameter>
+          <QueryParameter Name="@yearto">
+            <Value>=Parameters!yearto.Value</Value>
+          </QueryParameter>
+          <QueryParameter Name="@monthto2">
+            <Value>=Parameters!monthto2.Value</Value>
+          </QueryParameter>
+          <QueryParameter Name="@allcategories">
+            <Value>=Parameters!allcategories.Value</Value>
+          </QueryParameter>
+          <QueryParameter Name="@yearto2">
+            <Value>=Parameters!yearto2.Value</Value>
+          </QueryParameter>
+          <QueryParameter Name="@monthfrom">
+            <Value>=Parameters!monthfrom.Value</Value>
+          </QueryParameter>
+          <QueryParameter Name="@monthto">
+            <Value>=Parameters!monthto.Value</Value>
+          </QueryParameter>
+          <QueryParameter Name="@yearfrom2">
+            <Value>=Parameters!yearfrom2.Value</Value>
+          </QueryParameter>
+          <QueryParameter Name="@monthfrom2">
+            <Value>=Parameters!monthfrom2.Value</Value>
+          </QueryParameter>
+        </QueryParameters>
+        <CommandText>--declare @catinternal table (ID nvarchar(max));
+--declare @catinternal2 nvarchar(max);
+--Declare @allcategories nvarchar(max),
+--@monthfrom nvarchar(2),
+--@monthto nvarchar(2),
+--@yearfrom nvarchar(4),
+--@yearto nvarchar(4),
+--@monthfrom2 nvarchar(2),
+--@monthto2 nvarchar(2),
+--@yearfrom2 nvarchar(4),
+--@yearto2 nvarchar(4)
+Declare @dateto date;
+Declare @dateto2 date;
+
+
+--set @yearfrom = '2018'--02
+--set @monthfrom = '02'
+--set @yearto = '2018'
+--set @monthto = '02'
+
+--set @yearfrom2 = '2019'--02
+--set @monthfrom2 = '03'
+--set @yearto2 = '2019'
+--set @monthto2 = '03'
+--set @allcategories = '3548,3549'
+
+
+
+
+
+
+ 
+ begin
+       if @monthto+1&lt;10 set @dateto = cast(@yearto+'0'+cast(@monthto+1 as nvarchar(2))+'01' as date)
+  else if @monthto &lt; 12 set @dateto = cast(@yearto+cast(@monthto+1 as nvarchar(2))+'01' as date)
+  else if @monthto = 12 set @dateto = cast(cast(@yearto+1 as nvarchar) + '0101' as date)
+ end 
+
+  
+ begin
+       if @monthto2+1&lt;10 set @dateto2 = cast(@yearto2+'0'+cast(@monthto2+1 as nvarchar(2))+'01' as date)
+  else if @monthto2 &lt; 12 set @dateto2 = cast(@yearto2+cast(@monthto2+1 as nvarchar(2))+'01' as date)
+  else if @monthto2 = 12 set @dateto2 = cast(cast(@yearto2+1 as nvarchar) + '0101' as date)
+ end 
+------------------------------------------------------------------------------------------------------------------
+--Active headings from YPS----------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------
+IF OBJECT_ID('tempdb..#ActiveHeading') IS NOT NULL
+    DROP TABLE #ActiveHeading
+
+select distinct mh.Code 
+into #ActiveHeading
+  from yps.dbo.VersionGroupItem vgi
+  join yps.dbo.MasterHeading mh on vgi.SourceHeadingID = mh.id 
+ where vgi.MediumVersionID = 36 
+   and vgi.IsActive = 1
+   and vgi.ID &lt;&gt; 23
+   and mh.code &lt;&gt; 'ALL'
+
+------------------------------------------------------------------------------------------------------------------
+--Displays from begining of given year to be used in MO field ----------------------------------------------------
+------------------------------------------------------------------------------------------------------------------
+--set @catinternal2 = @category;
+--set @catinternal2 = replace(@category,',',';');
+--print @catinternal2
+
+--insert into @catinternal
+--select * 
+--from  [dbo].[fn_SplitString](@catinternal2,';')  
+
+--select * from @catinternal
+
+IF OBJECT_ID('tempdb..#categories') IS NOT NULL
+    DROP TABLE #categories
+
+SELECT *
+into #categories
+FROM itapps.dbo.SplitToInt(@allcategories, ',') a
+join heading.Heading h on replace(h.Code, 'H', '') = a.items
+
+
+IF OBJECT_ID('tempdb..#stats') IS NOT NULL  DROP TABLE #stats
+select s.heading, s.countofdisplays, cast(cast(s.LocalPeriod as nvarchar(6))+'01' as date) as  LocalPeriod
+into #stats
+from #categories ct
+join [gypneu01synapse01.sql.azuresynapse.net].[GYPNEU01DWPL01].[dbo].[StatsHeadingsMonthly] s on  s.Heading collate Greek_100_CI_AI = ct.items
+where cast(cast(s.LocalPeriod as nvarchar(6))+'01' as date) &gt; = cast(@yearfrom+'01'+'01' as date)   
+    and cast(cast(s.LocalPeriod as nvarchar(6))+'01' as date) &lt; @dateto--cast(@yearto+'0'+cast(@monthto+1 as nvarchar(2))+'01' as date)
+
+
+IF OBJECT_ID('tempdb..#yy') IS NOT NULL  DROP TABLE #yy
+ select s.Heading ,
+		ct.NameGR as 'Κατηγορία',
+		sum(s.CountOfDisplays) as CountOfDisplays
+   into #yy
+   from #categories ct
+   --join heading.Heading h on replace(h.Code, 'H', '') = ct.items
+   --join itapps.xocateg.category_text cat on ct.items = cat.id
+   join #stats s on  s.Heading collate Greek_100_CI_AI = ct.items
+where s.LocalPeriod &gt; = cast(@yearfrom+'01'+'01' as date)   
+    and s.LocalPeriod &lt; @dateto--cast(@yearto+'0'+cast(@monthto+1 as nvarchar(2))+'01' as date)
+
+    --and s.Heading in (@category)
+	--and cat.language_code  = 'el'
+	--and cat.id between 3000 and 6000
+  Group By s.Heading,
+           ct.NameGR
+--		   select * from #yy
+--select DATEDIFF(MONTH,cast(@yearfrom+'01'+'01' as date),cast(@yearto+'0'+cast(@monthto+1 as nvarchar(2))+'01' as date))
+
+
+IF OBJECT_ID('tempdb..#yy2') IS NOT NULL  DROP TABLE #yy2
+ select s.Heading ,
+		ct.NameGR as 'Κατηγορία',
+		sum(s.CountOfDisplays) as CountOfDisplays
+   into #yy2
+   from #categories ct
+   --join heading.Heading h on replace(h.Code, 'H', '') = ct.items
+   join #stats s on  s.Heading collate Greek_100_CI_AI = ct.items
+where s.LocalPeriod &gt; = cast(@yearfrom2+'01'+'01' as date)   
+    and s.LocalPeriod &lt; @dateto2--cast(@yearto+'0'+cast(@monthto+1 as nvarchar(2))+'01' as date)
+  Group By s.Heading,
+           ct.NameGR
+
+------------------------------------------------------------------------------------------------------------------
+--Month Displays for the given months ----------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------
+
+IF OBJECT_ID('tempdb..#mm') IS NOT NULL DROP TABLE #mm
+ select 
+ Sum(s.CountOfDisplays) as CountOfDisplays,
+        s.Heading ,
+		ct.NameGR as 'Κατηγορία'
+   into #mm
+   from #categories ct
+   --join heading.Heading h on replace(h.Code, 'H', '') = ct.items
+   --join itapps.xocateg.category_text cat on ct.items = cat.id
+   join #stats s on s.Heading collate Greek_100_CI_AI = ct.items
+where s.LocalPeriod &gt; = cast(@yearfrom+@monthfrom+'01' as date)   
+    and s.LocalPeriod &lt; @dateto--cast(@yearto+'0'+cast(@monthto+1 as nvarchar(2))+'01' as date)
+  Group By s.Heading,
+           ct.NameGR
+
+IF OBJECT_ID('tempdb..#mm2') IS NOT NULL DROP TABLE #mm2
+ select 
+ Sum(s.CountOfDisplays) as CountOfDisplays,
+        s.Heading ,
+		ct.NameGR as 'Κατηγορία'
+   into #mm2
+   from #categories ct
+   --join heading.Heading h on replace(h.Code, 'H', '') = ct.items
+   --join itapps.xocateg.category_text cat on ct.items = cat.id
+   join #stats s on s.Heading collate Greek_100_CI_AI = ct.items
+where s.LocalPeriod &gt; = cast(@yearfrom2+@monthfrom2+'01' as date)   
+    and s.LocalPeriod &lt; @dateto2--cast(@yearto+'0'+cast(@monthto+1 as nvarchar(2))+'01' as date)
+  Group By s.Heading,
+           ct.NameGR
+
+
+
+ select m.CountOfDisplays as 'Αναζητήσεις Κατηγοριών',
+			 m2.CountOfDisplays as 'Αναζητήσεις Κατηγοριών2',
+        y.Heading as 'Κωδικός Κατηγορίας',
+		y.[Κατηγορία] ,
+-- MO Total Displays from begining of given year to given @monthto / count of months 
+		round(y.CountOfDisplays/DATEDIFF(MONTH,cast(@yearfrom+'01'+'01' as date),@dateto),0) as MO ,
+		round(y2.CountOfDisplays/DATEDIFF(MONTH,cast(@yearfrom2+'01'+'01' as date),@dateto2),0) as MO2
+
+   from #yy y
+   join #ActiveHeading ah on ah.Code =  y.heading collate Greek_100_CI_AI
+   join #mm m on m.heading = y.heading
+	 left join #yy2 y2 on y2.heading = y.heading
+	 left join #mm2 m2 on m2.heading = y.heading
+
+
+order by y.Heading
+--
+--select * from [gyp-neu-01-avocet-01.database.windows.net].[GYP-NEU-01-DB0`].[dbo].[StatsHeadingsMonthly] s 
+--where s.localPeriod in (201801,201802,201803) and s.heading = 3548</CommandText>
+      </Query>
+      <Fields>
+        <Field Name="Αναζητήσεις_Κατηγοριών">
+          <DataField>Αναζητήσεις Κατηγοριών</DataField>
+          <rd:TypeName>System.Decimal</rd:TypeName>
+        </Field>
+        <Field Name="Αναζητήσεις_Κατηγοριών2">
+          <DataField>Αναζητήσεις Κατηγοριών2</DataField>
+          <rd:TypeName>System.Decimal</rd:TypeName>
+        </Field>
+        <Field Name="Κωδικός_Κατηγορίας">
+          <DataField>Κωδικός Κατηγορίας</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="Κατηγορία">
+          <DataField>Κατηγορία</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="MO">
+          <DataField>MO</DataField>
+          <rd:TypeName>System.Decimal</rd:TypeName>
+        </Field>
+        <Field Name="MO2">
+          <DataField>MO2</DataField>
+          <rd:TypeName>System.Decimal</rd:TypeName>
+        </Field>
+      </Fields>
+    </DataSet>
+    <DataSet Name="Year">
+      <Query>
+        <DataSourceName>ItApps</DataSourceName>
+        <CommandText>
+with yearlist1 as 
+(
+    select 2018 as year, cast(2018 as varchar(4)) as yearlabel
+    union all
+    select yl.year + 1 as year, cast(yl.year + 1 as varchar(4)) as yearlabel
+    from yearlist1 yl
+    where yl.year + 1 &lt;= YEAR(GetDate())
+)
+
+select year,yearlabel from yearlist1 
+union select null,'-' order by year desc;
+
+</CommandText>
+      </Query>
+      <Fields>
+        <Field Name="year">
+          <DataField>year</DataField>
+          <rd:TypeName>System.Int32</rd:TypeName>
+        </Field>
+        <Field Name="yearlabel">
+          <DataField>yearlabel</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+      </Fields>
+    </DataSet>
+    <DataSet Name="Heading">
+      <Query>
+        <DataSourceName>ItApps</DataSourceName>
+        <QueryParameters>
+          <QueryParameter Name="@categorysearch">
+            <Value>=Parameters!categorysearch.Value</Value>
+          </QueryParameter>
+        </QueryParameters>
+        <CommandText>
+IF OBJECT_ID('tempdb..#temp') IS NOT NULL DROP TABLE #temp
+select  Replace(h.Code, 'H', '')  as id  , '[' +Replace(h.Code, 'H', '') +']' + ' - ' + h.NameGR as cat
+into #temp 
+from heading.Heading h
+order by 1
+
+
+select *
+from #temp t
+WHERE 
+(cat LIKE '%' + @categorysearch + '%'
+OR      
+ISNULL(LEN(@categorysearch),0)=0
+)
+</CommandText>
+      </Query>
+      <Fields>
+        <Field Name="id">
+          <DataField>id</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+        <Field Name="cat">
+          <DataField>cat</DataField>
+          <rd:TypeName>System.String</rd:TypeName>
+        </Field>
+      </Fields>
+    </DataSet>
+  </DataSets>
+  <ReportSections>
+    <ReportSection>
+      <Body>
+        <ReportItems>
+          <Tablix Name="Tablix1">
+            <TablixBody>
+              <TablixColumns>
+                <TablixColumn>
+                  <Width>3.69062cm</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>7.65937cm</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>6.65396cm</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>4.82833cm</Width>
+                </TablixColumn>
+              </TablixColumns>
+              <TablixRows>
+                <TablixRow>
+                  <Height>0.6cm</Height>
+                  <TablixCells>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox3">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Κωδ. Κατηγορίας</Value>
+                                  <Style>
+                                    <FontFamily>Tahoma</FontFamily>
+                                    <FontSize>11pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                    <Color>White</Color>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox3</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>#1c3a70</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox5">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Κατηγορία</Value>
+                                  <Style>
+                                    <FontFamily>Tahoma</FontFamily>
+                                    <FontSize>11pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                    <Color>White</Color>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox5</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>#1c3a70</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox11">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Αναζητήσεις </Value>
+                                  <Style>
+                                    <FontFamily>Tahoma</FontFamily>
+                                    <FontSize>11pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                    <Color>White</Color>
+                                  </Style>
+                                </TextRun>
+                                <TextRun>
+                                  <Value>=Parameters!yearfrom.Value+Parameters!monthfrom.Value+" - "+Parameters!yearto.Value+Parameters!monthto.Value</Value>
+                                  <Style>
+                                    <FontFamily>Tahoma</FontFamily>
+                                    <FontSize>11pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                    <Color>White</Color>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox11</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>#1c3a70</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox2">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>M.O. </Value>
+                                  <Style>
+                                    <FontFamily>Tahoma</FontFamily>
+                                    <FontSize>11pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                    <Color>White</Color>
+                                  </Style>
+                                </TextRun>
+                                <TextRun>
+                                  <Label>MOValue</Label>
+                                  <Value>=Parameters!yearfrom.Value+"01 - "+Parameters!yearto.Value+Parameters!monthto.Value</Value>
+                                  <Style>
+                                    <FontFamily>Tahoma</FontFamily>
+                                    <FontSize>11pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                    <Color>White</Color>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox2</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>#1c3a70</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                  </TablixCells>
+                </TablixRow>
+                <TablixRow>
+                  <Height>0.6cm</Height>
+                  <TablixCells>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Κωδικός_Κατηγορίας">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!Κωδικός_Κατηγορίας.Value</Value>
+                                  <Style>
+                                    <FontFamily>Tahoma</FontFamily>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Κωδικός_Κατηγορίας</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Κατηγορία">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!Κατηγορία.Value</Value>
+                                  <Style>
+                                    <FontFamily>Tahoma</FontFamily>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Κατηγορία</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Αναζητήσεις_Κατηγοριών">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!Αναζητήσεις_Κατηγοριών.Value</Value>
+                                  <Style>
+                                    <FontFamily>Tahoma</FontFamily>
+                                    <Format>#,0</Format>
+                                    <Language>el-GR</Language>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Αναζητήσεις_Κατηγοριών</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox4">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!MO.Value</Value>
+                                  <Style>
+                                    <FontFamily>Tahoma</FontFamily>
+                                    <Format>#,0</Format>
+                                    <Language>el-GR</Language>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox4</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                  </TablixCells>
+                </TablixRow>
+              </TablixRows>
+            </TablixBody>
+            <TablixColumnHierarchy>
+              <TablixMembers>
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+              </TablixMembers>
+            </TablixColumnHierarchy>
+            <TablixRowHierarchy>
+              <TablixMembers>
+                <TablixMember>
+                  <KeepWithGroup>After</KeepWithGroup>
+                </TablixMember>
+                <TablixMember>
+                  <Group Name="Details" />
+                </TablixMember>
+              </TablixMembers>
+            </TablixRowHierarchy>
+            <DataSetName>MainDataset</DataSetName>
+            <Top>0.9144cm</Top>
+            <Height>1.2cm</Height>
+            <Width>22.83228cm</Width>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+            </Style>
+          </Tablix>
+          <Textbox Name="Textbox1">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>StatsCategoriesDisplayGreeceV2</Value>
+                    <Style>
+                      <FontSize>8pt</FontSize>
+                      <Color>Gray</Color>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>Textbox1</rd:DefaultName>
+            <Top>11.05076cm</Top>
+            <Height>0.61736cm</Height>
+            <Width>4.80188cm</Width>
+            <ZIndex>1</ZIndex>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Textbox Name="textbox1">
+            <CanGrow>true</CanGrow>
+            <KeepTogether>true</KeepTogether>
+            <Paragraphs>
+              <Paragraph>
+                <TextRuns>
+                  <TextRun>
+                    <Value>Πανελλαδικές Αναζητήσεις - Version 2</Value>
+                    <Style>
+                      <FontFamily>Tahoma</FontFamily>
+                      <FontSize>18pt</FontSize>
+                      <Color>#1c3a70</Color>
+                    </Style>
+                  </TextRun>
+                </TextRuns>
+                <Style />
+              </Paragraph>
+            </Paragraphs>
+            <rd:DefaultName>textbox1</rd:DefaultName>
+            <Left>0.03528cm</Left>
+            <Height>0.36in</Height>
+            <Width>6.87451in</Width>
+            <ZIndex>2</ZIndex>
+            <Style>
+              <PaddingLeft>2pt</PaddingLeft>
+              <PaddingRight>2pt</PaddingRight>
+              <PaddingTop>2pt</PaddingTop>
+              <PaddingBottom>2pt</PaddingBottom>
+            </Style>
+          </Textbox>
+          <Tablix Name="Tablix9">
+            <TablixBody>
+              <TablixColumns>
+                <TablixColumn>
+                  <Width>7.2367cm</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>5.33104cm</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>4.96063cm</Width>
+                </TablixColumn>
+                <TablixColumn>
+                  <Width>3.77cm</Width>
+                </TablixColumn>
+              </TablixColumns>
+              <TablixRows>
+                <TablixRow>
+                  <Height>0.6cm</Height>
+                  <TablixCells>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox9">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Αναζητήσεις  </Value>
+                                  <Style>
+                                    <FontFamily>Tahoma</FontFamily>
+                                    <FontSize>11pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                    <Color>White</Color>
+                                  </Style>
+                                </TextRun>
+                                <TextRun>
+                                  <Value>=Parameters!yearfrom2.Value + Parameters!monthfrom2.Value + " - " + Parameters!yearto2.Value + Parameters!monthto2.Value</Value>
+                                  <Style>
+                                    <FontFamily>Tahoma</FontFamily>
+                                    <FontSize>11pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                    <Color>White</Color>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox9</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>#1c3a70</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox6">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Μ.Ο. </Value>
+                                  <Style>
+                                    <FontFamily>Tahoma</FontFamily>
+                                    <FontSize>11pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                    <Color>White</Color>
+                                  </Style>
+                                </TextRun>
+                                <TextRun>
+                                  <Label>MOValue2</Label>
+                                  <Value>=Parameters!yearfrom2.Value+"01 - "+Parameters!yearto2.Value+Parameters!monthto2.Value</Value>
+                                  <Style>
+                                    <FontFamily>Tahoma</FontFamily>
+                                    <FontSize>11pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                    <Color>White</Color>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox6</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>#1c3a70</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox12">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Διαφορά Αναζητήσεων</Value>
+                                  <Style>
+                                    <FontFamily>Tahoma</FontFamily>
+                                    <FontSize>11pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                    <Color>White</Color>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox12</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>#1c3a70</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox14">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>Διαφορά Μ.Ο.</Value>
+                                  <Style>
+                                    <FontFamily>Tahoma</FontFamily>
+                                    <FontSize>11pt</FontSize>
+                                    <FontWeight>Bold</FontWeight>
+                                    <Color>White</Color>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox14</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <BackgroundColor>#1c3a70</BackgroundColor>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                  </TablixCells>
+                </TablixRow>
+                <TablixRow>
+                  <Height>0.6cm</Height>
+                  <TablixCells>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="MO">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!Αναζητήσεις_Κατηγοριών2.Value</Value>
+                                  <Style>
+                                    <FontFamily>Tahoma</FontFamily>
+                                    <Format>#,0</Format>
+                                    <Language>el-GR</Language>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>MO</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox7">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=Fields!MO2.Value</Value>
+                                  <Style>
+                                    <FontFamily>Tahoma</FontFamily>
+                                    <Format>0;(0)</Format>
+                                    <Language>el-GR</Language>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox7</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox13">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=(Fields!Αναζητήσεις_Κατηγοριών2.Value - Fields!Αναζητήσεις_Κατηγοριών.Value) / Fields!Αναζητήσεις_Κατηγοριών.Value</Value>
+                                  <Style>
+                                    <FontFamily>Tahoma</FontFamily>
+                                    <Format>0.00%</Format>
+                                    <Language>el-GR</Language>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox13</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                    <TablixCell>
+                      <CellContents>
+                        <Textbox Name="Textbox15">
+                          <CanGrow>true</CanGrow>
+                          <KeepTogether>true</KeepTogether>
+                          <Paragraphs>
+                            <Paragraph>
+                              <TextRuns>
+                                <TextRun>
+                                  <Value>=(Fields!MO2.Value - Fields!MO.Value) / Fields!MO.Value</Value>
+                                  <Style>
+                                    <FontFamily>Tahoma</FontFamily>
+                                    <Format>0.00%</Format>
+                                    <Language>el-GR</Language>
+                                  </Style>
+                                </TextRun>
+                              </TextRuns>
+                              <Style />
+                            </Paragraph>
+                          </Paragraphs>
+                          <rd:DefaultName>Textbox15</rd:DefaultName>
+                          <Style>
+                            <Border>
+                              <Color>LightGrey</Color>
+                              <Style>Solid</Style>
+                            </Border>
+                            <PaddingLeft>2pt</PaddingLeft>
+                            <PaddingRight>2pt</PaddingRight>
+                            <PaddingTop>2pt</PaddingTop>
+                            <PaddingBottom>2pt</PaddingBottom>
+                          </Style>
+                        </Textbox>
+                      </CellContents>
+                    </TablixCell>
+                  </TablixCells>
+                </TablixRow>
+              </TablixRows>
+            </TablixBody>
+            <TablixColumnHierarchy>
+              <TablixMembers>
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+                <TablixMember />
+              </TablixMembers>
+            </TablixColumnHierarchy>
+            <TablixRowHierarchy>
+              <TablixMembers>
+                <TablixMember>
+                  <KeepWithGroup>After</KeepWithGroup>
+                </TablixMember>
+                <TablixMember>
+                  <Group Name="Details2" />
+                </TablixMember>
+              </TablixMembers>
+            </TablixRowHierarchy>
+            <DataSetName>MainDataset</DataSetName>
+            <Top>0.9144cm</Top>
+            <Left>22.83228cm</Left>
+            <Height>1.2cm</Height>
+            <Width>21.29837cm</Width>
+            <ZIndex>3</ZIndex>
+            <Visibility>
+              <Hidden>=Parameters!comparison.Value = False</Hidden>
+            </Visibility>
+            <Style>
+              <Border>
+                <Style>None</Style>
+              </Border>
+            </Style>
+          </Tablix>
+        </ReportItems>
+        <Height>4.59375in</Height>
+        <Style />
+      </Body>
+      <Width>17.37427in</Width>
+      <Page>
+        <PageHeight>29.7cm</PageHeight>
+        <PageWidth>21cm</PageWidth>
+        <LeftMargin>2cm</LeftMargin>
+        <RightMargin>2cm</RightMargin>
+        <TopMargin>2cm</TopMargin>
+        <BottomMargin>2cm</BottomMargin>
+        <ColumnSpacing>0.13cm</ColumnSpacing>
+        <Style />
+      </Page>
+    </ReportSection>
+  </ReportSections>
+  <ReportParameters>
+    <ReportParameter Name="yearfrom">
+      <DataType>String</DataType>
+      <Prompt>Έτος Από</Prompt>
+      <ValidValues>
+        <DataSetReference>
+          <DataSetName>Year</DataSetName>
+          <ValueField>year</ValueField>
+          <LabelField>year</LabelField>
+        </DataSetReference>
+      </ValidValues>
+    </ReportParameter>
+    <ReportParameter Name="monthfrom">
+      <DataType>String</DataType>
+      <Prompt>Μήνας Από</Prompt>
+      <ValidValues>
+        <ParameterValues>
+          <ParameterValue>
+            <Value>01</Value>
+            <Label>Ιανουάριος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>02</Value>
+            <Label>Φεβρουάριος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>03</Value>
+            <Label>Μάρτιος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>04</Value>
+            <Label>Απρίλιος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>05</Value>
+            <Label>Μάϊος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>06</Value>
+            <Label>Ιούνιος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>07</Value>
+            <Label>Ιούλιος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>08</Value>
+            <Label>Αύγουστος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>09</Value>
+            <Label>Σεπτέμβριος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>10</Value>
+            <Label>Οκτώβριος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>11</Value>
+            <Label>Νοέμβριος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>12</Value>
+            <Label>Δεκέμβριος</Label>
+          </ParameterValue>
+        </ParameterValues>
+      </ValidValues>
+      <UsedInQuery>True</UsedInQuery>
+    </ReportParameter>
+    <ReportParameter Name="yearto">
+      <DataType>String</DataType>
+      <Prompt>Έτος Έως</Prompt>
+      <ValidValues>
+        <DataSetReference>
+          <DataSetName>Year</DataSetName>
+          <ValueField>year</ValueField>
+          <LabelField>year</LabelField>
+        </DataSetReference>
+      </ValidValues>
+    </ReportParameter>
+    <ReportParameter Name="monthto">
+      <DataType>String</DataType>
+      <Prompt>Μήνας Έως</Prompt>
+      <ValidValues>
+        <ParameterValues>
+          <ParameterValue>
+            <Value>01</Value>
+            <Label>Ιανουάριος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>02</Value>
+            <Label>Φερουάριος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>03</Value>
+            <Label>Μάρτιος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>04</Value>
+            <Label>Απρίλιος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>05</Value>
+            <Label>Μάϊος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>06</Value>
+            <Label>Ιούνιος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>07</Value>
+            <Label>Ιούλιος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>08</Value>
+            <Label>Αύγουστος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>09</Value>
+            <Label>Σεπτέμβριος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>10</Value>
+            <Label>Οκτώβριος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>11</Value>
+            <Label>Νοέμβριος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>12</Value>
+            <Label>Δεκέμβριος</Label>
+          </ParameterValue>
+        </ParameterValues>
+      </ValidValues>
+    </ReportParameter>
+    <ReportParameter Name="yearfrom2">
+      <DataType>String</DataType>
+      <Nullable>true</Nullable>
+      <DefaultValue>
+        <Values>
+          <Value xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:nil="true" />
+        </Values>
+      </DefaultValue>
+      <AllowBlank>true</AllowBlank>
+      <Prompt>Έτος από(2)</Prompt>
+      <ValidValues>
+        <DataSetReference>
+          <DataSetName>Year</DataSetName>
+          <ValueField>year</ValueField>
+          <LabelField>yearlabel</LabelField>
+        </DataSetReference>
+      </ValidValues>
+    </ReportParameter>
+    <ReportParameter Name="monthfrom2">
+      <DataType>String</DataType>
+      <Nullable>true</Nullable>
+      <DefaultValue>
+        <Values>
+          <Value xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:nil="true" />
+        </Values>
+      </DefaultValue>
+      <AllowBlank>true</AllowBlank>
+      <Prompt>Μήνας από(2)</Prompt>
+      <ValidValues>
+        <ParameterValues>
+          <ParameterValue>
+            <Value>01</Value>
+            <Label>Ιανουάριος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>02</Value>
+            <Label>Φεβρουάριος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>03</Value>
+            <Label>Μάρτιος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>04</Value>
+            <Label>Απρίλιος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>05</Value>
+            <Label>Μάιος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>06</Value>
+            <Label>Ιούνιος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>07</Value>
+            <Label>Ιούλιος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>08</Value>
+            <Label>Αύγουστος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>09</Value>
+            <Label>Σεπτέμβριος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>10</Value>
+            <Label>Οκτώβριος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>11</Value>
+            <Label>Νοέμβριος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>12</Value>
+            <Label>Δεκέμβριος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Label>-</Label>
+          </ParameterValue>
+        </ParameterValues>
+      </ValidValues>
+    </ReportParameter>
+    <ReportParameter Name="yearto2">
+      <DataType>String</DataType>
+      <Nullable>true</Nullable>
+      <DefaultValue>
+        <Values>
+          <Value xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:nil="true" />
+        </Values>
+      </DefaultValue>
+      <AllowBlank>true</AllowBlank>
+      <Prompt>Έτος εώς(2)</Prompt>
+      <ValidValues>
+        <DataSetReference>
+          <DataSetName>Year</DataSetName>
+          <ValueField>year</ValueField>
+          <LabelField>yearlabel</LabelField>
+        </DataSetReference>
+      </ValidValues>
+    </ReportParameter>
+    <ReportParameter Name="monthto2">
+      <DataType>String</DataType>
+      <Nullable>true</Nullable>
+      <DefaultValue>
+        <Values>
+          <Value xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:nil="true" />
+        </Values>
+      </DefaultValue>
+      <AllowBlank>true</AllowBlank>
+      <Prompt>Μήνας εώς(2)</Prompt>
+      <ValidValues>
+        <ParameterValues>
+          <ParameterValue>
+            <Value>01</Value>
+            <Label>Ιανουάριος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>02</Value>
+            <Label>Φεβρουάριος </Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>03</Value>
+            <Label>Μάρτιος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>04</Value>
+            <Label>Απρίλιος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>05</Value>
+            <Label>Μάιος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>06</Value>
+            <Label>Ιούνιος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>07</Value>
+            <Label>Ιούλιος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>08</Value>
+            <Label>Αύγουστος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>09</Value>
+            <Label>Σεπτέμβριος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>10</Value>
+            <Label>Οκτώβριος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>11</Value>
+            <Label>Νοέμβριος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>12</Value>
+            <Label>Δεκέμβριος</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Label>-</Label>
+          </ParameterValue>
+        </ParameterValues>
+      </ValidValues>
+    </ReportParameter>
+    <ReportParameter Name="categorysearch">
+      <DataType>String</DataType>
+      <DefaultValue>
+        <Values>
+          <Value />
+        </Values>
+      </DefaultValue>
+      <AllowBlank>true</AllowBlank>
+      <Prompt>Αναζήτηση Κατηγορίας</Prompt>
+    </ReportParameter>
+    <ReportParameter Name="category">
+      <DataType>String</DataType>
+      <Prompt>Κατηγορία</Prompt>
+      <ValidValues>
+        <DataSetReference>
+          <DataSetName>Heading</DataSetName>
+          <ValueField>id</ValueField>
+          <LabelField>cat</LabelField>
+        </DataSetReference>
+      </ValidValues>
+      <MultiValue>true</MultiValue>
+    </ReportParameter>
+    <ReportParameter Name="allcategories">
+      <DataType>String</DataType>
+      <DefaultValue>
+        <Values>
+          <Value>=join(Parameters!category.Value,",")</Value>
+        </Values>
+      </DefaultValue>
+      <Prompt>ReportParameter1</Prompt>
+      <Hidden>true</Hidden>
+    </ReportParameter>
+    <ReportParameter Name="comparison">
+      <DataType>Boolean</DataType>
+      <DefaultValue>
+        <Values>
+          <Value>false</Value>
+        </Values>
+      </DefaultValue>
+      <Prompt>Σύγκριση</Prompt>
+      <ValidValues>
+        <ParameterValues>
+          <ParameterValue>
+            <Value>true</Value>
+            <Label>Ναι</Label>
+          </ParameterValue>
+          <ParameterValue>
+            <Value>false</Value>
+            <Label>Όχι</Label>
+          </ParameterValue>
+        </ParameterValues>
+      </ValidValues>
+    </ReportParameter>
+  </ReportParameters>
+  <ReportParametersLayout>
+    <GridLayoutDefinition>
+      <NumberOfColumns>2</NumberOfColumns>
+      <NumberOfRows>7</NumberOfRows>
+      <CellDefinitions>
+        <CellDefinition>
+          <ColumnIndex>0</ColumnIndex>
+          <RowIndex>0</RowIndex>
+          <ParameterName>yearfrom</ParameterName>
+        </CellDefinition>
+        <CellDefinition>
+          <ColumnIndex>1</ColumnIndex>
+          <RowIndex>0</RowIndex>
+          <ParameterName>monthfrom</ParameterName>
+        </CellDefinition>
+        <CellDefinition>
+          <ColumnIndex>0</ColumnIndex>
+          <RowIndex>1</RowIndex>
+          <ParameterName>yearto</ParameterName>
+        </CellDefinition>
+        <CellDefinition>
+          <ColumnIndex>1</ColumnIndex>
+          <RowIndex>1</RowIndex>
+          <ParameterName>monthto</ParameterName>
+        </CellDefinition>
+        <CellDefinition>
+          <ColumnIndex>0</ColumnIndex>
+          <RowIndex>2</RowIndex>
+          <ParameterName>yearfrom2</ParameterName>
+        </CellDefinition>
+        <CellDefinition>
+          <ColumnIndex>1</ColumnIndex>
+          <RowIndex>2</RowIndex>
+          <ParameterName>monthfrom2</ParameterName>
+        </CellDefinition>
+        <CellDefinition>
+          <ColumnIndex>0</ColumnIndex>
+          <RowIndex>3</RowIndex>
+          <ParameterName>yearto2</ParameterName>
+        </CellDefinition>
+        <CellDefinition>
+          <ColumnIndex>1</ColumnIndex>
+          <RowIndex>3</RowIndex>
+          <ParameterName>monthto2</ParameterName>
+        </CellDefinition>
+        <CellDefinition>
+          <ColumnIndex>0</ColumnIndex>
+          <RowIndex>4</RowIndex>
+          <ParameterName>categorysearch</ParameterName>
+        </CellDefinition>
+        <CellDefinition>
+          <ColumnIndex>1</ColumnIndex>
+          <RowIndex>4</RowIndex>
+          <ParameterName>category</ParameterName>
+        </CellDefinition>
+        <CellDefinition>
+          <ColumnIndex>0</ColumnIndex>
+          <RowIndex>5</RowIndex>
+          <ParameterName>allcategories</ParameterName>
+        </CellDefinition>
+        <CellDefinition>
+          <ColumnIndex>0</ColumnIndex>
+          <RowIndex>6</RowIndex>
+          <ParameterName>comparison</ParameterName>
+        </CellDefinition>
+      </CellDefinitions>
+    </GridLayoutDefinition>
+  </ReportParametersLayout>
+  <rd:ReportUnitType>Cm</rd:ReportUnitType>
+  <rd:ReportID>903c581a-ddd0-45a5-9f26-1caabddaef05</rd:ReportID>
+</Report>

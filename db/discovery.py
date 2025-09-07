@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Database Discovery - Enhanced with SQL Server sys.* views and RDL integration
-Following Architecture: SQL Server only, sys.* metadata, RDL parsing, sqlglot validation
+Database Discovery - Enhanced with SQL Server sys.* views and Multi-RDL integration
+Following Architecture: SQL Server only, sys.* metadata, Multi-RDL parsing, sqlglot validation
 Simple, Readable, Maintainable - DRY, SOLID, YAGNI principles
 """
 
@@ -14,6 +14,7 @@ import xml.etree.ElementTree as ET
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 from pathlib import Path
+import glob
 
 # SQLGlot for SQL parsing (required by Architecture)
 try:
@@ -273,24 +274,89 @@ class SqlServerMetadata:
         
         return view_info
 
-class RDLParser:
-    """RDL parser for SSRS reports (Architecture requirement)"""
+class MultiRDLParser:
+    """Multi-RDL parser for SSRS reports (Architecture requirement)"""
     
     def __init__(self):
         self.rdl_usage = {}
     
-    def parse_rdl_file(self, rdl_path: str) -> Dict[str, Any]:
-        """Parse RDL file for business insights and table usage"""
-        print("   📋 Parsing RDL file for business insights...")
+    def parse_all_rdl_files(self, rdl_directory: str = "data_upload") -> Dict[str, Any]:
+        """Parse all RDL files in the directory for business insights"""
+        print("   📋 Parsing all RDL files for business insights...")
         
+        rdl_dir = Path(rdl_directory)
+        if not rdl_dir.exists():
+            print(f"   ⚠️ RDL directory not found: {rdl_directory}")
+            return {}
+        
+        # Find all RDL files
+        rdl_files = list(rdl_dir.glob("*.rdl"))
+        if not rdl_files:
+            print(f"   ⚠️ No RDL files found in: {rdl_directory}")
+            return {}
+        
+        print(f"   📁 Found {len(rdl_files)} RDL files to process")
+        
+        # Combined RDL information
+        combined_rdl_info = {
+            'reports': [],
+            'datasets': [],
+            'parameters': [],
+            'referenced_tables': set(),
+            'business_priority_signals': [],
+            'report_count': len(rdl_files)
+        }
+        
+        # Process each RDL file
+        for rdl_file in rdl_files:
+            try:
+                print(f"   📄 Processing: {rdl_file.name}")
+                rdl_info = self._parse_single_rdl_file(rdl_file)
+                
+                if rdl_info:
+                    # Add report info
+                    combined_rdl_info['reports'].append({
+                        'filename': rdl_file.name,
+                        'title': rdl_info.get('report_title', rdl_file.stem),
+                        'datasets_count': len(rdl_info.get('datasets', [])),
+                        'parameters_count': len(rdl_info.get('parameters', [])),
+                        'referenced_tables_count': len(rdl_info.get('referenced_tables', []))
+                    })
+                    
+                    # Combine datasets
+                    combined_rdl_info['datasets'].extend(rdl_info.get('datasets', []))
+                    
+                    # Combine parameters
+                    combined_rdl_info['parameters'].extend(rdl_info.get('parameters', []))
+                    
+                    # Combine referenced tables
+                    combined_rdl_info['referenced_tables'].update(rdl_info.get('referenced_tables', set()))
+                    
+                    # Combine business signals
+                    combined_rdl_info['business_priority_signals'].extend(
+                        rdl_info.get('business_priority_signals', [])
+                    )
+                    
+            except Exception as e:
+                print(f"   ⚠️ Failed to parse {rdl_file.name}: {e}")
+        
+        # Remove duplicates and finalize
+        combined_rdl_info['referenced_tables'] = list(combined_rdl_info['referenced_tables'])
+        combined_rdl_info['business_priority_signals'] = list(set(combined_rdl_info['business_priority_signals']))
+        
+        print(f"   ✅ Multi-RDL parsing completed:")
+        print(f"      📊 Total reports: {len(combined_rdl_info['reports'])}")
+        print(f"      📋 Total datasets: {len(combined_rdl_info['datasets'])}")
+        print(f"      🔗 Referenced tables: {len(combined_rdl_info['referenced_tables'])}")
+        print(f"      🎯 Business signals: {len(combined_rdl_info['business_priority_signals'])}")
+        
+        return combined_rdl_info
+    
+    def _parse_single_rdl_file(self, rdl_path: Path) -> Dict[str, Any]:
+        """Parse a single RDL file for business insights and table usage"""
         try:
-            rdl_file = Path(rdl_path)
-            if not rdl_file.exists():
-                print(f"   ⚠️ RDL file not found: {rdl_path}")
-                return {}
-            
             # Parse XML
-            tree = ET.parse(rdl_file)
+            tree = ET.parse(rdl_path)
             root = tree.getroot()
             
             # Handle namespace
@@ -301,7 +367,7 @@ class RDLParser:
             
             # Extract report metadata
             rdl_info = {
-                'report_title': self._get_report_title(root, ns),
+                'report_title': self._get_report_title(root, ns, rdl_path.stem),
                 'datasets': [],
                 'parameters': [],
                 'referenced_tables': set(),
@@ -327,14 +393,13 @@ class RDLParser:
             # Determine business priority signals
             rdl_info['business_priority_signals'] = self._analyze_business_priority(rdl_info)
             
-            print(f"   ✅ RDL parsed: {len(rdl_info['datasets'])} datasets, {len(rdl_info['parameters'])} parameters")
             return rdl_info
             
         except Exception as e:
-            print(f"   ⚠️ RDL parsing failed: {e}")
+            print(f"   ⚠️ RDL parsing failed for {rdl_path.name}: {e}")
             return {}
     
-    def _get_report_title(self, root, ns: Dict) -> str:
+    def _get_report_title(self, root, ns: Dict, fallback: str) -> str:
         """Extract report title"""
         # Try multiple ways to get title
         title_elements = [
@@ -349,7 +414,7 @@ class RDLParser:
                 if element.text and len(element.text.strip()) > 5:
                     return element.text.strip()
         
-        return "Unknown Report"
+        return fallback
     
     def _extract_dataset_info(self, dataset, ns: Dict) -> Dict[str, Any]:
         """Extract dataset information including SQL"""
@@ -466,20 +531,26 @@ class RDLParser:
         usage_data = {
             'metadata': {
                 'parsed_at': datetime.now().isoformat(),
-                'report_title': rdl_info.get('report_title', 'Unknown'),
+                'report_count': rdl_info.get('report_count', 0),
                 'priority_signals': rdl_info.get('business_priority_signals', [])
             },
             'table_usage': {},
             'common_joins': [],
-            'parameters': rdl_info.get('parameters', [])
+            'parameters': rdl_info.get('parameters', []),
+            'reports_summary': rdl_info.get('reports', [])
         }
         
         # Build table usage statistics
         for table_name in rdl_info.get('referenced_tables', []):
+            # Count how many reports reference this table
+            usage_count = sum(1 for report in rdl_info.get('reports', []) 
+                            if any(dataset.get('referenced_tables', []) and table_name in dataset.get('referenced_tables', []) 
+                                   for dataset in rdl_info.get('datasets', [])))
+            
             usage_data['table_usage'][table_name] = {
-                'usage_count': 1,  # Could be enhanced to count across multiple RDLs
+                'usage_count': max(1, usage_count),
                 'business_priority': 'high' if 'executive_report' in rdl_info.get('business_priority_signals', []) else 'medium',
-                'report_context': rdl_info.get('report_title', 'Unknown')
+                'report_context': f"{rdl_info.get('report_count', 0)} reports"
             }
         
         return usage_data
@@ -561,27 +632,28 @@ class EnhancedSampleCollector:
         return table_info.columns[0].get('name') if table_info.columns else None
 
 class EnhancedCacheManager:
-    """Enhanced cache with RDL integration"""
+    """Enhanced cache with Multi-RDL integration"""
     
     def __init__(self, config: Config):
         self.config = config
     
     def save_cache(self, tables: List[TableInfo], view_info: Dict, rdl_info: Dict):
-        """Save enhanced discovery with RDL data"""
+        """Save enhanced discovery with Multi-RDL data"""
         cache_file = self.config.get_cache_path("database_structure.json")
         
         data = {
             'metadata': {
                 'discovered': datetime.now().isoformat(),
-                'version': '3.0-sql-server-rdl',
+                'version': '3.0-sql-server-multi-rdl',
                 'sampling_method': 'first_3_plus_last_3',
                 'sql_server_metadata': True,
-                'rdl_integrated': len(rdl_info) > 0,
+                'multi_rdl_integrated': len(rdl_info) > 0,
                 'sqlglot_available': HAS_SQLGLOT
             },
             'discovery_summary': {
                 'total_tables': len(tables),
                 'total_views': len(view_info),
+                'rdl_reports_count': rdl_info.get('report_count', 0),
                 'rdl_referenced_tables': len(rdl_info.get('referenced_tables', [])) if rdl_info else 0
             },
             'tables': [self._table_to_dict(t) for t in tables],
@@ -592,7 +664,7 @@ class EnhancedCacheManager:
         try:
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False, default=str)
-            print(f"   💾 Enhanced discovery cached: {cache_file}")
+            print(f"   💾 Enhanced Multi-RDL discovery cached: {cache_file}")
         except Exception as e:
             print(f"   ⚠️ Cache save failed: {e}")
     
@@ -649,7 +721,7 @@ class EnhancedCacheManager:
         )
 
 class DatabaseDiscovery:
-    """Enhanced database discovery with SQL Server sys.* and RDL integration"""
+    """Enhanced database discovery with SQL Server sys.* and Multi-RDL integration"""
     
     def __init__(self, config: Config):
         self.config = config
@@ -657,7 +729,7 @@ class DatabaseDiscovery:
         # Initialize components
         self.connector = SqlServerConnector(config)
         self.metadata = SqlServerMetadata(self.connector)
-        self.rdl_parser = RDLParser()
+        self.rdl_parser = MultiRDLParser()
         self.sample_collector = EnhancedSampleCollector(self.connector)
         self.cache_manager = EnhancedCacheManager(config)
         
@@ -668,9 +740,9 @@ class DatabaseDiscovery:
         self.relationships: List[Relationship] = []
     
     async def discover_database(self) -> bool:
-        """Enhanced discovery with SQL Server sys.* and RDL integration"""
-        print("🔍 ENHANCED SQL SERVER DISCOVERY + RDL INTEGRATION")
-        print("Architecture: sys.* metadata + sqlglot + RDL parsing")
+        """Enhanced discovery with SQL Server sys.* and Multi-RDL integration"""
+        print("🔍 ENHANCED SQL SERVER DISCOVERY + MULTI-RDL INTEGRATION")
+        print("Architecture: sys.* metadata + sqlglot + Multi-RDL parsing")
         print("=" * 65)
         
         # Check cache first
@@ -680,14 +752,14 @@ class DatabaseDiscovery:
             self.view_info = cached_views
             self.rdl_info = cached_rdl
             print(f"✅ Loaded from cache: {len(self.tables)} tables, {len(self.view_info)} views")
+            print(f"   📋 RDL reports: {self.rdl_info.get('report_count', 0)}")
             return True
         
         try:
             start_time = time.time()
             
-            # Step 1: Parse RDL for business insights
-            rdl_path = "data_upload/Approved Συμβόλαια (weekly report).rdl"
-            self.rdl_info = self.rdl_parser.parse_rdl_file(rdl_path)
+            # Step 1: Parse all RDL files for business insights
+            self.rdl_info = self.rdl_parser.parse_all_rdl_files()
             
             # Step 2: Discover tables with SQL Server metadata
             await self._discover_tables_with_metadata()
@@ -698,8 +770,8 @@ class DatabaseDiscovery:
             # Step 4: Build relationships from foreign keys
             self._build_relationships_from_foreign_keys()
             
-            # Step 5: Apply RDL insights for business priority
-            self._apply_rdl_insights()
+            # Step 5: Apply Multi-RDL insights for business priority
+            self._apply_multi_rdl_insights()
             
             # Step 6: Save enhanced cache
             self.cache_manager.save_cache(self.tables, self.view_info, self.rdl_info)
@@ -793,45 +865,53 @@ class DatabaseDiscovery:
                     except Exception:
                         continue
     
-    def _apply_rdl_insights(self):
-        """Apply RDL insights to boost business priority"""
+    def _apply_multi_rdl_insights(self):
+        """Apply Multi-RDL insights to boost business priority"""
         if not self.rdl_info:
             return
         
-        rdl_tables = self.rdl_info.get('referenced_tables', set())
+        rdl_tables = set(self.rdl_info.get('referenced_tables', []))
         business_signals = self.rdl_info.get('business_priority_signals', [])
         
-        print(f"   📋 Applying RDL insights: {len(rdl_tables)} referenced tables")
+        print(f"   📋 Applying Multi-RDL insights: {len(rdl_tables)} referenced tables across {self.rdl_info.get('report_count', 0)} reports")
         
         for table in self.tables:
-            # Boost priority for tables referenced in RDL
+            # Boost priority for tables referenced in RDL reports
             if table.full_name in rdl_tables or any(table.name.lower() in ref.lower() for ref in rdl_tables):
                 table.business_priority = 'high'
-                table.confidence = min(1.0, table.confidence + 0.2)
+                table.confidence = min(1.0, getattr(table, 'confidence', 0.5) + 0.3)
                 
                 # Additional boost for executive reports
                 if 'executive_report' in business_signals:
                     table.business_priority = 'high'
-                    print(f"   📈 Boosted priority: {table.name} (RDL reference)")
+                    print(f"   📈 Boosted priority: {table.name} (Multi-RDL reference)")
     
     def _show_discovery_summary(self, elapsed_time: float):
         """Show enhanced discovery summary"""
-        print(f"\n📊 SQL SERVER DISCOVERY COMPLETED:")
+        print(f"\n📊 SQL SERVER DISCOVERY WITH MULTI-RDL COMPLETED:")
         print(f"   ⏱️ Time: {elapsed_time:.1f}s")
         print(f"   📊 Tables: {len(self.tables)}")
         print(f"   👁️ Views: {len(self.view_info)}")
         print(f"   🔗 Relationships: {len(self.relationships)}")
-        print(f"   📋 RDL referenced tables: {len(self.rdl_info.get('referenced_tables', []))}")
+        print(f"   📋 RDL reports processed: {self.rdl_info.get('report_count', 0)}")
+        print(f"   🔗 RDL referenced tables: {len(self.rdl_info.get('referenced_tables', []))}")
         print(f"   🧠 Metadata source: SQL Server sys.* views")
         print(f"   📝 Sampling: First 3 + Last 3 rows per table")
         print(f"   ⚙️ SQL parsing: {'✅ sqlglot available' if HAS_SQLGLOT else '❌ sqlglot missing'}")
         
-        # Show RDL insights
+        # Show Multi-RDL insights
         if self.rdl_info:
-            print(f"   📋 RDL insights: {self.rdl_info.get('report_title', 'Unknown report')}")
+            reports = self.rdl_info.get('reports', [])
+            if reports:
+                print(f"   📋 RDL reports:")
+                for report in reports[:3]:  # Show first 3 reports
+                    print(f"      • {report.get('title', 'Unknown')} ({report.get('datasets_count', 0)} datasets)")
+                if len(reports) > 3:
+                    print(f"      • ... and {len(reports) - 3} more reports")
+            
             priority_signals = self.rdl_info.get('business_priority_signals', [])
             if priority_signals:
-                print(f"   🎯 Business signals: {', '.join(priority_signals)}")
+                print(f"   🎯 Business signals: {', '.join(list(set(priority_signals)))}")
     
     def load_from_cache(self) -> bool:
         """Load from cache"""
@@ -862,6 +942,7 @@ class DatabaseDiscovery:
             'tables': len([t for t in self.tables if t.object_type != 'VIEW']),
             'views': len(self.view_info),
             'relationships': len(self.relationships),
+            'rdl_reports': self.rdl_info.get('report_count', 0),
             'rdl_references': len(self.rdl_info.get('referenced_tables', [])),
             'sqlglot_available': HAS_SQLGLOT,
             'sampling_method': 'first_3_plus_last_3',

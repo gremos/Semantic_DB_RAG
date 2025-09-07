@@ -20,6 +20,161 @@ from shared.config import Config
 from shared.models import TableInfo, BusinessDomain, Relationship
 from shared.utils import parse_json_response
 
+class CacheManager:
+    """Cache manager for semantic analysis results"""
+    
+    def __init__(self, config: Config):
+        self.config = config
+    
+    def save_analysis(self, tables: List[TableInfo], domain: Optional[BusinessDomain], 
+                     relationships: List[Relationship]):
+        """Save semantic analysis results to cache"""
+        cache_file = self.config.get_cache_path("semantic_analysis.json")
+        
+        data = {
+            'metadata': {
+                'analyzed': datetime.now().isoformat(),
+                'version': '3.0-cross-industry-rdl',
+                'analysis_method': 'enhanced_cross_industry_llm',
+                'total_objects': len(tables)
+            },
+            'analysis_summary': {
+                'total_tables': len([t for t in tables if t.object_type != 'VIEW']),
+                'total_views': len([t for t in tables if t.object_type == 'VIEW']),
+                'high_priority_tables': len([t for t in tables if getattr(t, 'business_priority', '') == 'high']),
+                'fact_tables': len([t for t in tables if getattr(t, 'bi_role', '') == 'fact'])
+            },
+            'tables': [self._table_to_dict(t) for t in tables],
+            'domain': self._domain_to_dict(domain) if domain else None,
+            'relationships': [self._relationship_to_dict(r) for r in relationships]
+        }
+        
+        try:
+            with open(cache_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False, default=str)
+            print(f"   💾 Semantic analysis cached: {cache_file}")
+        except Exception as e:
+            print(f"   ⚠️ Cache save failed: {e}")
+    
+    def load_analysis(self) -> Tuple[List[TableInfo], Optional[BusinessDomain], List[Relationship]]:
+        """Load semantic analysis results from cache"""
+        cache_file = self.config.get_cache_path("semantic_analysis.json")
+        
+        if not cache_file.exists():
+            return [], None, []
+        
+        try:
+            # Check cache age
+            cache_age = time.time() - cache_file.stat().st_mtime
+            if cache_age > (self.config.semantic_cache_hours * 3600):
+                return [], None, []
+            
+            with open(cache_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            
+            tables = [self._dict_to_table(t) for t in data.get('tables', [])]
+            domain = self._dict_to_domain(data.get('domain')) if data.get('domain') else None
+            relationships = [self._dict_to_relationship(r) for r in data.get('relationships', [])]
+            
+            return tables, domain, relationships
+            
+        except Exception:
+            return [], None, []
+    
+    def _table_to_dict(self, table: TableInfo) -> Dict:
+        """Convert TableInfo to dictionary"""
+        return {
+            'name': table.name,
+            'schema': table.schema,
+            'full_name': table.full_name,
+            'object_type': table.object_type,
+            'row_count': table.row_count,
+            'columns': table.columns,
+            'sample_data': table.sample_data,
+            'relationships': table.relationships,
+            'entity_type': table.entity_type,
+            'business_role': table.business_role,
+            'confidence': table.confidence,
+            'business_priority': getattr(table, 'business_priority', 'medium'),
+            'bi_role': getattr(table, 'bi_role', 'dimension'),
+            'measures': getattr(table, 'measures', []),
+            'name_columns': getattr(table, 'name_columns', []),
+            'key_columns': getattr(table, 'key_columns', []),
+            'time_columns': getattr(table, 'time_columns', []),
+            'entity_keys': getattr(table, 'entity_keys', []),
+            'data_type': getattr(table, 'data_type', 'reference'),
+            'grain': getattr(table, 'grain', 'unknown')
+        }
+    
+    def _dict_to_table(self, data: Dict) -> TableInfo:
+        """Convert dictionary to TableInfo"""
+        table = TableInfo(
+            name=data['name'],
+            schema=data['schema'],
+            full_name=data['full_name'],
+            object_type=data['object_type'],
+            row_count=data['row_count'],
+            columns=data['columns'],
+            sample_data=data['sample_data'],
+            relationships=data.get('relationships', [])
+        )
+        
+        # Set enhanced properties
+        table.entity_type = data.get('entity_type', 'Unknown')
+        table.business_role = data.get('business_role', 'Unknown')
+        table.confidence = data.get('confidence', 0.0)
+        table.business_priority = data.get('business_priority', 'medium')
+        table.bi_role = data.get('bi_role', 'dimension')
+        table.measures = data.get('measures', [])
+        table.name_columns = data.get('name_columns', [])
+        table.key_columns = data.get('key_columns', [])
+        table.time_columns = data.get('time_columns', [])
+        table.entity_keys = data.get('entity_keys', [])
+        table.data_type = data.get('data_type', 'reference')
+        table.grain = data.get('grain', 'unknown')
+        
+        return table
+    
+    def _domain_to_dict(self, domain: BusinessDomain) -> Dict:
+        """Convert BusinessDomain to dictionary"""
+        return {
+            'domain_type': domain.domain_type,
+            'industry': domain.industry,
+            'confidence': domain.confidence,
+            'sample_questions': domain.sample_questions,
+            'capabilities': domain.capabilities
+        }
+    
+    def _dict_to_domain(self, data: Dict) -> BusinessDomain:
+        """Convert dictionary to BusinessDomain"""
+        return BusinessDomain(
+            domain_type=data['domain_type'],
+            industry=data['industry'],
+            confidence=data['confidence'],
+            sample_questions=data['sample_questions'],
+            capabilities=data.get('capabilities', {})
+        )
+    
+    def _relationship_to_dict(self, relationship: Relationship) -> Dict:
+        """Convert Relationship to dictionary"""
+        return {
+            'from_table': relationship.from_table,
+            'to_table': relationship.to_table,
+            'relationship_type': relationship.relationship_type,
+            'confidence': relationship.confidence,
+            'description': relationship.description
+        }
+    
+    def _dict_to_relationship(self, data: Dict) -> Relationship:
+        """Convert dictionary to Relationship"""
+        return Relationship(
+            from_table=data['from_table'],
+            to_table=data['to_table'],
+            relationship_type=data['relationship_type'],
+            confidence=data['confidence'],
+            description=data.get('description', '')
+        )
+
 class EnhancedEntityAnalyzer:
     """Enhanced entity analyzer with cross-industry taxonomy (Architecture requirement)"""
     
@@ -539,7 +694,6 @@ class SemanticAnalyzer:
         self.domain_analyzer = EnhancedDomainAnalyzer()
         
         # Enhanced cache manager
-        from semantic.analysis import CacheManager  # Import original
         self.cache_manager = CacheManager(config)
         
         # Data storage
