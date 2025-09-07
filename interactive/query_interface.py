@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Query Interface - Fixed SQL Templates & Safety Validation
+Query Interface - LLM-Driven Intelligence
 Simple, Readable, Maintainable - DRY, SOLID, YAGNI principles
+More LLM intelligence, less rigid coding
 """
 
 import asyncio
@@ -24,86 +25,176 @@ from shared.config import Config
 from shared.models import TableInfo, BusinessDomain, Relationship, QueryResult
 from shared.utils import parse_json_response, clean_sql_query, safe_database_value
 
-class IntentAnalyzer:
-    """Intent analysis with business context"""
+class IntelligentAnalyzer:
+    """LLM-driven intelligent query analysis - no rigid entity constraints"""
     
     def __init__(self, llm: AzureChatOpenAI):
         self.llm = llm
     
-    async def analyze_intent(self, question: str, tables: List[TableInfo]) -> Dict[str, Any]:
-        """Analyze intent with cross-industry entity support"""
-        print("   🧠 Intent analysis...")
+    async def analyze_and_generate_sql(self, question: str, tables: List[TableInfo]) -> Dict[str, Any]:
+        """Single LLM call for complete analysis and SQL generation"""
+        print("   🧠 LLM-driven intelligent analysis...")
         
-        # Build entity context
-        entity_context = self._build_entity_context(tables)
+        # Build comprehensive context
+        context = self._build_intelligent_context(tables)
         
-        # Get LLM analysis
-        intent = await self._get_intent_from_llm(question, entity_context)
+        # Single intelligent prompt for everything
+        result = await self._get_intelligent_response(question, context)
         
-        if intent:
-            print(f"      ✅ Intent: {intent.get('task_type', 'unknown')}")
-            print(f"      🎯 Entities: {', '.join(intent.get('entities', []))}")
-            return intent
+        if result:
+            print(f"      ✅ Intent: {result.get('intent_summary', 'analyzed')}")
+            selected_tables = result.get('selected_tables', [])
+            if selected_tables:
+                print(f"      📊 Selected: {', '.join([t.get('table_name', 'Unknown') for t in selected_tables])}")
+            return result
         
-        # Pattern-based fallback
-        return self._pattern_fallback(question)
+        return self._create_fallback_response(question, tables)
     
-    def _build_entity_context(self, tables: List[TableInfo]) -> str:
-        """Build context with available entities"""
-        entity_groups = {}
-        for table in tables[:20]:
-            entity_type = table.entity_type
-            if entity_type not in entity_groups:
-                entity_groups[entity_type] = []
-            entity_groups[entity_type].append(table)
+    def _build_intelligent_context(self, tables: List[TableInfo]) -> str:
+        """Build rich context for LLM understanding"""
+        context_lines = [
+            "DATABASE CONTEXT:",
+            f"Total available tables: {len(tables)}",
+            ""
+        ]
         
-        context_lines = ["AVAILABLE ENTITIES:"]
+        # Group tables by likely business area (simple heuristics)
+        business_areas = {
+            'Customer Data': [],
+            'Financial Data': [], 
+            'Sales Data': [],
+            'Employee Data': [],
+            'System Data': []
+        }
         
-        priority_entities = ['Customer', 'Payment', 'Contract', 'Order', 'Employee']
+        for table in tables:
+            name_lower = table.name.lower()
+            
+            # Simple business area classification
+            if any(word in name_lower for word in ['customer', 'client', 'account', 'contact']):
+                business_areas['Customer Data'].append(table)
+            elif any(word in name_lower for word in ['payment', 'transaction', 'invoice', 'billing', 'revenue']):
+                business_areas['Financial Data'].append(table)
+            elif any(word in name_lower for word in ['sales', 'deal', 'opportunity', 'contract', 'order']):
+                business_areas['Sales Data'].append(table)
+            elif any(word in name_lower for word in ['user', 'employee', 'staff', 'rep']):
+                business_areas['Employee Data'].append(table)
+            else:
+                business_areas['System Data'].append(table)
         
-        for entity_type in priority_entities:
-            if entity_type in entity_groups:
-                tables_list = entity_groups[entity_type]
-                context_lines.append(f"\n{entity_type.upper()}:")
-                for table in tables_list[:2]:
-                    context_lines.append(f"  - {table.name}")
-        
-        other_entities = [e for e in entity_groups.keys() if e not in priority_entities]
-        if other_entities:
-            context_lines.append(f"\nOTHER: {', '.join(other_entities)}")
+        # Present tables by business area with rich details
+        for area, area_tables in business_areas.items():
+            if area_tables:
+                context_lines.append(f"\n{area.upper()}:")
+                for table in area_tables[:5]:  # Limit to keep context manageable
+                    context_lines.append(f"\n  📊 {table.full_name}")
+                    context_lines.append(f"      Rows: {table.row_count:,}")
+                    
+                    # Show meaningful columns
+                    col_details = []
+                    for col in table.columns[:8]:
+                        col_name = col.get('name', '')
+                        col_type = col.get('data_type', '')
+                        
+                        # Add business meaning hints
+                        hints = []
+                        if any(word in col_name.lower() for word in ['name', 'title', 'description']):
+                            hints.append('DISPLAY')
+                        if any(word in col_name.lower() for word in ['amount', 'total', 'revenue', 'price']):
+                            hints.append('MONEY')
+                        if any(word in col_name.lower() for word in ['date', 'time', 'created', 'modified']):
+                            hints.append('DATE')
+                        if col_name.lower().endswith('id') or 'id' in col_name.lower():
+                            hints.append('ID')
+                        
+                        hint_str = f" ({', '.join(hints)})" if hints else ""
+                        col_details.append(f"{col_name} ({col_type}){hint_str}")
+                    
+                    context_lines.append(f"      Columns: {', '.join(col_details)}")
+                    
+                    # Show sample data insights
+                    if table.sample_data:
+                        sample_insights = []
+                        first_row = table.sample_data[0]
+                        for key, value in list(first_row.items())[:4]:
+                            if not key.startswith('__') and value is not None:
+                                if isinstance(value, str) and len(str(value)) > 50:
+                                    value = str(value)[:50] + "..."
+                                sample_insights.append(f"{key}={value}")
+                        
+                        if sample_insights:
+                            context_lines.append(f"      Sample: {', '.join(sample_insights)}")
         
         return '\n'.join(context_lines)
     
-    async def _get_intent_from_llm(self, question: str, context: str) -> Optional[Dict[str, Any]]:
-        """LLM intent analysis"""
+    async def _get_intelligent_response(self, question: str, context: str) -> Optional[Dict[str, Any]]:
+        """Get intelligent response from LLM"""
         try:
-            prompt = f"""Analyze this business question to understand what data is needed.
+            prompt = f"""You are a business intelligence expert analyzing a database to answer this question:
 
 QUESTION: "{question}"
 
 {context}
 
-Determine the user's intent:
-1. What type of query? (ranking, total, count, list)
-2. Which entities are needed? (Customer, Payment, Contract, etc.)
-3. What should be displayed? (names, amounts, dates)
-4. Any limits? (top 10, etc.)
-5. Time filters? (this year, 2025, last month)
-6. Any filters? (active, approved, paid)
+Your task is to:
+1. Understand what the user is asking for
+2. Identify which tables contain the data needed
+3. Determine which columns to use for the query
+4. Generate appropriate SQL Server T-SQL
+
+Think step by step:
+- What business entities does this question involve? (customers, sales reps, revenue, contracts, etc.)
+- Which tables are most likely to contain this data?
+- What columns would contain the specific data needed?
+- What type of query is this? (ranking, aggregation, list, count)
+
+IMPORTANT SQL GENERATION RULES:
+- Generate SIMPLE SQL that works with a single table when possible
+- Use JOINs only when absolutely necessary
+- Prefer tables that already contain the needed data aggregated
+- Use proper SQL Server syntax with square brackets [column_name]
+- For ranking queries: SELECT TOP (N) ... ORDER BY ... DESC
+- For aggregation: SELECT SUM/COUNT/AVG(...) FROM single_table WHERE ...
+- Keep queries simple and safe
 
 Respond with JSON only:
 {{
-  "task_type": "ranking|aggregation|count|list",
-  "entities": ["Customer", "Payment"],
-  "show_fields": ["names", "amounts", "dates"],
-  "limit": 10,
-  "time_filter": "2025|this_year|last_month|null",
-  "filters": {{"status": "approved"}},
-  "search_terms": ["top", "customers"]
-}}"""
+  "intent_summary": "Brief description of what user wants",
+  "business_entities": ["customer", "revenue", "sales_rep"],
+  "query_type": "ranking|aggregation|list|count",
+  "selected_tables": [
+    {{
+      "table_name": "[schema].[table]",
+      "reason": "why this table was selected",
+      "columns_needed": [
+        {{
+          "column_name": "column_name",
+          "purpose": "customer_name|revenue_amount|date_filter|grouping",
+          "data_type": "varchar|decimal|datetime"
+        }}
+      ]
+    }}
+  ],
+  "sql_query": "SELECT TOP (10) [CustomerName], [TotalRevenue] FROM [dbo].[CustomerSummary] ORDER BY [TotalRevenue] DESC",
+  "confidence": 0.9
+}}
+
+EXAMPLES OF GOOD SIMPLE SQL:
+- Single table ranking: "SELECT TOP (10) [CustomerName], [Revenue] FROM [dbo].[Customers] ORDER BY [Revenue] DESC"
+- Single table aggregation: "SELECT SUM([Amount]) AS TotalRevenue FROM [dbo].[Payments]"
+- Single table with filter: "SELECT [Name], [Amount] FROM [dbo].[Contracts] WHERE [Status] = 'Active'"
+
+IMPORTANT: 
+- Only select tables that actually exist in the provided context
+- Choose columns that make business sense for the question
+- Use proper SQL Server syntax with square brackets
+- For money/revenue, look for columns with 'amount', 'total', 'revenue', 'price' in name
+- For customer names, look for columns with 'name', 'title', 'description'
+- For time filters, use actual date columns, not geographic coordinates!
+- KEEP IT SIMPLE - prefer single table queries when possible"""
 
             messages = [
-                SystemMessage(content="Analyze questions and respond with JSON only."),
+                SystemMessage(content="You are a business intelligence expert. Analyze the database intelligently and respond with JSON only."),
                 HumanMessage(content=prompt)
             ]
             
@@ -111,383 +202,66 @@ Respond with JSON only:
             return parse_json_response(response.content)
             
         except Exception as e:
-            print(f"      ⚠️ LLM intent analysis failed: {e}")
+            print(f"      ⚠️ Intelligent analysis failed: {e}")
             return None
     
-    def _pattern_fallback(self, question: str) -> Dict[str, Any]:
-        """Pattern-based intent analysis"""
+    def _create_fallback_response(self, question: str, tables: List[TableInfo]) -> Dict[str, Any]:
+        """Create fallback response when LLM fails"""
+        # Simple keyword-based fallback
         q_lower = question.lower()
         
-        # Task type
-        task_type = 'list'
-        limit = None
-        
-        if any(word in q_lower for word in ['top', 'highest', 'best']):
-            task_type = 'ranking'
-            import re
-            numbers = re.findall(r'top\s*(\d+)|(\d+)\s*(?:top|best)', q_lower)
-            if numbers:
-                limit = int(numbers[0][0] or numbers[0][1])
-            else:
-                limit = 10
-        elif any(word in q_lower for word in ['total', 'sum', 'revenue']):
-            task_type = 'aggregation'
-        elif any(word in q_lower for word in ['count', 'how many']):
-            task_type = 'count'
-        
-        # Entity detection
-        entities = []
-        entity_patterns = {
-            'Customer': ['customer', 'client', 'account'],
-            'Payment': ['payment', 'paid', 'revenue'],
-            'Contract': ['contract', 'agreement', 'συμβόλαια'],
-            'Order': ['order', 'purchase', 'sale'],
-            'Employee': ['employee', 'staff', 'personnel'],
-            'Product': ['product', 'item']
-        }
-        
-        for entity_type, keywords in entity_patterns.items():
-            if any(keyword in q_lower for keyword in keywords):
-                entities.append(entity_type)
-        
-        # Show fields
-        show_fields = []
-        if any(word in q_lower for word in ['name', 'who', 'which']):
-            show_fields.append('names')
-        if any(word in q_lower for word in ['amount', 'revenue', 'total']):
-            show_fields.append('amounts')
-        if any(word in q_lower for word in ['date', 'when', 'time']):
-            show_fields.append('dates')
-        
-        # Time filter
-        time_filter = None
-        if '2025' in question:
-            time_filter = '2025'
-        elif any(phrase in q_lower for phrase in ['this year', 'current year']):
-            time_filter = 'this_year'
-        elif any(phrase in q_lower for phrase in ['last month', 'previous month']):
-            time_filter = 'last_month'
+        if 'customer' in q_lower and any(word in q_lower for word in ['revenue', 'paid', 'sales']):
+            return {
+                'intent_summary': 'Customer revenue analysis',
+                'query_type': 'ranking',
+                'selected_tables': [],
+                'sql_query': '',
+                'confidence': 0.3
+            }
         
         return {
-            'task_type': task_type,
-            'entities': entities,
-            'show_fields': show_fields,
-            'limit': limit,
-            'time_filter': time_filter,
-            'filters': {},
-            'search_terms': q_lower.split()[:5]
+            'intent_summary': 'General query',
+            'query_type': 'list',
+            'selected_tables': [],
+            'sql_query': '',
+            'confidence': 0.1
         }
 
-class TableSelector:
-    """Smart table selection"""
+class SafetyValidator:
+    """SQL safety validation with sqlglot integration"""
     
-    def __init__(self, tables: List[TableInfo]):
-        self.tables = tables
-    
-    def select_tables(self, intent: Dict[str, Any]) -> List[TableInfo]:
-        """Select tables based on intent"""
-        print("   📋 Table selection...")
-        
-        target_entities = intent.get('entities', [])
-        show_fields = intent.get('show_fields', [])
-        
-        # Score tables
-        scored_tables = []
-        for table in self.tables:
-            score = self._calculate_score(table, target_entities, show_fields)
-            if score > 0:
-                scored_tables.append((table, score))
-        
-        # Sort and select
-        scored_tables.sort(key=lambda x: x[1], reverse=True)
-        selected = [table for table, score in scored_tables[:3]]
-        
-        if selected:
-            print(f"      ✅ Selected {len(selected)} tables:")
-            for i, table in enumerate(selected):
-                score = scored_tables[i][1] if i < len(scored_tables) else 0
-                print(f"         {i+1}. {table.name} ({table.entity_type}, score: {score:.2f})")
-        
-        return selected
-    
-    def _calculate_score(self, table: TableInfo, target_entities: List[str], show_fields: List[str]) -> float:
-        """Calculate table score"""
-        score = 0.0
-        
-        # Entity match (highest weight)
-        if table.entity_type in target_entities:
-            score += 10.0
-        
-        # Partial entity matching
-        for entity in target_entities:
-            if entity.lower() in table.entity_type.lower():
-                score += 5.0
-        
-        # Table name matching
-        table_name_lower = table.name.lower()
-        for entity in target_entities:
-            if entity.lower() in table_name_lower:
-                score += 3.0
-        
-        # Business priority
-        priority_scores = {'high': 5.0, 'medium': 2.0, 'low': 0.5}
-        priority = getattr(table, 'business_priority', 'medium')
-        score += priority_scores.get(priority, 2.0)
-        
-        # Field capabilities
-        if 'names' in show_fields and getattr(table, 'name_columns', []):
-            score += 3.0
-        if 'amounts' in show_fields and getattr(table, 'measures', []):
-            score += 3.0
-        if 'dates' in show_fields and getattr(table, 'time_columns', []):
-            score += 2.0
-        
-        # Data availability
-        if table.row_count > 0:
-            score += 2.0
-        
-        # Penalties
-        if any(word in table.name.lower() for word in ['temp', 'test', 'backup']):
-            score *= 0.1
-        
-        return score
-
-class SQLTemplateGenerator:
-    """Fixed SQL template generator (Architecture requirement)"""
-    
-    def __init__(self, llm: AzureChatOpenAI):
-        self.llm = llm
-    
-    async def generate_sql(self, question: str, intent: Dict[str, Any], tables: List[TableInfo]) -> Optional[str]:
-        """Generate SQL using fixed templates with LLM fallback"""
-        print("   ⚡ SQL generation...")
-        
-        if not tables:
-            return None
-        
-        # Try fixed templates first
-        template_sql = self._generate_template_sql(intent, tables[0])
-        if template_sql:
-            if self._validate_sql_safety(template_sql):
-                print("      ✅ Generated using fixed templates")
-                return template_sql
-            else:
-                print("      ⚠️ Template SQL failed safety validation")
-        
-        # LLM fallback
-        llm_sql = await self._generate_llm_sql(question, intent, tables[0])
-        if llm_sql:
-            if self._validate_sql_safety(llm_sql):
-                print("      ✅ Generated using LLM fallback")
-                return llm_sql
-            else:
-                print("      ⚠️ LLM SQL failed safety validation")
-        
-        print("      ❌ SQL generation failed")
-        return None
-    
-    def _generate_template_sql(self, intent: Dict[str, Any], table: TableInfo) -> Optional[str]:
-        """Generate SQL using deterministic templates"""
-        task_type = intent.get('task_type', 'list')
-        limit = intent.get('limit')
-        time_filter = intent.get('time_filter')
-        filters = intent.get('filters', {})
-        
-        # Build SELECT clause
-        select_columns = self._build_select_columns(intent, table)
-        if not select_columns:
-            return None
-        
-        select_clause = ', '.join(select_columns)
-        from_clause = table.full_name
-        
-        # Build WHERE clause
-        where_conditions = []
-        
-        # Time filters
-        time_conditions = self._build_time_conditions(time_filter, table)
-        where_conditions.extend(time_conditions)
-        
-        # Other filters
-        filter_conditions = self._build_filter_conditions(filters, table)
-        where_conditions.extend(filter_conditions)
-        
-        where_clause = f"WHERE {' AND '.join(where_conditions)}" if where_conditions else ""
-        
-        # Generate SQL by task type
-        if task_type == 'ranking' and limit:
-            order_column = self._get_best_order_column(table)
-            if order_column:
-                sql = f"SELECT TOP ({limit}) {select_clause} FROM {from_clause}"
-                if where_clause:
-                    sql += f" {where_clause}"
-                sql += f" ORDER BY [{order_column}] DESC"
-            else:
-                sql = f"SELECT TOP ({limit}) {select_clause} FROM {from_clause}"
-                if where_clause:
-                    sql += f" {where_clause}"
-                    
-        elif task_type == 'aggregation':
-            measure_column = self._get_best_measure_column(table)
-            if measure_column:
-                sql = f"SELECT SUM([{measure_column}]) AS Total FROM {from_clause}"
-                if where_clause:
-                    sql += f" {where_clause}"
-            else:
-                sql = f"SELECT COUNT(*) AS Count FROM {from_clause}"
-                if where_clause:
-                    sql += f" {where_clause}"
-                    
-        elif task_type == 'count':
-            sql = f"SELECT COUNT(*) AS Count FROM {from_clause}"
-            if where_clause:
-                sql += f" {where_clause}"
-                
-        else:  # list
-            top_clause = f"TOP ({limit})" if limit else "TOP (50)"
-            sql = f"SELECT {top_clause} {select_clause} FROM {from_clause}"
-            if where_clause:
-                sql += f" {where_clause}"
-            
-            # Add ORDER BY
-            order_column = self._get_best_order_column(table)
-            if order_column:
-                sql += f" ORDER BY [{order_column}]"
-        
-        return sql
-    
-    def _build_select_columns(self, intent: Dict[str, Any], table: TableInfo) -> List[str]:
-        """Build SELECT columns"""
-        show_fields = intent.get('show_fields', [])
-        columns = []
-        
-        # Name columns
-        if 'names' in show_fields or not show_fields:
-            name_cols = getattr(table, 'name_columns', [])
-            for col in name_cols[:2]:
-                columns.append(f"[{col}]")
-        
-        # Key columns if no names
-        if not columns:
-            key_cols = getattr(table, 'entity_keys', [])
-            for col in key_cols[:1]:
-                columns.append(f"[{col}]")
-        
-        # Measure columns
-        if 'amounts' in show_fields:
-            measures = getattr(table, 'measures', [])
-            for col in measures[:2]:
-                columns.append(f"[{col}]")
-        
-        # Time columns
-        if 'dates' in show_fields:
-            time_cols = getattr(table, 'time_columns', [])
-            for col in time_cols[:1]:
-                columns.append(f"[{col}]")
-        
-        # Fallback: use first few columns
-        if not columns:
-            for col in table.columns[:3]:
-                col_name = col.get('name', '')
-                if col_name and not col_name.startswith('__'):
-                    columns.append(f"[{col_name}]")
-        
-        return columns
-    
-    def _build_time_conditions(self, time_filter: str, table: TableInfo) -> List[str]:
-        """Build time-based WHERE conditions"""
-        conditions = []
-        
-        if not time_filter or time_filter == 'null':
-            return conditions
-        
-        # Get time column
-        time_columns = getattr(table, 'time_columns', [])
-        if not time_columns:
-            # Look for date columns
-            for col in table.columns:
-                col_type = col.get('data_type', '').lower()
-                if 'date' in col_type or 'time' in col_type:
-                    time_columns = [col.get('name')]
-                    break
-        
-        if not time_columns:
-            return conditions
-        
-        time_col = time_columns[0]
-        
-        # Time filter implementations
-        if time_filter == '2025':
-            conditions.append(f"YEAR([{time_col}]) = 2025")
-        elif time_filter == 'this_year':
-            conditions.append(f"YEAR([{time_col}]) = YEAR(GETDATE())")
-        elif time_filter == 'last_month':
-            conditions.append(f"[{time_col}] >= DATEADD(month, -1, DATEADD(day, 1-DAY(GETDATE()), GETDATE()))")
-            conditions.append(f"[{time_col}] < DATEADD(day, 1-DAY(GETDATE()), GETDATE())")
-        
-        return conditions
-    
-    def _build_filter_conditions(self, filters: Dict[str, str], table: TableInfo) -> List[str]:
-        """Build filter-based WHERE conditions"""
-        conditions = []
-        
-        for filter_key, filter_value in filters.items():
-            for col in table.columns:
-                col_name = col.get('name', '').lower()
-                if filter_key.lower() in col_name:
-                    conditions.append(f"[{col.get('name')}] = '{filter_value}'")
-                    break
-        
-        return conditions
-    
-    def _get_best_order_column(self, table: TableInfo) -> Optional[str]:
-        """Get best column for ORDER BY"""
-        # Prefer measures
-        measures = getattr(table, 'measures', [])
-        if measures:
-            return measures[0]
-        
-        # Then time columns
-        time_cols = getattr(table, 'time_columns', [])
-        if time_cols:
-            return time_cols[0]
-        
-        # Then keys
-        key_cols = getattr(table, 'entity_keys', [])
-        if key_cols:
-            return key_cols[0]
-        
-        # First column
-        if table.columns:
-            return table.columns[0].get('name')
-        
-        return None
-    
-    def _get_best_measure_column(self, table: TableInfo) -> Optional[str]:
-        """Get best measure column for aggregation"""
-        measures = getattr(table, 'measures', [])
-        return measures[0] if measures else None
-    
-    def _validate_sql_safety(self, sql: str) -> bool:
-        """Validate SQL safety using sqlglot (Architecture requirement)"""
+    def validate_sql_safety(self, sql: str) -> bool:
+        """Enhanced SQL safety validation"""
         if not sql or len(sql.strip()) < 5:
             return False
         
-        sql_upper = sql.upper().strip()
+        sql_normalized = ' ' + sql.upper().strip() + ' '
         
-        # Must start with safe operations
-        if not any(sql_upper.startswith(start) for start in ['SELECT', 'WITH']):
+        # Basic safety checks
+        safe_starts = [' SELECT ', ' WITH ']
+        if not any(sql_normalized.startswith(start.strip()) for start in safe_starts):
             return False
         
         # Dangerous operations
-        dangerous_keywords = [
-            'INSERT', 'UPDATE', 'DELETE', 'MERGE', 'DROP', 'CREATE', 'ALTER', 
-            'TRUNCATE', 'EXEC', 'EXECUTE', 'SP_', 'XP_'
+        dangerous_patterns = [
+            r'\b(?:INSERT|UPDATE|DELETE|MERGE|REPLACE)\b',
+            r'\b(?:DROP|CREATE|ALTER|TRUNCATE)\b',
+            r'\b(?:EXEC|EXECUTE|SP_|XP_|DBCC)\b',
+            r'\b(?:GRANT|REVOKE|DENY)\b',
+            r'\b(?:BULK|OPENROWSET|OPENDATASOURCE)\b',
+            r'\bXP_CMDSHELL\b',
+            r'\b(?:BACKUP|RESTORE)\b'
         ]
         
-        for keyword in dangerous_keywords:
-            if f' {keyword} ' in f' {sql_upper} ':
+        import re
+        for pattern in dangerous_patterns:
+            if re.search(pattern, sql_normalized, re.IGNORECASE):
                 return False
+        
+        # Check for multiple statements
+        sql_clean = sql.strip().rstrip(';')
+        if ';' in sql_clean:
+            return False
         
         # sqlglot validation if available
         if HAS_SQLGLOT:
@@ -499,81 +273,28 @@ class SQLTemplateGenerator:
                 if not isinstance(parsed, sqlglot.expressions.Select):
                     return False
                 
+                # Check for dangerous subqueries
+                for node in parsed.walk():
+                    if isinstance(node, (sqlglot.expressions.Insert, 
+                                       sqlglot.expressions.Update, 
+                                       sqlglot.expressions.Delete)):
+                        return False
+                
                 return True
                 
             except Exception:
                 return False
         
         return True
-    
-    async def _generate_llm_sql(self, question: str, intent: Dict[str, Any], table: TableInfo) -> Optional[str]:
-        """LLM fallback SQL generation"""
-        try:
-            table_context = self._build_sql_context(table)
-            
-            prompt = f"""Generate safe T-SQL for this question using the provided table.
-
-QUESTION: "{question}"
-
-INTENT: {intent}
-
-{table_context}
-
-REQUIREMENTS:
-- Generate ONLY safe SELECT statements for SQL Server
-- Use square brackets: [column_name]
-- For rankings: SELECT TOP (N) ... ORDER BY [measure] DESC
-- For totals: SELECT SUM([measure]) AS Total FROM [table]
-- For counts: SELECT COUNT(*) AS Count FROM [table]
-- Use only columns that exist in the table
-- NO dangerous operations
-
-Return only the T-SQL query:"""
-
-            messages = [
-                SystemMessage(content="Generate safe T-SQL SELECT queries only. Return only SQL code."),
-                HumanMessage(content=prompt)
-            ]
-            
-            response = await asyncio.to_thread(self.llm.invoke, messages)
-            return clean_sql_query(response.content)
-            
-        except Exception as e:
-            print(f"      ⚠️ LLM SQL generation failed: {e}")
-            return None
-    
-    def _build_sql_context(self, table: TableInfo) -> str:
-        """Build context for LLM SQL generation"""
-        lines = [f"TABLE: {table.full_name}"]
-        lines.append(f"ENTITY TYPE: {table.entity_type}")
-        lines.append(f"ROW COUNT: {table.row_count:,}")
-        
-        lines.append("\nCOLUMNS:")
-        for col in table.columns[:12]:
-            col_name = col.get('name', '')
-            col_type = col.get('data_type', '')
-            
-            annotations = []
-            if col_name in getattr(table, 'name_columns', []):
-                annotations.append('NAME')
-            if col_name in getattr(table, 'measures', []):
-                annotations.append('MEASURE')
-            if col_name in getattr(table, 'entity_keys', []):
-                annotations.append('KEY')
-            
-            ann_str = f" -- {', '.join(annotations)}" if annotations else ""
-            lines.append(f"  [{col_name}] ({col_type}){ann_str}")
-        
-        return '\n'.join(lines)
 
 class QueryExecutor:
-    """Query executor with error handling"""
+    """Query executor with enhanced error handling"""
     
     def __init__(self, config: Config):
         self.config = config
     
     async def execute_query(self, sql: str):
-        """Execute SQL with error handling"""
+        """Execute SQL with enhanced error handling"""
         print("   🔄 Executing query...")
         print(f"      📝 SQL: {sql[:80]}{'...' if len(sql) > 80 else ''}")
         
@@ -607,18 +328,20 @@ class QueryExecutor:
             error_msg = str(e)
             print(f"      ❌ Query failed: {error_msg}")
             
-            # Error suggestions
+            # Enhanced error suggestions
             if "Incorrect syntax" in error_msg:
-                error_msg += " | Check column names and SQL syntax"
+                error_msg += " | Try simpler column names or check table structure"
             elif "Invalid column name" in error_msg:
-                error_msg += " | Column may not exist"
+                error_msg += " | Column may not exist in selected table"
             elif "Invalid object name" in error_msg:
-                error_msg += " | Table may not exist"
+                error_msg += " | Table may not exist or wrong schema"
+            elif "Arithmetic overflow" in error_msg:
+                error_msg += " | Try using different numeric columns"
             
             return [], error_msg
 
 class QueryInterface:
-    """Enhanced Query Interface with fixed templates"""
+    """Enhanced Query Interface with LLM-driven intelligence"""
     
     def __init__(self, config: Config):
         self.config = config
@@ -629,24 +352,22 @@ class QueryInterface:
             api_key=config.api_key,
             azure_deployment=config.deployment_name,
             api_version=config.api_version,
-            request_timeout=60,
+            request_timeout=90,  # Increased for intelligent analysis
+            # temperature=0.1,     # Low temperature for consistent results
         )
         
         # Initialize components
-        self.intent_analyzer = IntentAnalyzer(self.llm)
-        self.sql_generator = SQLTemplateGenerator(self.llm)
+        self.analyzer = IntelligentAnalyzer(self.llm)
+        self.safety_validator = SafetyValidator()
         self.executor = QueryExecutor(config)
         
-        print("✅ Query Interface initialized")
-        print("   🧠 Cross-industry intent analysis")
-        print("   ⚡ Fixed SQL templates with LLM fallback")
+        print("✅ Intelligent Query Interface initialized")
+        print("   🧠 LLM-driven table and column selection")
+        print("   🎯 Dynamic business context understanding")
         print(f"   🛡️ Safety validation: {'✅ sqlglot' if HAS_SQLGLOT else '⚠️ basic only'}")
     
     async def start_session(self, tables: List[TableInfo], domain: Optional[BusinessDomain], relationships: List[Relationship]):
-        """Start interactive session"""
-        
-        # Initialize table selector
-        self.table_selector = TableSelector(tables)
+        """Start intelligent session"""
         
         # Show system readiness
         self._show_system_readiness(tables, domain)
@@ -678,48 +399,62 @@ class QueryInterface:
                 print(f"❌ Error: {e}")
     
     async def process_query(self, question: str, tables: List[TableInfo]) -> QueryResult:
-        """Process query using 3-stage pipeline"""
+        """Process query using intelligent LLM-driven approach"""
         
         try:
-            # Stage 1: Intent analysis
-            intent = await self.intent_analyzer.analyze_intent(question, tables)
+            # Single intelligent analysis
+            analysis = await self.analyzer.analyze_and_generate_sql(question, tables)
             
-            # Stage 2: Table selection
-            selected_tables = self.table_selector.select_tables(intent)
-            
-            if not selected_tables:
-                available_entities = list(set(t.entity_type for t in tables[:10]))
+            if not analysis or analysis.get('confidence', 0) < 0.5:
                 return QueryResult(
                     question=question,
                     sql_query="",
                     results=[],
-                    error=f"No suitable tables found. Available entities: {', '.join(available_entities)}",
+                    error="Could not understand the question. Please try rephrasing with specific business terms.",
                     result_type="error"
                 )
             
-            # Stage 3: SQL generation with safety validation
-            sql = await self.sql_generator.generate_sql(question, intent, selected_tables)
+            # Extract SQL
+            sql = analysis.get('sql_query', '').strip()
             
             if not sql:
                 return QueryResult(
                     question=question,
                     sql_query="",
                     results=[],
-                    error="Could not generate safe SQL. Try rephrasing.",
+                    error="Could not generate SQL. Try asking about specific data like 'customers', 'revenue', or 'sales'.",
+                    result_type="error"
+                )
+            
+            # Safety validation
+            if not self.safety_validator.validate_sql_safety(sql):
+                return QueryResult(
+                    question=question,
+                    sql_query=sql,
+                    results=[],
+                    error="Generated SQL failed safety validation. Try a simpler query.",
                     result_type="error"
                 )
             
             # Execute validated SQL
             results, error = await self.executor.execute_query(sql)
             
+            # Extract table names from analysis
+            tables_used = []
+            for table_info in analysis.get('selected_tables', []):
+                table_name = table_info.get('table_name', '')
+                if table_name:
+                    tables_used.append(table_name)
+            
             return QueryResult(
                 question=question,
                 sql_query=sql,
                 results=results,
                 error=error,
-                tables_used=[t.full_name for t in selected_tables],
+                tables_used=tables_used,
                 result_type="data" if results and not error else "error",
-                sql_generation_method="fixed_template" if "template" in sql else "llm_fallback"
+                sql_generation_method="intelligent_llm",
+                intent_confidence=analysis.get('confidence', 0.8)
             )
             
         except Exception as e:
@@ -732,38 +467,54 @@ class QueryInterface:
             )
     
     def _show_system_readiness(self, tables: List[TableInfo], domain: Optional[BusinessDomain]):
-        """Show system readiness"""
-        entities = {}
+        """Show intelligent system readiness"""
+        
+        # Analyze available data intelligently
+        business_areas = {
+            'Customer Data': 0,
+            'Financial Data': 0, 
+            'Sales Data': 0,
+            'Employee Data': 0,
+            'Contract Data': 0,
+            'Other Data': 0
+        }
+        
         for table in tables:
-            entity = table.entity_type
-            entities[entity] = entities.get(entity, 0) + 1
+            name_lower = table.name.lower()
+            
+            if any(word in name_lower for word in ['customer', 'client', 'account', 'contact']):
+                business_areas['Customer Data'] += 1
+            elif any(word in name_lower for word in ['payment', 'transaction', 'invoice', 'billing', 'revenue']):
+                business_areas['Financial Data'] += 1
+            elif any(word in name_lower for word in ['sales', 'deal', 'opportunity', 'order']):
+                business_areas['Sales Data'] += 1
+            elif any(word in name_lower for word in ['user', 'employee', 'staff', 'rep']):
+                business_areas['Employee Data'] += 1
+            elif any(word in name_lower for word in ['contract', 'agreement']):
+                business_areas['Contract Data'] += 1
+            else:
+                business_areas['Other Data'] += 1
         
-        print(f"\n🚀 QUERY SYSTEM READY:")
-        print(f"   📊 Total objects: {len(tables)}")
+        print(f"\n🚀 INTELLIGENT QUERY SYSTEM READY:")
+        print(f"   📊 Total tables: {len(tables)}")
         
-        sorted_entities = sorted(entities.items(), key=lambda x: x[1], reverse=True)
-        priority_entities = ['Customer', 'Payment', 'Contract', 'Order', 'Employee']
+        for area, count in business_areas.items():
+            if count > 0:
+                emoji = "🔥" if area in ['Customer Data', 'Financial Data', 'Sales Data'] else "📋"
+                print(f"   {emoji} {area}: {count} tables")
         
-        for entity, count in sorted_entities[:6]:
-            priority_emoji = "🔥" if entity in priority_entities else "📋"
-            print(f"   {priority_emoji} {entity}: {count} objects")
+        print(f"\n🧠 INTELLIGENT CAPABILITIES:")
+        print(f"   • Natural language understanding")
+        print(f"   • Dynamic table and column selection")
+        print(f"   • Business context awareness")
+        print(f"   • Safe SQL generation")
         
-        if domain:
-            print(f"   🏢 Domain: {domain.domain_type}")
-        
-        print(f"\n🔄 3-STAGE PIPELINE:")
-        print(f"   1. Cross-Industry Intent Analysis")
-        print(f"   2. Smart Table Selection")
-        print(f"   3. Fixed SQL Templates + Safety Validation")
-        
-        print(f"\n💡 Example questions:")
-        if domain and domain.sample_questions:
-            for i, question in enumerate(domain.sample_questions[:3], 1):
-                print(f"   {i}. {question}")
-        else:
-            print("   • Show customer names")
-            print("   • Total revenue this year") 
-            print("   • Top 10 contracts by amount")
+        print(f"\n💡 Try asking:")
+        print(f"   • Who are our top customers by revenue?")
+        print(f"   • Which sales reps closed the most deals?")
+        print(f"   • What's our total revenue this year?")
+        print(f"   • Show me contract details")
+        print(f"   • List payment transactions")
     
     def _display_result(self, result: QueryResult):
         """Display query results"""
@@ -777,8 +528,12 @@ class QueryInterface:
             print(f"{result.sql_query}")
             
             if result.tables_used:
-                table_names = [t.split('.')[-1].replace(']', '') for t in result.tables_used]
-                print(f"\n📊 Tables Used: {', '.join(table_names)}")
+                # Clean table names for display
+                clean_names = []
+                for table in result.tables_used:
+                    clean_name = table.replace('[', '').replace(']', '').split('.')[-1]
+                    clean_names.append(clean_name)
+                print(f"\n📊 Tables Used: {', '.join(clean_names)}")
             
             print(f"\n📈 Results ({len(result.results)} rows):")
             self._display_data(result.results)
@@ -787,39 +542,61 @@ class QueryInterface:
             print(f"❌ QUERY FAILED")
             print(f"   Error: {result.error}")
             
-            print(f"\n💡 Suggestions:")
-            print(f"   • Try specific entity names: 'customers', 'payments', 'contracts'")
-            print(f"   • Use simple questions: 'show customer names', 'total revenue'")
+            print(f"\n💡 Enhanced suggestions:")
+            print(f"   • Try: 'top 10 customers by revenue'")
+            print(f"   • Try: 'which sales reps closed most deals'")
+            print(f"   • Try: 'total contract value this year'")
     
     def _display_data(self, results: List[Dict[str, Any]]):
-        """Display query results"""
+        """Enhanced data display with business formatting"""
         if len(results) == 1 and len(results[0]) == 1:
             # Single value result
             key, value = next(iter(results[0].items()))
-            if isinstance(value, (int, float)) and abs(value) >= 1000:
-                formatted_value = f"{value:,}"
+            
+            # Format based on column name
+            if any(word in key.lower() for word in ['revenue', 'amount', 'total', 'value']):
+                if isinstance(value, (int, float)) and abs(value) >= 1000:
+                    formatted_value = f"${value:,.2f}"
+                else:
+                    formatted_value = f"${value}"
+            elif any(word in key.lower() for word in ['count', 'number', 'qty']):
+                formatted_value = f"{value:,}" if isinstance(value, (int, float)) else str(value)
             else:
                 formatted_value = str(value)
+            
             print(f"   🎯 {key}: {formatted_value}")
             
         else:
-            # Multiple rows
+            # Multiple rows - enhanced business formatting
             for i, row in enumerate(results[:15], 1):
                 parts = []
                 for j, (key, value) in enumerate(row.items()):
                     if j >= 4:  # Limit columns
                         break
                     
-                    # Format value
-                    if isinstance(value, (int, float)) and abs(value) >= 1000:
-                        formatted_value = f"{value:,}"
-                    elif isinstance(value, str) and len(value) > 30:
-                        formatted_value = value[:30] + "..."
+                    # Enhanced business formatting
+                    if isinstance(value, (int, float)):
+                        if any(word in key.lower() for word in ['revenue', 'amount', 'total', 'value', 'price']):
+                            formatted_value = f"${value:,.2f}" if abs(value) >= 1000 else f"${value}"
+                        elif any(word in key.lower() for word in ['count', 'number', 'qty']):
+                            formatted_value = f"{value:,}"
+                        else:
+                            formatted_value = f"{value:,}" if abs(value) >= 1000 else str(value)
+                    elif isinstance(value, str):
+                        formatted_value = value[:40] + "..." if len(value) > 40 else value
                     else:
                         formatted_value = str(value) if value is not None else ""
                     
-                    # Format key
-                    display_key = key.replace('_', ' ').title() if '_' in key else key
+                    # Enhanced key formatting
+                    if any(word in key.lower() for word in ['revenue', 'amount', 'total']):
+                        display_key = "Revenue"
+                    elif any(word in key.lower() for word in ['name', 'title']):
+                        display_key = key.replace('_', ' ').title()
+                    elif any(word in key.lower() for word in ['count', 'number']):
+                        display_key = "Count"
+                    else:
+                        display_key = key.replace('_', ' ').title()
+                    
                     parts.append(f"{display_key}: {formatted_value}")
                 
                 print(f"   {i:2d}. {' | '.join(parts)}")

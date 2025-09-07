@@ -81,7 +81,7 @@ class SqlServerMetadata:
             s.name as schema_name,
             t.name as table_name,
             t.type_desc as object_type,
-            ISNULL(SUM(p.rows), 0) as estimated_rows
+            ISNULL(SUM(p.row_count), 0) as estimated_rows
         FROM sys.tables t
         INNER JOIN sys.schemas s ON t.schema_id = s.schema_id
         LEFT JOIN sys.dm_db_partition_stats p ON t.object_id = p.object_id 
@@ -307,15 +307,28 @@ class RDLParser:
         return combined_rdl_info
     
     def _parse_single_rdl_file(self, rdl_path: Path) -> Dict[str, Any]:
-        """Parse single RDL file"""
+        """Parse single RDL file with improved XML handling"""
         try:
-            tree = ET.parse(rdl_path)
-            root = tree.getroot()
+            # Read file with encoding detection
+            try:
+                content = rdl_path.read_text(encoding='utf-8')
+            except UnicodeDecodeError:
+                content = rdl_path.read_text(encoding='utf-8-sig')  # Try with BOM
+            except UnicodeDecodeError:
+                content = rdl_path.read_text(encoding='latin-1')   # Fallback
             
-            # Handle namespace
+            # Parse XML
+            try:
+                root = ET.fromstring(content)
+            except ET.ParseError as e:
+                print(f"   ⚠️ XML parse error in {rdl_path.name}: {e}")
+                return {}
+            
+            # Improved namespace handling
             ns = {}
             if root.tag.startswith('{'):
-                ns = {'': 'http://schemas.microsoft.com/sqlserver/reporting/2008/01/reportdefinition'}
+                namespace = root.tag.split('}')[0][1:]
+                ns[''] = namespace
             
             rdl_info = {
                 'report_title': self._get_report_title(root, ns, rdl_path.stem),
@@ -325,16 +338,16 @@ class RDLParser:
                 'business_priority_signals': []
             }
             
-            # Extract DataSets
-            datasets = root.findall('.//DataSet', ns) if ns else root.findall('.//DataSet')
+            # Extract DataSets with improved search
+            datasets = self._find_elements(root, ['DataSet', 'DataSets/DataSet'], ns)
             for dataset in datasets:
                 dataset_info = self._extract_dataset_info(dataset, ns)
                 if dataset_info:
                     rdl_info['datasets'].append(dataset_info)
                     rdl_info['referenced_tables'].update(dataset_info.get('referenced_tables', []))
             
-            # Extract Parameters
-            params = root.findall('.//ReportParameter', ns) if ns else root.findall('.//ReportParameter')
+            # Extract Parameters with improved search
+            params = self._find_elements(root, ['ReportParameter', 'ReportParameters/ReportParameter'], ns)
             for param in params:
                 param_info = self._extract_parameter_info(param, ns)
                 if param_info:
@@ -349,47 +362,100 @@ class RDLParser:
             print(f"   ⚠️ RDL parsing failed for {rdl_path.name}: {e}")
             return {}
     
-    def _get_report_title(self, root, ns: Dict, fallback: str) -> str:
-        """Extract report title"""
-        title_elements = [
-            './/Textbox[@Name="textbox1"]',
-            './/TextRun/Value',
-            './/Paragraph/TextRuns/TextRun/Value'
+    def _find_elements(self, root, xpath_list: List[str], ns: Dict) -> List:
+        """Find elements using multiple XPath expressions"""
+        elements = []
+        
+        # Try multiple search patterns
+        search_patterns = xpath_list + [
+            f".//{path}" for path in xpath_list  # Deep search
         ]
         
-        for xpath in title_elements:
-            elements = root.findall(xpath, ns) if ns else root.findall(xpath)
+        for pattern in search_patterns:
+            try:
+                if ns:
+                    found = root.findall(pattern, ns)
+                else:
+                    found = root.findall(pattern)
+                
+                if found:
+                    elements.extend(found)
+                    break  # Stop at first successful pattern
+            except:
+                continue
+        
+        # If namespaced search fails, try without namespace
+        if not elements and ns:
+            for pattern in xpath_list:
+                try:
+                    found = root.findall(pattern)
+                    if found:
+                        elements.extend(found)
+                        break
+                except:
+                    continue
+        
+        return elements
+    
+    def _get_report_title(self, root, ns: Dict, fallback: str) -> str:
+        """Extract report title with improved search"""
+        title_patterns = [
+            './/Textbox[@Name="textbox1"]//Value',
+            './/Textbox[@Name="Textbox1"]//Value', 
+            './/TextRun/Value',
+            './/Paragraph/TextRuns/TextRun/Value',
+            './/Value'
+        ]
+        
+        for pattern in title_patterns:
+            elements = self._find_elements(root, [pattern], ns)
             for element in elements:
-                if element.text and len(element.text.strip()) > 5:
-                    return element.text.strip()
+                if element.text and len(element.text.strip()) > 3:
+                    title = element.text.strip()
+                    # Skip if it looks like a field reference
+                    if not title.startswith('=') and not title.startswith('Fields!'):
+                        return title
         
         return fallback
     
     def _extract_dataset_info(self, dataset, ns: Dict) -> Dict[str, Any]:
-        """Extract dataset information"""
+        """Extract dataset information with improved parsing"""
         try:
-            name_elem = dataset.find('Name', ns) if ns else dataset.find('Name')
-            query_elem = dataset.find('.//Query', ns) if ns else dataset.find('.//Query')
+            # Get dataset name
+            name_elem = dataset.get('Name') or (dataset.find('Name', ns) if ns else dataset.find('Name'))
+            dataset_name = 'Unknown'
+            if name_elem is not None:
+                dataset_name = name_elem.text if hasattr(name_elem, 'text') else str(name_elem)
             
-            if not query_elem:
+            # Find Query/CommandText with multiple patterns
+            command_text = None
+            command_patterns = [
+                'Query/CommandText',
+                './/CommandText', 
+                'CommandText'
+            ]
+            
+            for pattern in command_patterns:
+                elements = self._find_elements(dataset, [pattern], ns)
+                if elements and elements[0].text:
+                    command_text = elements[0].text.strip()
+                    break
+            
+            if not command_text:
                 return None
-            
-            command_text_elem = query_elem.find('CommandText', ns) if ns else query_elem.find('CommandText')
-            if not command_text_elem or not command_text_elem.text:
-                return None
-            
-            command_text = command_text_elem.text.strip()
             
             dataset_info = {
-                'name': name_elem.text if name_elem is not None and name_elem.text else 'Unknown',
+                'name': dataset_name,
                 'command_text': command_text,
                 'referenced_tables': []
             }
             
-            # Parse SQL to extract tables
+            # Enhanced SQL parsing to extract tables
             if HAS_SQLGLOT and command_text:
                 try:
-                    parsed = sqlglot.parse_one(command_text, dialect="tsql")
+                    # Clean the SQL first
+                    cleaned_sql = self._clean_sql_for_parsing(command_text)
+                    parsed = sqlglot.parse_one(cleaned_sql, dialect="tsql")
                     if parsed:
                         tables = []
                         for table in parsed.find_all(sqlglot.expressions.Table):
@@ -397,31 +463,83 @@ class RDLParser:
                                 table_name = str(table.this)
                                 if table.db:
                                     table_name = f"[{table.db}].[{table_name}]"
+                                elif '.' not in table_name:
+                                    table_name = f"[dbo].[{table_name}]"
                                 tables.append(table_name)
                         dataset_info['referenced_tables'] = list(set(tables))
                 except Exception:
+                    # Fallback to regex extraction
                     dataset_info['referenced_tables'] = self._extract_tables_regex(command_text)
+            else:
+                dataset_info['referenced_tables'] = self._extract_tables_regex(command_text)
             
             return dataset_info
             
-        except Exception:
+        except Exception as e:
+            print(f"   ⚠️ Dataset extraction error: {e}")
             return None
     
-    def _extract_tables_regex(self, sql: str) -> List[str]:
-        """Fallback regex-based table extraction"""
+    def _clean_sql_for_parsing(self, sql: str) -> str:
+        """Clean SQL for better parsing"""
         import re
         
+        # Remove XML entities
+        sql = sql.replace('&gt;', '>').replace('&lt;', '<').replace('&amp;', '&')
+        
+        # Remove comments
+        sql = re.sub(r'--.*?$', '', sql, flags=re.MULTILINE)
+        sql = re.sub(r'/\*.*?\*/', '', sql, flags=re.DOTALL)
+        
+        # Remove variable declarations that might confuse parser
+        sql = re.sub(r'declare\s+@\w+.*?(?=\n|$)', '', sql, flags=re.IGNORECASE | re.MULTILINE)
+        sql = re.sub(r'set\s+@\w+.*?(?=\n|$)', '', sql, flags=re.IGNORECASE | re.MULTILINE)
+        
+        return sql.strip()
+    
+    def _extract_tables_regex(self, sql: str) -> List[str]:
+        """Enhanced regex-based table extraction"""
+        import re
+        
+        # Clean SQL first
+        sql = self._clean_sql_for_parsing(sql)
+        
+        # Enhanced patterns for table extraction
         patterns = [
             r'FROM\s+(\[?\w+\]?\.\[?\w+\]?|\[?\w+\]?)',
-            r'JOIN\s+(\[?\w+\]?\.\[?\w+\]?|\[?\w+\]?)'
+            r'JOIN\s+(\[?\w+\]?\.\[?\w+\]?|\[?\w+\]?)',
+            r'UPDATE\s+(\[?\w+\]?\.\[?\w+\]?|\[?\w+\]?)',
+            r'INSERT\s+INTO\s+(\[?\w+\]?\.\[?\w+\]?|\[?\w+\]?)',
+            # Handle temp tables and CTEs
+            r'WITH\s+(\w+)\s+AS',
+            # Handle schema.table patterns
+            r'\b(\w+\.\w+)\b(?=\s+(?:AS\s+\w+\s*)?(?:WHERE|GROUP|ORDER|JOIN|,|\)|$))'
         ]
         
         tables = set()
+        
         for pattern in patterns:
-            matches = re.findall(pattern, sql, re.IGNORECASE)
+            matches = re.findall(pattern, sql, re.IGNORECASE | re.MULTILINE)
             for match in matches:
                 cleaned = match.strip()
-                if cleaned and not cleaned.upper() in ['WHERE', 'SELECT']:
+                
+                # Skip obvious non-tables
+                skip_words = ['WHERE', 'SELECT', 'GROUP', 'ORDER', 'HAVING', 'AND', 'OR', 'AS', 'ON']
+                if cleaned.upper() in skip_words:
+                    continue
+                
+                # Skip variables and functions
+                if cleaned.startswith('@') or '(' in cleaned:
+                    continue
+                
+                # Normalize table names
+                if cleaned and len(cleaned) > 1:
+                    if '.' not in cleaned and not cleaned.startswith('['):
+                        cleaned = f"[dbo].[{cleaned}]"
+                    elif '.' in cleaned and not cleaned.startswith('['):
+                        parts = cleaned.split('.')
+                        if len(parts) == 2:
+                            cleaned = f"[{parts[0]}].[{parts[1]}]"
+                    
                     tables.add(cleaned)
         
         return list(tables)
@@ -444,11 +562,21 @@ class RDLParser:
         signals = []
         title = rdl_info.get('report_title', '').lower()
         
-        if any(word in title for word in ['monthly', 'weekly', 'executive']):
+        # Executive/important reports
+        if any(word in title for word in ['monthly', 'weekly', 'executive', 'dashboard', 'summary']):
             signals.append('executive_report')
         
-        if any(word in title for word in ['absentees', 'personnel', 'employee']):
-            signals.append('hr_data')
+        # Greek business terms
+        if any(word in title for word in ['συμβόλαια', 'πελατών', 'καμπάνια', 'τζίρος', 'φερεγγυότητα']):
+            signals.append('business_critical')
+        
+        # Contract/payment analysis
+        if any(word in title for word in ['contract', 'payment', 'revenue', 'billing', 'πληρωμής']):
+            signals.append('financial_data')
+        
+        # Customer analysis
+        if any(word in title for word in ['customer', 'client', 'πελατών']):
+            signals.append('customer_data')
         
         return signals
 
