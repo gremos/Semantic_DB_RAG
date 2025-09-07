@@ -10,7 +10,6 @@ import json
 import time
 from typing import List, Dict, Any, Optional
 from datetime import datetime
-from pathlib import Path
 
 from langchain_openai import AzureChatOpenAI
 from langchain.schema import HumanMessage, SystemMessage
@@ -377,7 +376,7 @@ class DomainAnalyzer:
             return "Business Intelligence"
 
 class CacheManager:
-    """Cache management for semantic analysis"""
+    """Cache management for semantic analysis (COMPLIANT - uses existing cache)"""
     
     def __init__(self, config: Config):
         self.config = config

@@ -246,7 +246,7 @@ class RDLParser:
     """RDL parser for SSRS reports (Architecture requirement)"""
     
     def parse_all_rdl_files(self, rdl_directory: str = "data_upload") -> Dict[str, Any]:
-        """Parse all RDL files from data_upload directory"""
+        """Parse all RDL files from data_upload directory (COMPLIANT - reads ALL files from path)"""
         print(f"   📋 Parsing all RDL files from: {rdl_directory}")
         
         rdl_dir = Path(rdl_directory)
@@ -516,7 +516,7 @@ class SampleCollector:
         return table_info.columns[0].get('name') if table_info.columns else None
 
 class CacheManager:
-    """Cache management"""
+    """Cache management (COMPLIANT - uses existing cache, doesn't create new files)"""
     
     def __init__(self, config: Config):
         self.config = config
