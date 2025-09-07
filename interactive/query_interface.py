@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Query Interface - LLM-Driven Intelligence
+Query Interface - Fixed Safety Validation and Template-First SQL
 Simple, Readable, Maintainable - DRY, SOLID, YAGNI principles
-More LLM intelligence, less rigid coding
+Fixed: Safety validator, template-first approach, better table selection
 """
 
 import asyncio
@@ -25,221 +25,449 @@ from shared.config import Config
 from shared.models import TableInfo, BusinessDomain, Relationship, QueryResult
 from shared.utils import parse_json_response, clean_sql_query, safe_database_value
 
-class IntelligentAnalyzer:
-    """LLM-driven intelligent query analysis - no rigid entity constraints"""
+class IntentParser:
+    """Parse user intent for deterministic template selection"""
     
     def __init__(self, llm: AzureChatOpenAI):
         self.llm = llm
     
-    async def analyze_and_generate_sql(self, question: str, tables: List[TableInfo]) -> Dict[str, Any]:
-        """Single LLM call for complete analysis and SQL generation"""
-        print("   🧠 LLM-driven intelligent analysis...")
+    async def parse_intent(self, question: str) -> Dict[str, Any]:
+        """Parse user intent into structured format"""
+        print("   🎯 Parsing intent...")
         
-        # Build comprehensive context
-        context = self._build_intelligent_context(tables)
-        
-        # Single intelligent prompt for everything
-        result = await self._get_intelligent_response(question, context)
-        
-        if result:
-            print(f"      ✅ Intent: {result.get('intent_summary', 'analyzed')}")
-            selected_tables = result.get('selected_tables', [])
-            if selected_tables:
-                print(f"      📊 Selected: {', '.join([t.get('table_name', 'Unknown') for t in selected_tables])}")
-            return result
-        
-        return self._create_fallback_response(question, tables)
-    
-    def _build_intelligent_context(self, tables: List[TableInfo]) -> str:
-        """Build rich context for LLM understanding"""
-        context_lines = [
-            "DATABASE CONTEXT:",
-            f"Total available tables: {len(tables)}",
-            ""
-        ]
-        
-        # Group tables by likely business area (simple heuristics)
-        business_areas = {
-            'Customer Data': [],
-            'Financial Data': [], 
-            'Sales Data': [],
-            'Employee Data': [],
-            'System Data': []
-        }
-        
-        for table in tables:
-            name_lower = table.name.lower()
-            
-            # Simple business area classification
-            if any(word in name_lower for word in ['customer', 'client', 'account', 'contact']):
-                business_areas['Customer Data'].append(table)
-            elif any(word in name_lower for word in ['payment', 'transaction', 'invoice', 'billing', 'revenue']):
-                business_areas['Financial Data'].append(table)
-            elif any(word in name_lower for word in ['sales', 'deal', 'opportunity', 'contract', 'order']):
-                business_areas['Sales Data'].append(table)
-            elif any(word in name_lower for word in ['user', 'employee', 'staff', 'rep']):
-                business_areas['Employee Data'].append(table)
-            else:
-                business_areas['System Data'].append(table)
-        
-        # Present tables by business area with rich details
-        for area, area_tables in business_areas.items():
-            if area_tables:
-                context_lines.append(f"\n{area.upper()}:")
-                for table in area_tables[:5]:  # Limit to keep context manageable
-                    context_lines.append(f"\n  📊 {table.full_name}")
-                    context_lines.append(f"      Rows: {table.row_count:,}")
-                    
-                    # Show meaningful columns
-                    col_details = []
-                    for col in table.columns[:8]:
-                        col_name = col.get('name', '')
-                        col_type = col.get('data_type', '')
-                        
-                        # Add business meaning hints
-                        hints = []
-                        if any(word in col_name.lower() for word in ['name', 'title', 'description']):
-                            hints.append('DISPLAY')
-                        if any(word in col_name.lower() for word in ['amount', 'total', 'revenue', 'price']):
-                            hints.append('MONEY')
-                        if any(word in col_name.lower() for word in ['date', 'time', 'created', 'modified']):
-                            hints.append('DATE')
-                        if col_name.lower().endswith('id') or 'id' in col_name.lower():
-                            hints.append('ID')
-                        
-                        hint_str = f" ({', '.join(hints)})" if hints else ""
-                        col_details.append(f"{col_name} ({col_type}){hint_str}")
-                    
-                    context_lines.append(f"      Columns: {', '.join(col_details)}")
-                    
-                    # Show sample data insights
-                    if table.sample_data:
-                        sample_insights = []
-                        first_row = table.sample_data[0]
-                        for key, value in list(first_row.items())[:4]:
-                            if not key.startswith('__') and value is not None:
-                                if isinstance(value, str) and len(str(value)) > 50:
-                                    value = str(value)[:50] + "..."
-                                sample_insights.append(f"{key}={value}")
-                        
-                        if sample_insights:
-                            context_lines.append(f"      Sample: {', '.join(sample_insights)}")
-        
-        return '\n'.join(context_lines)
-    
-    async def _get_intelligent_response(self, question: str, context: str) -> Optional[Dict[str, Any]]:
-        """Get intelligent response from LLM"""
         try:
-            prompt = f"""You are a business intelligence expert analyzing a database to answer this question:
+            prompt = f"""Parse this business question into structured intent:
 
 QUESTION: "{question}"
 
-{context}
-
-Your task is to:
-1. Understand what the user is asking for
-2. Identify which tables contain the data needed
-3. Determine which columns to use for the query
-4. Generate appropriate SQL Server T-SQL
-
-Think step by step:
-- What business entities does this question involve? (customers, sales reps, revenue, contracts, etc.)
-- Which tables are most likely to contain this data?
-- What columns would contain the specific data needed?
-- What type of query is this? (ranking, aggregation, list, count)
-
-IMPORTANT SQL GENERATION RULES:
-- Generate SIMPLE SQL that works with a single table when possible
-- Use JOINs only when absolutely necessary
-- Prefer tables that already contain the needed data aggregated
-- Use proper SQL Server syntax with square brackets [column_name]
-- For ranking queries: SELECT TOP (N) ... ORDER BY ... DESC
-- For aggregation: SELECT SUM/COUNT/AVG(...) FROM single_table WHERE ...
-- Keep queries simple and safe
-
 Respond with JSON only:
 {{
-  "intent_summary": "Brief description of what user wants",
-  "business_entities": ["customer", "revenue", "sales_rep"],
-  "query_type": "ranking|aggregation|list|count",
-  "selected_tables": [
-    {{
-      "table_name": "[schema].[table]",
-      "reason": "why this table was selected",
-      "columns_needed": [
-        {{
-          "column_name": "column_name",
-          "purpose": "customer_name|revenue_amount|date_filter|grouping",
-          "data_type": "varchar|decimal|datetime"
-        }}
-      ]
-    }}
-  ],
-  "sql_query": "SELECT TOP (10) [CustomerName], [TotalRevenue] FROM [dbo].[CustomerSummary] ORDER BY [TotalRevenue] DESC",
-  "confidence": 0.9
+  "task_type": "list|count|aggregation|ranking",
+  "entities": ["Customer", "Payment", "Order", "Employee"],
+  "show_fields": ["name", "amount", "date"],
+  "limit": 10,
+  "time_filter": "this_year|last_month|2025|null",
+  "filters": {{"status": "active", "type": "paid"}},
+  "group_by": ["customer", "month"]
 }}
 
-EXAMPLES OF GOOD SIMPLE SQL:
-- Single table ranking: "SELECT TOP (10) [CustomerName], [Revenue] FROM [dbo].[Customers] ORDER BY [Revenue] DESC"
-- Single table aggregation: "SELECT SUM([Amount]) AS TotalRevenue FROM [dbo].[Payments]"
-- Single table with filter: "SELECT [Name], [Amount] FROM [dbo].[Contracts] WHERE [Status] = 'Active'"
+TASK TYPES:
+- list: Show records
+- count: Count records  
+- aggregation: Sum/total/average
+- ranking: Top N by measure
 
-IMPORTANT: 
-- Only select tables that actually exist in the provided context
-- Choose columns that make business sense for the question
-- Use proper SQL Server syntax with square brackets
-- For money/revenue, look for columns with 'amount', 'total', 'revenue', 'price' in name
-- For customer names, look for columns with 'name', 'title', 'description'
-- For time filters, use actual date columns, not geographic coordinates!
-- KEEP IT SIMPLE - prefer single table queries when possible"""
+ENTITIES: Customer, Payment, Order, Product, Contract, Employee, Vendor, Project, Asset, Inventory, Event, System, Other
+
+TIME FILTERS:
+- this_year, last_month, 2025, between_dates, null
+
+Examples:
+"top customers by revenue" → task_type: "ranking", entities: ["Customer"], show_fields: ["name", "revenue"], time_filter: null
+"total payments this year" → task_type: "aggregation", entities: ["Payment"], show_fields: ["amount"], time_filter: "this_year"
+"customer count" → task_type: "count", entities: ["Customer"]"""
 
             messages = [
-                SystemMessage(content="You are a business intelligence expert. Analyze the database intelligently and respond with JSON only."),
+                SystemMessage(content="Parse business questions into structured intent. Respond with JSON only."),
                 HumanMessage(content=prompt)
             ]
             
             response = await asyncio.to_thread(self.llm.invoke, messages)
-            return parse_json_response(response.content)
+            result = parse_json_response(response.content)
+            
+            if result:
+                print(f"      ✅ Task: {result.get('task_type', 'unknown')}")
+                print(f"      📋 Entities: {', '.join(result.get('entities', []))}")
+                return result
+            
+            return self._create_fallback_intent(question)
             
         except Exception as e:
-            print(f"      ⚠️ Intelligent analysis failed: {e}")
-            return None
+            print(f"      ⚠️ Intent parsing failed: {e}")
+            return self._create_fallback_intent(question)
     
-    def _create_fallback_response(self, question: str, tables: List[TableInfo]) -> Dict[str, Any]:
-        """Create fallback response when LLM fails"""
-        # Simple keyword-based fallback
+    def _create_fallback_intent(self, question: str) -> Dict[str, Any]:
+        """Create fallback intent from keywords"""
         q_lower = question.lower()
         
-        if 'customer' in q_lower and any(word in q_lower for word in ['revenue', 'paid', 'sales']):
-            return {
-                'intent_summary': 'Customer revenue analysis',
-                'query_type': 'ranking',
-                'selected_tables': [],
-                'sql_query': '',
-                'confidence': 0.3
-            }
+        # Simple keyword detection
+        if any(word in q_lower for word in ['top', 'highest', 'best', 'ranking']):
+            task_type = "ranking"
+            limit = 10
+        elif any(word in q_lower for word in ['total', 'sum', 'amount']):
+            task_type = "aggregation"  
+            limit = None
+        elif any(word in q_lower for word in ['count', 'how many', 'number']):
+            task_type = "count"
+            limit = None
+        else:
+            task_type = "list"
+            limit = 20
+        
+        # Entity detection
+        entities = []
+        if any(word in q_lower for word in ['customer', 'client']):
+            entities.append('Customer')
+        if any(word in q_lower for word in ['payment', 'revenue', 'money']):
+            entities.append('Payment')
+        if any(word in q_lower for word in ['order', 'sale']):
+            entities.append('Order')
+        if any(word in q_lower for word in ['employee', 'staff']):
+            entities.append('Employee')
+        
+        if not entities:
+            entities = ['Customer']  # Default
+        
+        # Time filter detection
+        time_filter = None
+        if any(word in q_lower for word in ['2025']):
+            time_filter = '2025'
+        elif any(word in q_lower for word in ['this year', 'current year']):
+            time_filter = 'this_year'
+        elif any(word in q_lower for word in ['last month']):
+            time_filter = 'last_month'
         
         return {
-            'intent_summary': 'General query',
-            'query_type': 'list',
-            'selected_tables': [],
-            'sql_query': '',
-            'confidence': 0.1
+            'task_type': task_type,
+            'entities': entities,
+            'show_fields': ['name', 'amount'],
+            'limit': limit,
+            'time_filter': time_filter,
+            'filters': {},
+            'group_by': []
         }
 
+class SmartTableSelector:
+    """Smart table selection with multi-factor scoring"""
+    
+    def select_tables(self, intent: Dict[str, Any], tables: List[TableInfo]) -> List[TableInfo]:
+        """Select best tables using multi-factor scoring"""
+        print("   📊 Smart table selection...")
+        
+        scored_tables = []
+        required_entities = intent.get('entities', [])
+        task_type = intent.get('task_type', 'list')
+        time_filter = intent.get('time_filter')
+        
+        for table in tables:
+            score = self._score_table(table, required_entities, task_type, time_filter)
+            if score > 0.1:  # Minimum threshold
+                scored_tables.append((table, score))
+        
+        # Sort by score and return top tables
+        scored_tables.sort(key=lambda x: x[1], reverse=True)
+        selected = [table for table, score in scored_tables[:3]]
+        
+        if selected:
+            for table in selected[:2]:
+                print(f"      ✅ {table.name}: {table.entity_type} ({table.row_count:,} rows)")
+        
+        return selected
+    
+    def _score_table(self, table: TableInfo, entities: List[str], task_type: str, time_filter: str) -> float:
+        """Score table using multi-factor analysis"""
+        score = 0.0
+        
+        # 1. Entity fit (30%)
+        entity_score = 0.0
+        if table.entity_type in entities:
+            entity_score = 1.0
+        elif any(entity.lower() in table.name.lower() for entity in entities):
+            entity_score = 0.7
+        score += entity_score * 0.3
+        
+        # 2. Measure fit (25%) - for aggregation/ranking tasks
+        measure_score = 0.0
+        if task_type in ['aggregation', 'ranking']:
+            if hasattr(table, 'measures') and table.measures:
+                measure_score = 1.0
+            elif any(col.get('data_type', '').lower() in ['decimal', 'money', 'float', 'numeric'] 
+                    for col in table.columns):
+                measure_score = 0.8
+            elif any(word in col.get('name', '').lower() 
+                    for col in table.columns 
+                    for word in ['amount', 'total', 'revenue', 'value', 'price']):
+                measure_score = 0.9
+        else:
+            measure_score = 0.5  # Not critical for list/count
+        score += measure_score * 0.25
+        
+        # 3. Time fit (20%) - for time-filtered queries
+        time_score = 0.0
+        if time_filter:
+            if hasattr(table, 'time_columns') and table.time_columns:
+                time_score = 1.0
+            elif any(col.get('data_type', '').lower() in ['datetime', 'date', 'timestamp']
+                    for col in table.columns):
+                time_score = 0.9
+            elif any(word in col.get('name', '').lower()
+                    for col in table.columns
+                    for word in ['date', 'time', 'created', 'modified']):
+                time_score = 0.8
+        else:
+            time_score = 0.7  # Neutral if no time filter
+        score += time_score * 0.20
+        
+        # 4. Row estimate (10%) - prefer fact tables for aggregations
+        row_score = 0.0
+        if table.row_count > 1000:
+            row_score = 1.0
+        elif table.row_count > 100:
+            row_score = 0.8
+        elif table.row_count > 10:
+            row_score = 0.6
+        else:
+            row_score = 0.3
+        score += row_score * 0.10
+        
+        # 5. Business priority (10%)
+        priority_score = 0.0
+        if hasattr(table, 'business_priority'):
+            if table.business_priority == 'high':
+                priority_score = 1.0
+            elif table.business_priority == 'medium':
+                priority_score = 0.7
+            else:
+                priority_score = 0.4
+        else:
+            priority_score = 0.5
+        score += priority_score * 0.10
+        
+        # 6. Name columns (5%) - for display purposes
+        name_score = 0.0
+        if hasattr(table, 'name_columns') and table.name_columns:
+            name_score = 1.0
+        elif any(word in col.get('name', '').lower()
+                for col in table.columns
+                for word in ['name', 'title', 'description']):
+            name_score = 0.8
+        score += name_score * 0.05
+        
+        return min(score, 1.0)
+
+class TemplateGenerator:
+    """Generate SQL using deterministic templates"""
+    
+    def generate_sql(self, intent: Dict[str, Any], tables: List[TableInfo]) -> Optional[str]:
+        """Generate SQL using templates"""
+        if not tables:
+            return None
+        
+        print("   ⚙️ Template-based SQL generation...")
+        
+        task_type = intent.get('task_type', 'list')
+        table = tables[0]  # Use best table
+        
+        try:
+            if task_type == 'ranking':
+                return self._generate_ranking_sql(intent, table)
+            elif task_type == 'aggregation':
+                return self._generate_aggregation_sql(intent, table)
+            elif task_type == 'count':
+                return self._generate_count_sql(intent, table)
+            else:  # list
+                return self._generate_list_sql(intent, table)
+        except Exception as e:
+            print(f"      ⚠️ Template generation failed: {e}")
+            return None
+    
+    def _generate_ranking_sql(self, intent: Dict[str, Any], table: TableInfo) -> str:
+        """Generate TOP N ranking query"""
+        limit = intent.get('limit', 10)
+        
+        # Find best columns
+        name_col = self._find_name_column(table)
+        measure_col = self._find_measure_column(table)
+        
+        if not measure_col:
+            raise ValueError("No measure column found for ranking")
+        
+        # Build SELECT
+        select_cols = []
+        if name_col:
+            select_cols.append(f"[{name_col}]")
+        select_cols.append(f"[{measure_col}]")
+        
+        # Build WHERE for time filter
+        where_clause = self._build_where_conditions(intent, table)
+        
+        sql = f"SELECT TOP ({limit}) {', '.join(select_cols)} FROM {table.full_name}"
+        if where_clause:
+            sql += f" WHERE {where_clause}"
+        sql += f" ORDER BY [{measure_col}] DESC"
+        
+        return sql
+    
+    def _generate_aggregation_sql(self, intent: Dict[str, Any], table: TableInfo) -> str:
+        """Generate aggregation query"""
+        measure_col = self._find_measure_column(table)
+        
+        if not measure_col:
+            raise ValueError("No measure column found for aggregation")
+        
+        # Build WHERE for time filter
+        where_clause = self._build_where_conditions(intent, table)
+        
+        sql = f"SELECT SUM([{measure_col}]) AS Total FROM {table.full_name}"
+        if where_clause:
+            sql += f" WHERE {where_clause}"
+        
+        return sql
+    
+    def _generate_count_sql(self, intent: Dict[str, Any], table: TableInfo) -> str:
+        """Generate count query"""
+        where_clause = self._build_where_conditions(intent, table)
+        
+        sql = f"SELECT COUNT(*) AS Count FROM {table.full_name}"
+        if where_clause:
+            sql += f" WHERE {where_clause}"
+        
+        return sql
+    
+    def _generate_list_sql(self, intent: Dict[str, Any], table: TableInfo) -> str:
+        """Generate list query"""
+        limit = intent.get('limit', 20)
+        
+        # Find best display columns
+        display_cols = self._get_display_columns(table, 4)
+        
+        # Build WHERE for time filter
+        where_clause = self._build_where_conditions(intent, table)
+        
+        sql = f"SELECT TOP ({limit}) {', '.join(f'[{col}]' for col in display_cols)} FROM {table.full_name}"
+        if where_clause:
+            sql += f" WHERE {where_clause}"
+        
+        # Order by best column
+        sort_col = self._find_sort_column(table)
+        if sort_col:
+            sql += f" ORDER BY [{sort_col}] DESC"
+        
+        return sql
+    
+    def _find_name_column(self, table: TableInfo) -> Optional[str]:
+        """Find best name/display column"""
+        if hasattr(table, 'name_columns') and table.name_columns:
+            return table.name_columns[0]
+        
+        for col in table.columns:
+            col_name = col.get('name', '').lower()
+            if any(word in col_name for word in ['name', 'title', 'description']):
+                return col.get('name')
+        
+        return None
+    
+    def _find_measure_column(self, table: TableInfo) -> Optional[str]:
+        """Find best measure column"""
+        if hasattr(table, 'measures') and table.measures:
+            return table.measures[0]
+        
+        # Look for numeric columns with money/amount names
+        for col in table.columns:
+            col_name = col.get('name', '').lower()
+            col_type = col.get('data_type', '').lower()
+            
+            if (any(word in col_name for word in ['amount', 'total', 'revenue', 'value', 'price']) and
+                col_type in ['decimal', 'money', 'float', 'numeric', 'int']):
+                return col.get('name')
+        
+        # Fallback to any numeric column
+        for col in table.columns:
+            col_type = col.get('data_type', '').lower()
+            if col_type in ['decimal', 'money', 'float', 'numeric']:
+                return col.get('name')
+        
+        return None
+    
+    def _find_sort_column(self, table: TableInfo) -> Optional[str]:
+        """Find best column for sorting"""
+        # Prefer measure columns
+        measure_col = self._find_measure_column(table)
+        if measure_col:
+            return measure_col
+        
+        # Then date columns
+        for col in table.columns:
+            col_type = col.get('data_type', '').lower()
+            if 'date' in col_type or 'time' in col_type:
+                return col.get('name')
+        
+        # Then ID columns
+        for col in table.columns:
+            col_name = col.get('name', '').lower()
+            if col_name.endswith('id') or 'id' in col_name:
+                return col.get('name')
+        
+        return None
+    
+    def _get_display_columns(self, table: TableInfo, max_cols: int) -> List[str]:
+        """Get best columns for display"""
+        cols = []
+        
+        # Name columns first
+        name_col = self._find_name_column(table)
+        if name_col:
+            cols.append(name_col)
+        
+        # Measure columns
+        measure_col = self._find_measure_column(table)
+        if measure_col and measure_col not in cols:
+            cols.append(measure_col)
+        
+        # Fill with other columns
+        for col in table.columns:
+            if len(cols) >= max_cols:
+                break
+            col_name = col.get('name', '')
+            if col_name and col_name not in cols:
+                cols.append(col_name)
+        
+        return cols[:max_cols]
+    
+    def _build_where_conditions(self, intent: Dict[str, Any], table: TableInfo) -> Optional[str]:
+        """Build WHERE conditions for time filters"""
+        time_filter = intent.get('time_filter')
+        if not time_filter:
+            return None
+        
+        # Find date column
+        date_col = None
+        for col in table.columns:
+            col_type = col.get('data_type', '').lower()
+            col_name = col.get('name', '').lower()
+            
+            if ('date' in col_type or 'time' in col_type or 
+                any(word in col_name for word in ['date', 'time', 'created'])):
+                date_col = col.get('name')
+                break
+        
+        if not date_col:
+            return None
+        
+        # Build condition based on time filter
+        if time_filter == 'this_year':
+            return f"YEAR([{date_col}]) = YEAR(GETDATE())"
+        elif time_filter == '2025':
+            return f"YEAR([{date_col}]) = 2025"
+        elif time_filter == 'last_month':
+            return f"[{date_col}] >= EOMONTH(GETDATE(), -2) AND [{date_col}] < EOMONTH(GETDATE(), -1)"
+        
+        return None
+
 class SafetyValidator:
-    """SQL safety validation with sqlglot integration"""
+    """Fixed SQL safety validation"""
     
     def validate_sql_safety(self, sql: str) -> bool:
-        """Enhanced SQL safety validation"""
+        """Enhanced SQL safety validation (FIXED)"""
         if not sql or len(sql.strip()) < 5:
             return False
         
-        sql_normalized = ' ' + sql.upper().strip() + ' '
+        # FIXED: Don't prepend leading space that breaks startswith
+        sql_stripped = sql.strip()
+        sql_normalized = sql_stripped.upper()
         
-        # Basic safety checks
-        safe_starts = [' SELECT ', ' WITH ']
-        if not any(sql_normalized.startswith(start.strip()) for start in safe_starts):
+        # FIXED: Check without leading space
+        if not sql_normalized.startswith(('SELECT', 'WITH')):
             return False
         
         # Dangerous operations
@@ -263,24 +491,24 @@ class SafetyValidator:
         if ';' in sql_clean:
             return False
         
-        # sqlglot validation if available
+        # FIXED: sqlglot validation with CTE support
         if HAS_SQLGLOT:
             try:
                 parsed = sqlglot.parse_one(sql, dialect="tsql")
                 if not parsed:
                     return False
                 
-                if not isinstance(parsed, sqlglot.expressions.Select):
+                # FIXED: Accept both SELECT and WITH (CTE)
+                if isinstance(parsed, sqlglot.expressions.Select):
+                    return True
+                elif isinstance(parsed, sqlglot.expressions.With):
+                    # CTE - check if it contains a SELECT
+                    for node in parsed.walk():
+                        if isinstance(node, sqlglot.expressions.Select):
+                            return True
                     return False
-                
-                # Check for dangerous subqueries
-                for node in parsed.walk():
-                    if isinstance(node, (sqlglot.expressions.Insert, 
-                                       sqlglot.expressions.Update, 
-                                       sqlglot.expressions.Delete)):
-                        return False
-                
-                return True
+                else:
+                    return False
                 
             except Exception:
                 return False
@@ -341,7 +569,7 @@ class QueryExecutor:
             return [], error_msg
 
 class QueryInterface:
-    """Enhanced Query Interface with LLM-driven intelligence"""
+    """Enhanced Query Interface with fixed safety validation and template-first approach"""
     
     def __init__(self, config: Config):
         self.config = config
@@ -352,22 +580,23 @@ class QueryInterface:
             api_key=config.api_key,
             azure_deployment=config.deployment_name,
             api_version=config.api_version,
-            request_timeout=90,  # Increased for intelligent analysis
-            # temperature=0.1,     # Low temperature for consistent results
+            request_timeout=60,
         )
         
         # Initialize components
-        self.analyzer = IntelligentAnalyzer(self.llm)
+        self.intent_parser = IntentParser(self.llm)
+        self.table_selector = SmartTableSelector()
+        self.template_generator = TemplateGenerator()
         self.safety_validator = SafetyValidator()
         self.executor = QueryExecutor(config)
         
-        print("✅ Intelligent Query Interface initialized")
-        print("   🧠 LLM-driven table and column selection")
-        print("   🎯 Dynamic business context understanding")
-        print(f"   🛡️ Safety validation: {'✅ sqlglot' if HAS_SQLGLOT else '⚠️ basic only'}")
+        print("✅ Enhanced Query Interface initialized")
+        print("   🎯 Template-first SQL generation")
+        print("   📊 Smart multi-factor table selection")
+        print(f"   🛡️ Fixed safety validation: {'✅ sqlglot + CTE' if HAS_SQLGLOT else '⚠️ basic only'}")
     
     async def start_session(self, tables: List[TableInfo], domain: Optional[BusinessDomain], relationships: List[Relationship]):
-        """Start intelligent session"""
+        """Start enhanced session with template-first approach"""
         
         # Show system readiness
         self._show_system_readiness(tables, domain)
@@ -399,62 +628,73 @@ class QueryInterface:
                 print(f"❌ Error: {e}")
     
     async def process_query(self, question: str, tables: List[TableInfo]) -> QueryResult:
-        """Process query using intelligent LLM-driven approach"""
+        """FIXED: Process query with template-first approach and normalization"""
         
         try:
-            # Single intelligent analysis
-            analysis = await self.analyzer.analyze_and_generate_sql(question, tables)
+            # Stage 1: Parse intent 
+            intent = await self.intent_parser.parse_intent(question)
             
-            if not analysis or analysis.get('confidence', 0) < 0.5:
+            if not intent or intent.get('task_type') == 'unknown':
                 return QueryResult(
                     question=question,
                     sql_query="",
                     results=[],
-                    error="Could not understand the question. Please try rephrasing with specific business terms.",
+                    error="Could not understand the question. Please try rephrasing.",
                     result_type="error"
                 )
             
-            # Extract SQL
-            sql = analysis.get('sql_query', '').strip()
+            # Stage 2: Smart table selection
+            selected_tables = self.table_selector.select_tables(intent, tables)
+            
+            if not selected_tables:
+                return QueryResult(
+                    question=question,
+                    sql_query="",
+                    results=[],
+                    error="No suitable tables found for this query. Try asking about available data entities.",
+                    result_type="error"
+                )
+            
+            # Stage 3: Template-based SQL generation
+            sql = self.template_generator.generate_sql(intent, selected_tables)
             
             if not sql:
                 return QueryResult(
                     question=question,
                     sql_query="",
                     results=[],
-                    error="Could not generate SQL. Try asking about specific data like 'customers', 'revenue', or 'sales'.",
+                    error="Could not generate SQL template. Try a simpler query type.",
                     result_type="error"
                 )
             
-            # Safety validation
-            if not self.safety_validator.validate_sql_safety(sql):
+            # FIXED: Normalize SQL first, then validate
+            cleaned_sql = clean_sql_query(sql)
+            
+            # FIXED: Safety validation
+            if not self.safety_validator.validate_sql_safety(cleaned_sql):
                 return QueryResult(
                     question=question,
-                    sql_query=sql,
+                    sql_query=cleaned_sql,
                     results=[],
                     error="Generated SQL failed safety validation. Try a simpler query.",
                     result_type="error"
                 )
             
             # Execute validated SQL
-            results, error = await self.executor.execute_query(sql)
+            results, error = await self.executor.execute_query(cleaned_sql)
             
-            # Extract table names from analysis
-            tables_used = []
-            for table_info in analysis.get('selected_tables', []):
-                table_name = table_info.get('table_name', '')
-                if table_name:
-                    tables_used.append(table_name)
+            # Extract table names
+            tables_used = [table.full_name for table in selected_tables]
             
             return QueryResult(
                 question=question,
-                sql_query=sql,
+                sql_query=cleaned_sql,
                 results=results,
                 error=error,
                 tables_used=tables_used,
                 result_type="data" if results and not error else "error",
-                sql_generation_method="intelligent_llm",
-                intent_confidence=analysis.get('confidence', 0.8)
+                sql_generation_method="template_first",
+                intent_confidence=0.9
             )
             
         except Exception as e:
@@ -467,9 +707,9 @@ class QueryInterface:
             )
     
     def _show_system_readiness(self, tables: List[TableInfo], domain: Optional[BusinessDomain]):
-        """Show intelligent system readiness"""
+        """Show enhanced system readiness"""
         
-        # Analyze available data intelligently
+        # Analyze available data
         business_areas = {
             'Customer Data': 0,
             'Financial Data': 0, 
@@ -480,22 +720,22 @@ class QueryInterface:
         }
         
         for table in tables:
-            name_lower = table.name.lower()
+            entity_type = getattr(table, 'entity_type', 'Other')
             
-            if any(word in name_lower for word in ['customer', 'client', 'account', 'contact']):
+            if entity_type == 'Customer':
                 business_areas['Customer Data'] += 1
-            elif any(word in name_lower for word in ['payment', 'transaction', 'invoice', 'billing', 'revenue']):
+            elif entity_type == 'Payment':
                 business_areas['Financial Data'] += 1
-            elif any(word in name_lower for word in ['sales', 'deal', 'opportunity', 'order']):
+            elif entity_type in ['Order', 'Sale']:
                 business_areas['Sales Data'] += 1
-            elif any(word in name_lower for word in ['user', 'employee', 'staff', 'rep']):
+            elif entity_type == 'Employee':
                 business_areas['Employee Data'] += 1
-            elif any(word in name_lower for word in ['contract', 'agreement']):
+            elif entity_type == 'Contract':
                 business_areas['Contract Data'] += 1
             else:
                 business_areas['Other Data'] += 1
         
-        print(f"\n🚀 INTELLIGENT QUERY SYSTEM READY:")
+        print(f"\n🚀 TEMPLATE-FIRST QUERY SYSTEM READY:")
         print(f"   📊 Total tables: {len(tables)}")
         
         for area, count in business_areas.items():
@@ -503,18 +743,17 @@ class QueryInterface:
                 emoji = "🔥" if area in ['Customer Data', 'Financial Data', 'Sales Data'] else "📋"
                 print(f"   {emoji} {area}: {count} tables")
         
-        print(f"\n🧠 INTELLIGENT CAPABILITIES:")
-        print(f"   • Natural language understanding")
-        print(f"   • Dynamic table and column selection")
-        print(f"   • Business context awareness")
-        print(f"   • Safe SQL generation")
+        print(f"\n⚙️ ENHANCED PIPELINE:")
+        print(f"   1. 🎯 Intent parsing with structured output")
+        print(f"   2. 📊 Multi-factor table scoring")
+        print(f"   3. ⚙️ Template-based SQL generation")
+        print(f"   4. 🛡️ Fixed safety validation + normalization")
         
         print(f"\n💡 Try asking:")
-        print(f"   • Who are our top customers by revenue?")
-        print(f"   • Which sales reps closed the most deals?")
-        print(f"   • What's our total revenue this year?")
-        print(f"   • Show me contract details")
-        print(f"   • List payment transactions")
+        print(f"   • Who are the top 10 customers by revenue?")
+        print(f"   • What is our total revenue this year?")
+        print(f"   • Show me customer payment data")
+        print(f"   • Count active contracts")
     
     def _display_result(self, result: QueryResult):
         """Display query results"""
@@ -542,10 +781,10 @@ class QueryInterface:
             print(f"❌ QUERY FAILED")
             print(f"   Error: {result.error}")
             
-            print(f"\n💡 Enhanced suggestions:")
+            print(f"\n💡 Template-first suggestions:")
             print(f"   • Try: 'top 10 customers by revenue'")
-            print(f"   • Try: 'which sales reps closed most deals'")
-            print(f"   • Try: 'total contract value this year'")
+            print(f"   • Try: 'total payments this year'")
+            print(f"   • Try: 'count of active customers'")
     
     def _display_data(self, results: List[Dict[str, Any]]):
         """Enhanced data display with business formatting"""
