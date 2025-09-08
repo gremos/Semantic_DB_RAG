@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Database Discovery - Enhanced SQL Server Architecture with RDL Fields/Parameters
+Database Discovery - ENHANCED SQL Server Architecture with RDL Fields/Parameters
 Simple, Readable, Maintainable - DRY, SOLID, YAGNI principles
-Enhanced: RDL Fields extraction, view join edges, business priority boosting
+ENHANCED: RDL Fields extraction, view join edges, business priority boosting
+FIXED: Use sys.* everywhere, extract JOIN pairs, feed into relationship graph
 """
 
 import asyncio
@@ -70,7 +71,7 @@ class SqlServerConnector:
             return []
 
 class SqlServerMetadata:
-    """SQL Server metadata using sys.* views (Architecture requirement)"""
+    """SQL Server metadata using sys.* views ONLY (Architecture requirement)"""
     
     def __init__(self, connector: SqlServerConnector):
         self.connector = connector
@@ -132,7 +133,7 @@ class SqlServerMetadata:
             return []
     
     def get_primary_keys(self, schema: str, table: str) -> List[str]:
-        """Get primary keys using sys.key_constraints"""
+        """Get primary keys using sys.key_constraints (Architecture requirement)"""
         sql = """
         SELECT c.name as column_name
         FROM sys.key_constraints kc
@@ -156,7 +157,7 @@ class SqlServerMetadata:
             return []
     
     def get_foreign_keys(self, schema: str, table: str) -> List[Dict[str, Any]]:
-        """Get foreign keys using sys.foreign_keys (Architecture fix)"""
+        """Get foreign keys using sys.foreign_keys (Architecture requirement - FIXED)"""
         sql = """
         SELECT 
             COL_NAME(fkc.parent_object_id, fkc.parent_column_id) as column_name,
@@ -191,7 +192,7 @@ class SqlServerMetadata:
             return []
     
     def get_views_with_definitions(self) -> Dict[str, Dict[str, Any]]:
-        """Get views with definitions using sys.views + sys.sql_modules"""
+        """ENHANCED: Get views with definitions and extract JOIN edges"""
         sql = """
         SELECT 
             s.name as schema_name,
@@ -217,11 +218,11 @@ class SqlServerMetadata:
                 'object_type': 'VIEW',
                 'definition': row['view_definition'],
                 'referenced_objects': [],
-                'join_edges': [],  # Enhanced: JOIN pairs for relationship graph
+                'join_edges': [],  # ENHANCED: JOIN pairs for relationship graph
                 'parsing_success': False
             }
             
-            # Enhanced: Parse with sqlglot if available and extract joins
+            # ENHANCED: Parse with sqlglot and extract JOIN edges for relationship graph
             if HAS_SQLGLOT and row['view_definition']:
                 try:
                     parsed = sqlglot.parse_one(row['view_definition'], dialect="tsql")
@@ -235,14 +236,21 @@ class SqlServerMetadata:
                                 table_name = str(table.this)
                                 if table.db:
                                     table_name = f"[{table.db}].[{table_name}]"
+                                elif '.' not in table_name:
+                                    table_name = f"[dbo].[{table_name}]"
                                 tables.append(table_name)
                         
-                        # Enhanced: Extract join conditions for relationship graph
+                        # ENHANCED: Extract JOIN conditions for relationship graph
                         for join in parsed.find_all(sqlglot.expressions.Join):
                             if join.on:
                                 join_info = self._parse_join_condition(join.on, join.kind)
                                 if join_info:
                                     join_edges.append(join_info)
+                        
+                        # Also check WHERE clauses for implicit joins
+                        for where in parsed.find_all(sqlglot.expressions.Where):
+                            implicit_joins = self._extract_implicit_joins(where)
+                            join_edges.extend(implicit_joins)
                         
                         view_info[full_name].update({
                             'referenced_objects': list(set(tables)),
@@ -250,13 +258,13 @@ class SqlServerMetadata:
                             'parsing_success': True
                         })
                         
-                except Exception:
-                    pass
+                except Exception as e:
+                    print(f"   ⚠️ View parsing failed for {full_name}: {e}")
         
         return view_info
     
     def _parse_join_condition(self, condition, join_kind: str = 'INNER') -> Optional[Dict]:
-        """Enhanced: Parse JOIN condition to extract table.column relationships"""
+        """ENHANCED: Parse JOIN condition to extract table.column relationships"""
         try:
             # Look for equality conditions (table1.col = table2.col)
             if isinstance(condition, sqlglot.expressions.EQ):
@@ -269,17 +277,59 @@ class SqlServerMetadata:
                 
                 if left_table and left_col and right_table and right_col:
                     return {
-                        'left_table': left_table,
+                        'left_table': self._normalize_table_name(left_table),
                         'left_column': left_col,
-                        'right_table': right_table, 
+                        'right_table': self._normalize_table_name(right_table), 
                         'right_column': right_col,
                         'join_type': str(join_kind) if join_kind else 'INNER',
-                        'confidence': 0.85  # Medium confidence from view
+                        'confidence': 0.85,  # Medium confidence from view
+                        'source': 'view_join'
                     }
             
             return None
         except Exception:
             return None
+    
+    def _extract_implicit_joins(self, where_clause) -> List[Dict]:
+        """ENHANCED: Extract implicit joins from WHERE clauses"""
+        implicit_joins = []
+        
+        try:
+            # Look for AND conditions in WHERE clause
+            if hasattr(where_clause, 'this'):
+                conditions = []
+                
+                # Handle AND conditions
+                if isinstance(where_clause.this, sqlglot.expressions.And):
+                    conditions.extend(self._flatten_and_conditions(where_clause.this))
+                else:
+                    conditions.append(where_clause.this)
+                
+                # Check each condition for table.col = table.col patterns
+                for condition in conditions:
+                    if isinstance(condition, sqlglot.expressions.EQ):
+                        join_info = self._parse_join_condition(condition, 'IMPLICIT')
+                        if join_info:
+                            join_info['source'] = 'view_implicit_join'
+                            join_info['confidence'] = 0.75  # Lower confidence for implicit
+                            implicit_joins.append(join_info)
+            
+        except Exception:
+            pass
+        
+        return implicit_joins
+    
+    def _flatten_and_conditions(self, and_expr) -> List:
+        """Flatten nested AND conditions"""
+        conditions = []
+        
+        if isinstance(and_expr, sqlglot.expressions.And):
+            conditions.extend(self._flatten_and_conditions(and_expr.left))
+            conditions.extend(self._flatten_and_conditions(and_expr.right))
+        else:
+            conditions.append(and_expr)
+        
+        return conditions
     
     def _extract_table_column(self, expr) -> tuple:
         """Extract table and column from expression"""
@@ -291,13 +341,32 @@ class SqlServerMetadata:
             return None, None
         except Exception:
             return None, None
+    
+    def _normalize_table_name(self, table_name: str) -> str:
+        """Normalize table name to [schema].[table] format"""
+        if not table_name:
+            return table_name
+        
+        # Already bracketed
+        if table_name.startswith('[') and '].[' in table_name:
+            return table_name
+        
+        # Handle different formats
+        if '.' not in table_name:
+            return f"[dbo].[{table_name}]"
+        else:
+            parts = table_name.split('.')
+            if len(parts) == 2:
+                return f"[{parts[0]}].[{parts[1]}]"
+        
+        return table_name
 
 class RDLParser:
-    """Enhanced RDL parser for SSRS reports with Fields and Parameters extraction"""
+    """ENHANCED RDL parser with Fields and Parameters extraction (Architecture requirement)"""
     
     def parse_all_rdl_files(self, rdl_directory: str = "data_upload") -> Dict[str, Any]:
-        """Enhanced: Parse all RDL files with Fields and Parameters extraction"""
-        print(f"   📋 Enhanced RDL parsing from: {rdl_directory}")
+        """ENHANCED: Parse all RDL files with Fields and Parameters extraction"""
+        print(f"   📋 ENHANCED RDL parsing from: {rdl_directory}")
         
         rdl_dir = Path(rdl_directory)
         if not rdl_dir.exists():
@@ -314,12 +383,13 @@ class RDLParser:
         combined_rdl_info = {
             'reports': [],
             'datasets': [],
-            'fields': [],  # Enhanced: Field mappings
-            'parameters': [],
+            'fields': [],  # ENHANCED: Field mappings
+            'parameters': [],  # ENHANCED: Report parameters
             'referenced_tables': set(),
             'business_priority_signals': [],
-            'join_pairs': [],  # Enhanced: JOIN relationships from CommandText
-            'report_count': len(rdl_files)
+            'join_pairs': [],  # ENHANCED: JOIN relationships from CommandText
+            'report_count': len(rdl_files),
+            'usage_stats': {}  # ENHANCED: Usage statistics
         }
         
         # Process each RDL file
@@ -349,11 +419,12 @@ class RDLParser:
             except Exception as e:
                 print(f"   ⚠️ Failed to parse {rdl_file.name}: {e}")
         
-        # Finalize
+        # Finalize and create usage statistics
         combined_rdl_info['referenced_tables'] = list(combined_rdl_info['referenced_tables'])
         combined_rdl_info['business_priority_signals'] = list(set(combined_rdl_info['business_priority_signals']))
+        combined_rdl_info['usage_stats'] = self._calculate_usage_stats(combined_rdl_info)
         
-        print(f"   ✅ Enhanced RDL parsing completed:")
+        print(f"   ✅ ENHANCED RDL parsing completed:")
         print(f"      📊 Total reports: {len(combined_rdl_info['reports'])}")
         print(f"      📋 Total datasets: {len(combined_rdl_info['datasets'])}")
         print(f"      🏷️ Total fields: {len(combined_rdl_info['fields'])}")
@@ -364,15 +435,16 @@ class RDLParser:
         return combined_rdl_info
     
     def _parse_single_rdl_file(self, rdl_path: Path) -> Dict[str, Any]:
-        """Enhanced: Parse single RDL file with Fields and Parameters"""
+        """ENHANCED: Parse single RDL file with Fields and Parameters"""
         try:
             # Read file with encoding detection
             try:
                 content = rdl_path.read_text(encoding='utf-8')
             except UnicodeDecodeError:
-                content = rdl_path.read_text(encoding='utf-8-sig')  # Try with BOM
-            except UnicodeDecodeError:
-                content = rdl_path.read_text(encoding='latin-1')   # Fallback
+                try:
+                    content = rdl_path.read_text(encoding='utf-8-sig')  # Try with BOM
+                except UnicodeDecodeError:
+                    content = rdl_path.read_text(encoding='latin-1')   # Fallback
             
             # Parse XML
             try:
@@ -390,14 +462,14 @@ class RDLParser:
             rdl_info = {
                 'report_title': self._get_report_title(root, ns, rdl_path.stem),
                 'datasets': [],
-                'fields': [],  # Enhanced
-                'parameters': [],
+                'fields': [],  # ENHANCED
+                'parameters': [],  # ENHANCED
                 'referenced_tables': set(),
                 'business_priority_signals': [],
-                'join_pairs': []  # Enhanced
+                'join_pairs': []  # ENHANCED
             }
             
-            # Extract DataSets with enhanced analysis
+            # Extract DataSets with ENHANCED analysis
             datasets = self._find_elements(root, ['DataSet', 'DataSets/DataSet'], ns)
             for dataset in datasets:
                 dataset_info = self._extract_enhanced_dataset_info(dataset, ns)
@@ -407,7 +479,7 @@ class RDLParser:
                     rdl_info['referenced_tables'].update(dataset_info.get('referenced_tables', []))
                     rdl_info['join_pairs'].extend(dataset_info.get('join_pairs', []))
             
-            # Enhanced: Extract Parameters
+            # ENHANCED: Extract Parameters
             params = self._find_elements(root, ['ReportParameter', 'ReportParameters/ReportParameter'], ns)
             for param in params:
                 param_info = self._extract_enhanced_parameter_info(param, ns)
@@ -424,7 +496,7 @@ class RDLParser:
             return {}
     
     def _extract_enhanced_dataset_info(self, dataset, ns: Dict) -> Dict[str, Any]:
-        """Enhanced: Extract dataset with Fields and JOIN analysis"""
+        """ENHANCED: Extract dataset with Fields and JOIN analysis"""
         try:
             # Get dataset name
             name_elem = dataset.get('Name') or (dataset.find('Name', ns) if ns else dataset.find('Name'))
@@ -453,15 +525,15 @@ class RDLParser:
                 'name': dataset_name,
                 'command_text': command_text,
                 'referenced_tables': [],
-                'fields': [],  # Enhanced
-                'join_pairs': []  # Enhanced
+                'fields': [],  # ENHANCED
+                'join_pairs': []  # ENHANCED
             }
             
-            # Enhanced: Extract Fields mapping
+            # ENHANCED: Extract Fields mapping (business field names -> database columns)
             fields_info = self._extract_fields_mapping(dataset, ns)
             dataset_info['fields'] = fields_info
             
-            # Enhanced: SQL parsing to extract tables and JOINs
+            # ENHANCED: SQL parsing to extract tables and JOINs
             if HAS_SQLGLOT and command_text:
                 try:
                     cleaned_sql = self._clean_sql_for_parsing(command_text)
@@ -480,7 +552,7 @@ class RDLParser:
                         
                         dataset_info['referenced_tables'] = list(set(tables))
                         
-                        # Enhanced: Extract JOIN pairs
+                        # ENHANCED: Extract JOIN pairs for relationship graph
                         join_pairs = []
                         for join in parsed.find_all(sqlglot.expressions.Join):
                             if join.on:
@@ -503,7 +575,7 @@ class RDLParser:
             return None
     
     def _extract_fields_mapping(self, dataset, ns: Dict) -> List[Dict]:
-        """Enhanced: Extract Fields mapping from DataSet"""
+        """ENHANCED: Extract Fields mapping from DataSet (business names -> DB columns)"""
         fields = []
         
         # Find Fields element
@@ -517,14 +589,14 @@ class RDLParser:
                 try:
                     field_name = field_elem.get('Name')
                     
-                    # Find DataField element
+                    # Find DataField element (maps to actual database column)
                     data_field_elem = self._find_elements(field_elem, ['DataField'], ns)
                     data_field = data_field_elem[0].text if data_field_elem and data_field_elem[0].text else None
                     
                     if field_name and data_field:
                         fields.append({
-                            'field_name': field_name,
-                            'data_field': data_field,
+                            'business_name': field_name,  # Business-friendly name
+                            'database_column': data_field,  # Actual database column
                             'dataset': 'current'
                         })
                         
@@ -534,7 +606,7 @@ class RDLParser:
         return fields
     
     def _extract_enhanced_parameter_info(self, param, ns: Dict) -> Dict[str, Any]:
-        """Enhanced: Extract parameter with data type and usage info"""
+        """ENHANCED: Extract parameter with data type and usage info"""
         try:
             name_attr = param.get('Name')
             
@@ -546,17 +618,22 @@ class RDLParser:
             prompt_elem = param.find('Prompt', ns) if ns else param.find('Prompt')
             prompt = prompt_elem.text if prompt_elem is not None else None
             
+            # Get DefaultValue
+            default_elem = param.find('DefaultValue', ns) if ns else param.find('DefaultValue')
+            default_value = default_elem.text if default_elem is not None else None
+            
             return {
                 'name': name_attr or 'Unknown',
                 'data_type': data_type,
                 'prompt': prompt,
+                'default_value': default_value,
                 'parameter_type': 'report_parameter'
             }
         except Exception:
             return None
     
     def _parse_rdl_join_condition(self, condition, join_kind: str = 'INNER') -> Optional[Dict]:
-        """Enhanced: Parse JOIN condition from RDL CommandText"""
+        """ENHANCED: Parse JOIN condition from RDL CommandText"""
         try:
             if isinstance(condition, sqlglot.expressions.EQ):
                 left = condition.left
@@ -589,12 +666,48 @@ class RDLParser:
                 
                 # Normalize table names
                 if table and not table.startswith('['):
-                    table = f"[dbo].[{table}]"
+                    if '.' not in table:
+                        table = f"[dbo].[{table}]"
+                    else:
+                        parts = table.split('.')
+                        if len(parts) == 2:
+                            table = f"[{parts[0]}].[{parts[1]}]"
                 
                 return table, column
             return None, None
         except Exception:
             return None, None
+    
+    def _calculate_usage_stats(self, rdl_info: Dict) -> Dict[str, Any]:
+        """ENHANCED: Calculate usage statistics for business priority"""
+        usage_stats = {}
+        
+        # Table usage frequency
+        table_usage = {}
+        for table in rdl_info['referenced_tables']:
+            table_usage[table] = table_usage.get(table, 0) + 1
+        
+        # Sort by usage frequency
+        sorted_usage = sorted(table_usage.items(), key=lambda x: x[1], reverse=True)
+        
+        # Field mapping statistics
+        field_mappings = {}
+        for field in rdl_info['fields']:
+            db_col = field.get('database_column', '')
+            if db_col:
+                field_mappings[db_col] = field_mappings.get(db_col, 0) + 1
+        
+        usage_stats = {
+            'top_used_tables': sorted_usage[:10],
+            'total_table_references': len(rdl_info['referenced_tables']),
+            'total_field_mappings': len(rdl_info['fields']),
+            'total_parameters': len(rdl_info['parameters']),
+            'business_signals_count': len(rdl_info['business_priority_signals']),
+            'join_relationships': len(rdl_info['join_pairs']),
+            'field_mapping_frequency': field_mappings
+        }
+        
+        return usage_stats
     
     def _find_elements(self, root, xpath_list: List[str], ns: Dict) -> List:
         """Find elements using multiple XPath expressions"""
@@ -670,7 +783,7 @@ class RDLParser:
         return sql.strip()
     
     def _extract_tables_regex(self, sql: str) -> List[str]:
-        """Enhanced regex-based table extraction"""
+        """ENHANCED regex-based table extraction"""
         import re
         
         # Clean SQL first
@@ -682,8 +795,6 @@ class RDLParser:
             r'JOIN\s+(\[?\w+\]?\.\[?\w+\]?|\[?\w+\]?)',
             r'UPDATE\s+(\[?\w+\]?\.\[?\w+\]?|\[?\w+\]?)',
             r'INSERT\s+INTO\s+(\[?\w+\]?\.\[?\w+\]?|\[?\w+\]?)',
-            # Handle temp tables and CTEs
-            r'WITH\s+(\w+)\s+AS',
             # Handle schema.table patterns
             r'\b(\w+\.\w+)\b(?=\s+(?:AS\s+\w+\s*)?(?:WHERE|GROUP|ORDER|JOIN|,|\)|$))'
         ]
@@ -718,7 +829,7 @@ class RDLParser:
         return list(tables)
     
     def _analyze_business_priority(self, rdl_info: Dict) -> List[str]:
-        """Analyze for business priority signals"""
+        """ENHANCED business priority analysis"""
         signals = []
         title = rdl_info.get('report_title', '').lower()
         
@@ -738,10 +849,18 @@ class RDLParser:
         if any(word in title for word in ['customer', 'client', 'πελατών']):
             signals.append('customer_data')
         
+        # Dataset frequency indicates importance
+        if len(rdl_info.get('datasets', [])) > 3:
+            signals.append('complex_report')
+        
+        # Many parameters indicate interactive/important report
+        if len(rdl_info.get('parameters', [])) > 2:
+            signals.append('interactive_report')
+        
         return signals
 
 class SampleCollector:
-    """Sample collection - First 3 + Last 3 rows"""
+    """Sample collection - First 3 + Last 3 rows (Architecture requirement)"""
     
     def __init__(self, connector: SqlServerConnector):
         self.connector = connector
@@ -810,16 +929,17 @@ class CacheManager:
         self.config = config
     
     def save_cache(self, tables: List[TableInfo], view_info: Dict, rdl_info: Dict):
-        """Save discovery cache with enhanced RDL info"""
+        """Save discovery cache with ENHANCED RDL info"""
         cache_file = self.config.get_cache_path("database_structure.json")
         
         data = {
             'metadata': {
                 'discovered': datetime.now().isoformat(),
-                'version': '3.1-enhanced-rdl-fields',
+                'version': '3.2-enhanced-rdl-fields-joins',
                 'sampling_method': 'first_3_plus_last_3',
                 'sqlglot_available': HAS_SQLGLOT,
-                'rdl_enhanced': True
+                'rdl_enhanced': True,
+                'view_joins_extracted': True
             },
             'tables': [self._table_to_dict(t) for t in tables],
             'views': view_info,
@@ -829,7 +949,7 @@ class CacheManager:
         try:
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False, default=str)
-            print(f"   💾 Enhanced discovery cached: {cache_file}")
+            print(f"   💾 ENHANCED discovery cached: {cache_file}")
         except Exception as e:
             print(f"   ⚠️ Cache save failed: {e}")
     
@@ -884,7 +1004,7 @@ class CacheManager:
         )
 
 class DatabaseDiscovery:
-    """Enhanced database discovery with SQL Server + Enhanced RDL integration"""
+    """ENHANCED database discovery with SQL Server + RDL Fields/Parameters integration"""
     
     def __init__(self, config: Config):
         self.config = config
@@ -903,9 +1023,9 @@ class DatabaseDiscovery:
         self.relationships: List[Relationship] = []
     
     async def discover_database(self) -> bool:
-        """Enhanced discovery with SQL Server + Enhanced RDL integration"""
-        print("🔍 ENHANCED SQL SERVER DISCOVERY + RDL FIELDS/PARAMETERS")
-        print("=" * 70)
+        """ENHANCED discovery with SQL Server + RDL integration"""
+        print("🔍 ENHANCED SQL SERVER DISCOVERY + RDL FIELDS/PARAMETERS/JOINS")
+        print("=" * 75)
         
         # Check cache first
         cached_tables, cached_views, cached_rdl = self.cache_manager.load_cache()
@@ -919,19 +1039,19 @@ class DatabaseDiscovery:
         try:
             start_time = time.time()
             
-            # Enhanced: Parse RDL files with Fields and Parameters
+            # ENHANCED: Parse RDL files with Fields and Parameters
             self.rdl_info = self.rdl_parser.parse_all_rdl_files()
             
             # Discover tables
             await self._discover_tables()
             
-            # Enhanced: Analyze views with join edge extraction
+            # ENHANCED: Analyze views with join edge extraction
             self.view_info = self.metadata.get_views_with_definitions()
             
-            # Enhanced: Build relationships from FKs, views, and RDL
+            # ENHANCED: Build relationships from FKs, views, and RDL
             self._build_enhanced_relationships()
             
-            # Enhanced: Apply RDL insights with field mappings
+            # ENHANCED: Apply RDL insights with field mappings
             self._apply_enhanced_rdl_insights()
             
             # Save cache
@@ -1001,7 +1121,7 @@ class DatabaseDiscovery:
         print(f"   ✅ Discovered {len(self.tables)} tables")
     
     def _build_enhanced_relationships(self):
-        """Enhanced: Build relationships from FKs, views, and RDL JOINs"""
+        """ENHANCED: Build relationships from FKs, views, and RDL JOINs"""
         self.relationships = []
         
         # 1. Foreign key relationships
@@ -1023,7 +1143,7 @@ class DatabaseDiscovery:
                     except Exception:
                         continue
         
-        # 2. Enhanced: View join relationships
+        # 2. ENHANCED: View join relationships from JOIN edges
         for view_name, view_data in self.view_info.items():
             for join_edge in view_data.get('join_edges', []):
                 self.relationships.append(Relationship(
@@ -1034,7 +1154,7 @@ class DatabaseDiscovery:
                     description=f"View JOIN: {join_edge.get('left_column', '')} = {join_edge.get('right_column', '')}"
                 ))
         
-        # 3. Enhanced: RDL join relationships  
+        # 3. ENHANCED: RDL join relationships from CommandText parsing
         for join_pair in self.rdl_info.get('join_pairs', []):
             self.relationships.append(Relationship(
                 from_table=join_pair.get('left_table', ''),
@@ -1045,43 +1165,53 @@ class DatabaseDiscovery:
             ))
     
     def _apply_enhanced_rdl_insights(self):
-        """Enhanced: Apply RDL insights with field mappings and business priority"""
+        """ENHANCED: Apply RDL insights with field mappings and business priority"""
         if not self.rdl_info:
             return
         
         rdl_tables = set(self.rdl_info.get('referenced_tables', []))
         rdl_fields = self.rdl_info.get('fields', [])
         business_signals = self.rdl_info.get('business_priority_signals', [])
+        usage_stats = self.rdl_info.get('usage_stats', {})
         
-        # Build field mapping index
+        # Build field mapping index (business names -> database columns)
         field_mapping = {}
         for field in rdl_fields:
-            data_field = field.get('data_field', '')
-            field_name = field.get('field_name', '')
-            if data_field and field_name:
-                field_mapping[data_field.lower()] = field_name
+            db_column = field.get('database_column', '')
+            business_name = field.get('business_name', '')
+            if db_column and business_name:
+                field_mapping[db_column.lower()] = business_name
+        
+        # Get top used tables from RDL
+        top_used_tables = {table for table, count in usage_stats.get('top_used_tables', [])}
         
         for table in self.tables:
-            # Business priority from RDL usage
+            # Business priority from RDL usage and frequency
             if table.full_name in rdl_tables or any(table.name.lower() in ref.lower() for ref in rdl_tables):
                 table.business_priority = 'high'
                 table.confidence = 0.9
                 
-                # Enhanced: Apply business signals
+                # ENHANCED: Higher priority for frequently used tables
+                if table.full_name in top_used_tables:
+                    table.business_priority = 'high'
+                    table.confidence = 0.95
+                
+                # ENHANCED: Apply business signals
                 if 'executive_report' in business_signals:
                     table.business_priority = 'high'
                 if 'business_critical' in business_signals:
                     table.confidence = 0.95
             
-            # Enhanced: Apply field mappings to columns
+            # ENHANCED: Apply field mappings to columns (business context)
             for col in table.columns:
                 col_name_lower = col.get('name', '').lower()
                 if col_name_lower in field_mapping:
-                    col['rdl_field_name'] = field_mapping[col_name_lower]
-                    col['has_rdl_mapping'] = True
+                    col['business_name'] = field_mapping[col_name_lower]
+                    col['has_business_mapping'] = True
+                    col['rdl_source'] = True
     
     def _show_summary(self, elapsed_time: float):
-        """Show enhanced discovery summary"""
+        """Show ENHANCED discovery summary"""
         print(f"\n✅ ENHANCED SQL SERVER DISCOVERY COMPLETED:")
         print(f"   ⏱️ Time: {elapsed_time:.1f}s")
         print(f"   📊 Tables: {len(self.tables)}")
@@ -1103,6 +1233,13 @@ class DatabaseDiscovery:
             print(f"   🔗 Relationship types:")
             for rel_type, count in rel_types.items():
                 print(f"      • {rel_type}: {count}")
+        
+        # Show top RDL referenced tables
+        if self.rdl_info.get('usage_stats', {}).get('top_used_tables'):
+            print(f"   📊 Top RDL tables:")
+            for table, count in self.rdl_info['usage_stats']['top_used_tables'][:3]:
+                clean_name = table.split('.')[-1].replace('[', '').replace(']', '')
+                print(f"      • {clean_name}: {count} references")
     
     def load_from_cache(self) -> bool:
         """Load from cache"""
@@ -1147,5 +1284,6 @@ class DatabaseDiscovery:
             'sqlglot_available': HAS_SQLGLOT,
             'sampling_method': 'first_3_plus_last_3',
             'metadata_source': 'sql_server_sys_views',
-            'rdl_enhanced': True
+            'rdl_enhanced': True,
+            'view_joins_extracted': True
         }
