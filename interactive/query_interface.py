@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Query Interface - Fixed Safety Validation and Template-First SQL
+Query Interface - Fixed to Only Use Discovered Columns
 Simple, Readable, Maintainable - DRY, SOLID, YAGNI principles
-Fixed: Safety validator, template-first approach, better table selection
+FIXED: Only use columns that actually exist in discovered table structure
 """
 
 import asyncio
@@ -246,10 +246,10 @@ class SmartTableSelector:
         return min(score, 1.0)
 
 class TemplateGenerator:
-    """Generate SQL using deterministic templates"""
+    """FIXED: Generate SQL using only discovered columns"""
     
     def generate_sql(self, intent: Dict[str, Any], tables: List[TableInfo]) -> Optional[str]:
-        """Generate SQL using templates"""
+        """FIXED: Generate SQL using only discovered columns"""
         if not tables:
             return None
         
@@ -257,6 +257,11 @@ class TemplateGenerator:
         
         task_type = intent.get('task_type', 'list')
         table = tables[0]  # Use best table
+        
+        # FIXED: Validate table has columns before proceeding
+        if not table.columns:
+            print(f"      ❌ No columns discovered for table {table.name}")
+            return None
         
         try:
             if task_type == 'ranking':
@@ -272,23 +277,26 @@ class TemplateGenerator:
             return None
     
     def _generate_ranking_sql(self, intent: Dict[str, Any], table: TableInfo) -> str:
-        """Generate TOP N ranking query"""
+        """FIXED: Generate TOP N ranking query using only discovered columns"""
         limit = intent.get('limit', 10)
         
-        # Find best columns
-        name_col = self._find_name_column(table)
-        measure_col = self._find_measure_column(table)
+        # FIXED: Find columns that actually exist
+        name_col = self._find_actual_name_column(table)
+        measure_col = self._find_actual_measure_column(table)
         
         if not measure_col:
-            raise ValueError("No measure column found for ranking")
+            # FIXED: If no measure column, try to find any numeric column
+            measure_col = self._find_any_numeric_column(table)
+            if not measure_col:
+                raise ValueError(f"No measure/numeric column found in {table.name}")
         
-        # Build SELECT
+        # Build SELECT using only existing columns
         select_cols = []
         if name_col:
             select_cols.append(f"[{name_col}]")
         select_cols.append(f"[{measure_col}]")
         
-        # Build WHERE for time filter
+        # FIXED: Build WHERE for time filter using discovered columns
         where_clause = self._build_where_conditions(intent, table)
         
         sql = f"SELECT TOP ({limit}) {', '.join(select_cols)} FROM {table.full_name}"
@@ -299,13 +307,16 @@ class TemplateGenerator:
         return sql
     
     def _generate_aggregation_sql(self, intent: Dict[str, Any], table: TableInfo) -> str:
-        """Generate aggregation query"""
-        measure_col = self._find_measure_column(table)
+        """FIXED: Generate aggregation query using discovered columns"""
+        measure_col = self._find_actual_measure_column(table)
         
         if not measure_col:
-            raise ValueError("No measure column found for aggregation")
+            # FIXED: Try any numeric column for aggregation
+            measure_col = self._find_any_numeric_column(table)
+            if not measure_col:
+                raise ValueError(f"No measure/numeric column found in {table.name}")
         
-        # Build WHERE for time filter
+        # FIXED: Build WHERE using discovered columns
         where_clause = self._build_where_conditions(intent, table)
         
         sql = f"SELECT SUM([{measure_col}]) AS Total FROM {table.full_name}"
@@ -315,7 +326,7 @@ class TemplateGenerator:
         return sql
     
     def _generate_count_sql(self, intent: Dict[str, Any], table: TableInfo) -> str:
-        """Generate count query"""
+        """Generate count query using discovered columns"""
         where_clause = self._build_where_conditions(intent, table)
         
         sql = f"SELECT COUNT(*) AS Count FROM {table.full_name}"
@@ -325,44 +336,61 @@ class TemplateGenerator:
         return sql
     
     def _generate_list_sql(self, intent: Dict[str, Any], table: TableInfo) -> str:
-        """Generate list query"""
+        """FIXED: Generate list query using only discovered columns"""
         limit = intent.get('limit', 20)
         
-        # Find best display columns
-        display_cols = self._get_display_columns(table, 4)
+        # FIXED: Get display columns that actually exist
+        display_cols = self._get_actual_display_columns(table, 4)
         
-        # Build WHERE for time filter
+        if not display_cols:
+            raise ValueError(f"No suitable display columns found in {table.name}")
+        
+        # FIXED: Build WHERE using discovered columns
         where_clause = self._build_where_conditions(intent, table)
         
         sql = f"SELECT TOP ({limit}) {', '.join(f'[{col}]' for col in display_cols)} FROM {table.full_name}"
         if where_clause:
             sql += f" WHERE {where_clause}"
         
-        # Order by best column
-        sort_col = self._find_sort_column(table)
+        # FIXED: Order by best available column
+        sort_col = self._find_actual_sort_column(table)
         if sort_col:
             sql += f" ORDER BY [{sort_col}] DESC"
         
         return sql
     
-    def _find_name_column(self, table: TableInfo) -> Optional[str]:
-        """Find best name/display column"""
+    def _find_actual_name_column(self, table: TableInfo) -> Optional[str]:
+        """FIXED: Find name column that actually exists in discovered columns"""
+        # First check if semantic analysis provided name columns
         if hasattr(table, 'name_columns') and table.name_columns:
-            return table.name_columns[0]
+            # Verify the column actually exists
+            for name_col in table.name_columns:
+                if self._column_exists(table, name_col):
+                    return name_col
         
+        # Search through actual discovered columns
         for col in table.columns:
-            col_name = col.get('name', '').lower()
-            if any(word in col_name for word in ['name', 'title', 'description']):
+            col_name = col.get('name', '')
+            if col_name and any(word in col_name.lower() for word in ['name', 'title', 'description']):
+                return col_name
+        
+        # Fallback to first string column
+        for col in table.columns:
+            col_type = col.get('data_type', '').lower()
+            if col_type in ['varchar', 'nvarchar', 'char', 'nchar', 'text']:
                 return col.get('name')
         
         return None
     
-    def _find_measure_column(self, table: TableInfo) -> Optional[str]:
-        """Find best measure column"""
+    def _find_actual_measure_column(self, table: TableInfo) -> Optional[str]:
+        """FIXED: Find measure column that actually exists"""
+        # First check semantic analysis measures
         if hasattr(table, 'measures') and table.measures:
-            return table.measures[0]
+            for measure_col in table.measures:
+                if self._column_exists(table, measure_col):
+                    return measure_col
         
-        # Look for numeric columns with money/amount names
+        # Look for columns with revenue/amount names AND numeric types
         for col in table.columns:
             col_name = col.get('name', '').lower()
             col_type = col.get('data_type', '').lower()
@@ -371,18 +399,20 @@ class TemplateGenerator:
                 col_type in ['decimal', 'money', 'float', 'numeric', 'int']):
                 return col.get('name')
         
-        # Fallback to any numeric column
-        for col in table.columns:
-            col_type = col.get('data_type', '').lower()
-            if col_type in ['decimal', 'money', 'float', 'numeric']:
-                return col.get('name')
-        
         return None
     
-    def _find_sort_column(self, table: TableInfo) -> Optional[str]:
-        """Find best column for sorting"""
+    def _find_any_numeric_column(self, table: TableInfo) -> Optional[str]:
+        """FIXED: Find any numeric column that exists"""
+        for col in table.columns:
+            col_type = col.get('data_type', '').lower()
+            if col_type in ['decimal', 'money', 'float', 'numeric', 'int', 'bigint']:
+                return col.get('name')
+        return None
+    
+    def _find_actual_sort_column(self, table: TableInfo) -> Optional[str]:
+        """FIXED: Find sort column that actually exists"""
         # Prefer measure columns
-        measure_col = self._find_measure_column(table)
+        measure_col = self._find_actual_measure_column(table)
         if measure_col:
             return measure_col
         
@@ -398,23 +428,27 @@ class TemplateGenerator:
             if col_name.endswith('id') or 'id' in col_name:
                 return col.get('name')
         
+        # Fallback to first column
+        if table.columns:
+            return table.columns[0].get('name')
+        
         return None
     
-    def _get_display_columns(self, table: TableInfo, max_cols: int) -> List[str]:
-        """Get best columns for display"""
+    def _get_actual_display_columns(self, table: TableInfo, max_cols: int) -> List[str]:
+        """FIXED: Get display columns that actually exist"""
         cols = []
         
-        # Name columns first
-        name_col = self._find_name_column(table)
+        # Name columns first (if they exist)
+        name_col = self._find_actual_name_column(table)
         if name_col:
             cols.append(name_col)
         
-        # Measure columns
-        measure_col = self._find_measure_column(table)
+        # Measure columns (if they exist)
+        measure_col = self._find_actual_measure_column(table)
         if measure_col and measure_col not in cols:
             cols.append(measure_col)
         
-        # Fill with other columns
+        # Fill with other existing columns
         for col in table.columns:
             if len(cols) >= max_cols:
                 break
@@ -425,21 +459,31 @@ class TemplateGenerator:
         return cols[:max_cols]
     
     def _build_where_conditions(self, intent: Dict[str, Any], table: TableInfo) -> Optional[str]:
-        """Build WHERE conditions for time filters"""
+        """FIXED: Build WHERE conditions using discovered columns only"""
         time_filter = intent.get('time_filter')
         if not time_filter:
             return None
         
-        # Find date column
+        # FIXED: Find date column that actually exists
         date_col = None
-        for col in table.columns:
-            col_type = col.get('data_type', '').lower()
-            col_name = col.get('name', '').lower()
-            
-            if ('date' in col_type or 'time' in col_type or 
-                any(word in col_name for word in ['date', 'time', 'created'])):
-                date_col = col.get('name')
-                break
+        
+        # Check semantic analysis time columns first
+        if hasattr(table, 'time_columns') and table.time_columns:
+            for time_col in table.time_columns:
+                if self._column_exists(table, time_col):
+                    date_col = time_col
+                    break
+        
+        # Search discovered columns
+        if not date_col:
+            for col in table.columns:
+                col_type = col.get('data_type', '').lower()
+                col_name = col.get('name', '').lower()
+                
+                if ('date' in col_type or 'time' in col_type or 
+                    any(word in col_name for word in ['date', 'time', 'created'])):
+                    date_col = col.get('name')
+                    break
         
         if not date_col:
             return None
@@ -453,6 +497,14 @@ class TemplateGenerator:
             return f"[{date_col}] >= EOMONTH(GETDATE(), -2) AND [{date_col}] < EOMONTH(GETDATE(), -1)"
         
         return None
+    
+    def _column_exists(self, table: TableInfo, column_name: str) -> bool:
+        """FIXED: Check if column actually exists in discovered columns"""
+        if not column_name or not table.columns:
+            return False
+        
+        existing_columns = [col.get('name', '') for col in table.columns]
+        return column_name in existing_columns
 
 class SafetyValidator:
     """Fixed SQL safety validation"""
@@ -569,7 +621,7 @@ class QueryExecutor:
             return [], error_msg
 
 class QueryInterface:
-    """Enhanced Query Interface with fixed safety validation and template-first approach"""
+    """Enhanced Query Interface with fixed safety validation and discovered-column-only approach"""
     
     def __init__(self, config: Config):
         self.config = config
@@ -593,6 +645,7 @@ class QueryInterface:
         print("✅ Enhanced Query Interface initialized")
         print("   🎯 Template-first SQL generation")
         print("   📊 Smart multi-factor table selection")
+        print("   🛡️ FIXED: Only use discovered columns")
         print(f"   🛡️ Fixed safety validation: {'✅ sqlglot + CTE' if HAS_SQLGLOT else '⚠️ basic only'}")
     
     async def start_session(self, tables: List[TableInfo], domain: Optional[BusinessDomain], relationships: List[Relationship]):
@@ -628,7 +681,7 @@ class QueryInterface:
                 print(f"❌ Error: {e}")
     
     async def process_query(self, question: str, tables: List[TableInfo]) -> QueryResult:
-        """FIXED: Process query with template-first approach and normalization"""
+        """FIXED: Process query with discovered-columns-only approach"""
         
         try:
             # Stage 1: Parse intent 
@@ -655,7 +708,18 @@ class QueryInterface:
                     result_type="error"
                 )
             
-            # Stage 3: Template-based SQL generation
+            # FIXED: Validate selected table has columns
+            best_table = selected_tables[0]
+            if not best_table.columns:
+                return QueryResult(
+                    question=question,
+                    sql_query="",
+                    results=[],
+                    error=f"Selected table {best_table.name} has no discovered columns. Cannot generate SQL.",
+                    result_type="error"
+                )
+            
+            # Stage 3: Template-based SQL generation using only discovered columns
             sql = self.template_generator.generate_sql(intent, selected_tables)
             
             if not sql:
@@ -663,7 +727,7 @@ class QueryInterface:
                     question=question,
                     sql_query="",
                     results=[],
-                    error="Could not generate SQL template. Try a simpler query type.",
+                    error="Could not generate SQL template using discovered columns. Try a simpler query type.",
                     result_type="error"
                 )
             
@@ -693,7 +757,7 @@ class QueryInterface:
                 error=error,
                 tables_used=tables_used,
                 result_type="data" if results and not error else "error",
-                sql_generation_method="template_first",
+                sql_generation_method="template_discovered_columns",
                 intent_confidence=0.9
             )
             
@@ -735,7 +799,7 @@ class QueryInterface:
             else:
                 business_areas['Other Data'] += 1
         
-        print(f"\n🚀 TEMPLATE-FIRST QUERY SYSTEM READY:")
+        print(f"\n🚀 DISCOVERED-COLUMNS-ONLY QUERY SYSTEM READY:")
         print(f"   📊 Total tables: {len(tables)}")
         
         for area, count in business_areas.items():
@@ -746,7 +810,7 @@ class QueryInterface:
         print(f"\n⚙️ ENHANCED PIPELINE:")
         print(f"   1. 🎯 Intent parsing with structured output")
         print(f"   2. 📊 Multi-factor table scoring")
-        print(f"   3. ⚙️ Template-based SQL generation")
+        print(f"   3. ⚙️ Template-based SQL using ONLY discovered columns")
         print(f"   4. 🛡️ Fixed safety validation + normalization")
         
         print(f"\n💡 Try asking:")

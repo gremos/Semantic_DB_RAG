@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Semantic Analysis - Enhanced Table Classification for Better Revenue Queries
+Semantic Analysis - Enhanced for Better Column Discovery and Classification
 Simple, Readable, Maintainable - DRY, SOLID, YAGNI principles
-Enhanced: Better table classification to avoid selecting lookup tables for revenue queries
+Enhanced: Better column analysis to ensure discovered columns are properly classified
 """
 
 import asyncio
@@ -20,7 +20,7 @@ from shared.models import TableInfo, BusinessDomain, Relationship
 from shared.utils import parse_json_response
 
 class EntityAnalyzer:
-    """Enhanced entity analyzer with better revenue table detection"""
+    """Enhanced entity analyzer with better column discovery and classification"""
     
     def __init__(self, llm: AzureChatOpenAI):
         self.llm = llm
@@ -49,8 +49,12 @@ class EntityAnalyzer:
         }
     
     async def analyze_tables(self, tables: List[TableInfo], rdl_info: Dict = None) -> List[TableInfo]:
-        """Enhanced table analysis with better revenue table detection"""
+        """Enhanced table analysis with better column discovery"""
         print(f"🧠 Enhanced table analysis: {len(tables)} objects...")
+        
+        # First pass: Analyze columns locally for each table
+        for table in tables:
+            self._analyze_table_columns_locally(table)
         
         batch_size = 3
         analyzed_objects = []
@@ -66,6 +70,49 @@ class EntityAnalyzer:
         print(f"   ✅ Analysis completed: {len(analyzed_objects)} objects")
         return analyzed_objects
     
+    def _analyze_table_columns_locally(self, table: TableInfo):
+        """Analyze table columns locally to ensure proper classification"""
+        if not table.columns:
+            return
+        
+        # Initialize column classifications
+        measures = []
+        name_columns = []
+        entity_keys = []
+        time_columns = []
+        
+        for col in table.columns:
+            col_name = col.get('name', '').lower()
+            col_type = col.get('data_type', '').lower()
+            
+            # Measure columns (amount, revenue, numeric)
+            if (any(word in col_name for word in ['amount', 'total', 'revenue', 'value', 'price', 'cost', 'sum']) and
+                col_type in ['decimal', 'money', 'float', 'numeric', 'int', 'bigint']):
+                measures.append(col.get('name'))
+            
+            # Name/display columns
+            elif any(word in col_name for word in ['name', 'title', 'description', 'label']):
+                name_columns.append(col.get('name'))
+            
+            # Entity key columns
+            elif (col_name.endswith('id') or col_name.endswith('_id') or 
+                  col_name.startswith('id') or col_name == 'id' or
+                  col.get('is_primary_key', False)):
+                entity_keys.append(col.get('name'))
+            
+            # Time columns
+            elif ('date' in col_type or 'time' in col_type or 
+                  any(word in col_name for word in ['date', 'time', 'created', 'modified', 'updated'])):
+                time_columns.append(col.get('name'))
+        
+        # Set the analyzed columns on the table
+        table.measures = measures[:5]  # Limit to avoid overflow
+        table.name_columns = name_columns[:3]
+        table.entity_keys = entity_keys[:5]
+        table.time_columns = time_columns[:3]
+        
+        print(f"      📊 {table.name}: measures={len(measures)}, names={len(name_columns)}, keys={len(entity_keys)}, times={len(time_columns)}")
+    
     async def _analyze_batch(self, batch: List[TableInfo], rdl_info: Dict = None) -> List[TableInfo]:
         """Analyze batch with enhanced revenue detection"""
         try:
@@ -74,43 +121,49 @@ class EntityAnalyzer:
             return self._apply_enhanced_analysis(response, batch)
         except Exception as e:
             print(f"   ⚠️ Batch analysis failed: {e}")
+            # Apply local analysis as fallback
+            for table in batch:
+                self._enhanced_fallback_classification(table)
             return batch
     
     def _create_enhanced_analysis_prompt(self, batch: List[TableInfo], rdl_info: Dict = None) -> str:
-        """Create enhanced analysis prompt focusing on revenue tables"""
+        """Create enhanced analysis prompt with actual discovered columns"""
         objects_info = []
         
         for table in batch:
-            # Enhanced column analysis
-            revenue_indicators = []
-            customer_indicators = []
-            lookup_indicators = []
+            # Enhanced column analysis with actual column details
+            actual_columns = []
+            measure_columns = []
+            name_columns = []
+            key_columns = []
             
-            for col in table.columns[:15]:
+            for col in table.columns[:15]:  # Limit to avoid prompt overflow
+                col_info = {
+                    'name': col.get('name', ''),
+                    'type': col.get('data_type', ''),
+                    'is_pk': col.get('is_primary_key', False)
+                }
+                actual_columns.append(col_info)
+                
                 col_name = col.get('name', '').lower()
                 col_type = col.get('data_type', '').lower()
                 
-                # Revenue/amount indicators
-                if any(word in col_name for word in ['amount', 'total', 'revenue', 'value', 'price']):
-                    if col_type in ['decimal', 'money', 'float', 'numeric']:
-                        revenue_indicators.append(col_name)
-                
-                # Customer indicators
-                if any(word in col_name for word in ['customer', 'client', 'business_point']):
-                    customer_indicators.append(col_name)
-                
-                # Lookup table indicators
-                if any(word in col_name for word in ['method', 'type', 'category', 'status', 'classification']):
-                    lookup_indicators.append(col_name)
+                # Categorize columns
+                if col_type in ['decimal', 'money', 'float', 'numeric']:
+                    measure_columns.append(col.get('name'))
+                if any(word in col_name for word in ['name', 'title', 'description']):
+                    name_columns.append(col.get('name'))
+                if col_name.endswith('id') or col.get('is_primary_key', False):
+                    key_columns.append(col.get('name'))
             
             obj_info = {
                 'name': table.full_name,
                 'row_count': table.row_count,
-                'revenue_indicators': revenue_indicators,
-                'customer_indicators': customer_indicators,
-                'lookup_indicators': lookup_indicators,
-                'total_columns': len(table.columns),
-                'sample_data_available': len(table.sample_data) > 0
+                'actual_columns': actual_columns,
+                'discovered_measures': measure_columns,
+                'discovered_names': name_columns,
+                'discovered_keys': key_columns,
+                'total_columns': len(table.columns)
             }
             
             objects_info.append(obj_info)
@@ -120,21 +173,21 @@ class EntityAnalyzer:
             rdl_tables = rdl_info.get('referenced_tables', [])
             rdl_context = f"\nRDL BUSINESS CONTEXT: {', '.join(rdl_tables[:5])}"
         
-        return f"""Analyze these database objects for CUSTOMER REVENUE ANALYTICS.
+        return f"""Analyze these database objects for CUSTOMER REVENUE ANALYTICS using ONLY the discovered columns.
 
-CRITICAL: For "top customers by revenue" queries, we need FACT TABLES with:
-1. Customer identifiers (customer_id, business_point_id)
-2. Amount/revenue columns (amount, total, revenue)
+CRITICAL: Use ONLY the columns listed in 'actual_columns' for each table. Do not assume any columns exist.
+
+For "top customers by revenue" queries, we need FACT TABLES with:
+1. Customer identifiers (from discovered_keys)
+2. Amount/revenue columns (from discovered_measures) 
 3. Transaction-level data (NOT lookup tables)
 
-AVOID selecting lookup/reference tables like PaymentMethod, Category, Classification.
-
-DATABASE OBJECTS:
+DATABASE OBJECTS WITH DISCOVERED COLUMNS:
 {json.dumps(objects_info, indent=2)}
 
 {rdl_context}
 
-For each object, classify as:
+For each object, classify using ONLY the discovered columns:
 
 ENTITY TYPES:
 - CustomerRevenue: Tables with customer+amount data (BEST for revenue queries)
@@ -151,12 +204,7 @@ BI_ROLE:
 - dimension: Reference/lookup data
 - lookup: Small reference tables (AVOID for revenue)
 
-BUSINESS_PRIORITY:
-- high: Core revenue/customer tables
-- medium: Supporting business tables
-- low: System/lookup tables
-
-Respond with JSON:
+Respond with JSON using ONLY discovered column names:
 {{
   "analysis": [
     {{
@@ -166,19 +214,22 @@ Respond with JSON:
       "business_priority": "high",
       "revenue_capability": "excellent|good|poor|none",
       "customer_capability": "excellent|good|poor|none",
-      "measures": ["amount_column"],
-      "entity_keys": ["customer_id"],
-      "name_columns": ["customer_name"],
-      "time_columns": ["date_column"]
+      "measures": ["actual_column_name"],
+      "entity_keys": ["actual_column_name"],
+      "name_columns": ["actual_column_name"],
+      "time_columns": ["actual_column_name"]
     }}
   ]
-}}"""
+}}
+
+IMPORTANT: Only use column names that exist in the 'actual_columns' list for each table."""
     
     async def _get_llm_response(self, prompt: str) -> str:
         """Get LLM response"""
         try:
             system_msg = """You are a business intelligence analyst specializing in customer revenue analytics.
 Classify tables to ensure revenue queries select FACT TABLES with customer+amount data, NOT lookup tables.
+Use ONLY the discovered column names provided - do not assume any columns exist.
 Respond with valid JSON only."""
             
             messages = [
@@ -227,11 +278,25 @@ Respond with valid JSON only."""
                 else:
                     table.revenue_readiness = 0.1
                 
-                # Column analysis
-                table.measures = analysis.get('measures', [])
-                table.entity_keys = analysis.get('entity_keys', [])
-                table.name_columns = analysis.get('name_columns', [])
-                table.time_columns = analysis.get('time_columns', [])
+                # CRITICAL: Only use columns that actually exist in discovered structure
+                llm_measures = analysis.get('measures', [])
+                llm_keys = analysis.get('entity_keys', [])
+                llm_names = analysis.get('name_columns', [])
+                llm_times = analysis.get('time_columns', [])
+                
+                existing_columns = [col.get('name') for col in table.columns]
+                
+                # Filter to only existing columns, combine with local analysis
+                verified_measures = [col for col in llm_measures if col in existing_columns]
+                verified_keys = [col for col in llm_keys if col in existing_columns]
+                verified_names = [col for col in llm_names if col in existing_columns]
+                verified_times = [col for col in llm_times if col in existing_columns]
+                
+                # Combine with local analysis (prefer local analysis)
+                table.measures = list(set(table.measures + verified_measures))[:5]
+                table.entity_keys = list(set(table.entity_keys + verified_keys))[:5]
+                table.name_columns = list(set(table.name_columns + verified_names))[:3]
+                table.time_columns = list(set(table.time_columns + verified_times))[:3]
                 
                 # Set business role based on analysis
                 if table.entity_type in ['CustomerRevenue', 'Payment', 'Order']:
@@ -242,7 +307,7 @@ Respond with valid JSON only."""
                     table.business_role = "Lookup Data"
                     table.business_priority = 'low'  # Downgrade lookup tables
                 
-                print(f"   ✅ {table.name}: {table.entity_type} (revenue={revenue_cap})")
+                print(f"   ✅ {table.name}: {table.entity_type} (revenue={revenue_cap}, measures={len(table.measures)})")
             else:
                 # Enhanced fallback
                 self._enhanced_fallback_classification(table)
@@ -256,13 +321,14 @@ Respond with valid JSON only."""
         return batch
     
     def _enhanced_fallback_classification(self, table: TableInfo) -> None:
-        """Enhanced fallback with revenue detection"""
+        """Enhanced fallback with revenue detection using discovered columns"""
         name_lower = table.name.lower()
         
-        # Revenue table detection
+        # Analyze discovered columns for classification
         has_customer = any(word in name_lower for word in ['customer', 'client', 'business'])
-        has_amount = any(col.get('name', '').lower() in ['amount', 'total', 'revenue'] 
-                        for col in table.columns)
+        
+        # Check discovered columns for amount/revenue indicators
+        has_amount = len(table.measures) > 0
         has_numeric = any(col.get('data_type', '').lower() in ['decimal', 'money', 'float'] 
                          for col in table.columns)
         
@@ -292,18 +358,15 @@ Respond with valid JSON only."""
             table.business_priority = 'medium'
             table.revenue_readiness = 0.3
         
-        # Extract columns
-        table.measures = [col.get('name') for col in table.columns 
-                         if col.get('data_type', '').lower() in ['decimal', 'money', 'float'] 
-                         and any(word in col.get('name', '').lower() 
-                               for word in ['amount', 'total', 'revenue'])][:3]
-        
-        table.entity_keys = [col.get('name') for col in table.columns 
-                           if col.get('name', '').lower().endswith('id')][:3]
-        
-        table.name_columns = [col.get('name') for col in table.columns 
-                            if any(word in col.get('name', '').lower() 
-                                 for word in ['name', 'title', 'description'])][:3]
+        # Set default business role
+        if table.entity_type in ['CustomerRevenue', 'Payment', 'Order']:
+            table.business_role = "Revenue Analytics"
+        elif table.entity_type == 'Customer':
+            table.business_role = "Customer Master Data"
+        elif table.entity_type in ['PaymentMethod', 'Category']:
+            table.business_role = "Lookup Data"
+        else:
+            table.business_role = "Business Data"
 
 class DomainAnalyzer:
     """Enhanced domain analysis"""
@@ -383,8 +446,8 @@ class CacheManager:
         data = {
             'metadata': {
                 'analyzed': datetime.now().isoformat(),
-                'version': '3.1-enhanced-revenue',
-                'analysis_method': 'enhanced_revenue_detection'
+                'version': '3.2-enhanced-columns',
+                'analysis_method': 'enhanced_column_discovery'
             },
             'tables': [self._table_to_dict(t) for t in tables],
             'domain': self._domain_to_dict(domain) if domain else None,
@@ -513,7 +576,7 @@ class CacheManager:
         )
 
 class SemanticAnalyzer:
-    """Enhanced semantic analyzer with better revenue table detection"""
+    """Enhanced semantic analyzer with better column discovery and classification"""
     
     def __init__(self, config: Config):
         self.config = config
@@ -538,12 +601,12 @@ class SemanticAnalyzer:
         self.domain: Optional[BusinessDomain] = None
         
         print("✅ Enhanced Semantic Analyzer initialized")
-        print("   🎯 Revenue table detection enabled")
-        print("   📊 Fact table prioritization active")
+        print("   🎯 Column discovery and classification enabled")
+        print("   📊 Only discovered columns will be used")
     
     async def analyze_tables(self, tables: List[TableInfo], discovery=None) -> bool:
-        """Enhanced analysis with revenue focus"""
-        print("🧠 ENHANCED REVENUE-FOCUSED ANALYSIS")
+        """Enhanced analysis with column discovery"""
+        print("🧠 ENHANCED COLUMN-DISCOVERY ANALYSIS")
         print("=" * 50)
         
         try:
@@ -556,7 +619,7 @@ class SemanticAnalyzer:
                 if rdl_info:
                     print(f"   📋 RDL context: {rdl_info.get('report_count', 0)} reports")
             
-            # Enhanced entity analysis
+            # Enhanced entity analysis with column discovery
             self.tables = await self.entity_analyzer.analyze_tables(tables, rdl_info)
             
             # Domain analysis
@@ -615,6 +678,8 @@ class SemanticAnalyzer:
         entity_counts = {}
         revenue_ready = 0
         fact_tables = 0
+        total_measures = 0
+        total_names = 0
         
         for table in self.tables:
             entity_type = table.entity_type
@@ -625,12 +690,17 @@ class SemanticAnalyzer:
             
             if getattr(table, 'bi_role', '') == 'fact':
                 fact_tables += 1
+            
+            total_measures += len(getattr(table, 'measures', []))
+            total_names += len(getattr(table, 'name_columns', []))
         
-        print(f"\n✅ ENHANCED REVENUE-FOCUSED ANALYSIS COMPLETED:")
+        print(f"\n✅ ENHANCED COLUMN-DISCOVERY ANALYSIS COMPLETED:")
         print(f"   ⏱️ Time: {elapsed_time:.1f}s")
         print(f"   📊 Total objects: {len(self.tables)}")
         print(f"   💰 Revenue-ready tables: {revenue_ready}")
         print(f"   📈 Fact tables: {fact_tables}")
+        print(f"   🔢 Discovered measures: {total_measures}")
+        print(f"   🏷️ Discovered name columns: {total_names}")
         
         # Show revenue capabilities
         if entity_counts.get('CustomerRevenue', 0) > 0:
@@ -663,6 +733,7 @@ class SemanticAnalyzer:
     def get_analysis_stats(self) -> Dict[str, Any]:
         entity_counts = {}
         revenue_ready = 0
+        total_measures = 0
         
         for table in self.tables:
             entity_type = table.entity_type
@@ -670,6 +741,8 @@ class SemanticAnalyzer:
             
             if getattr(table, 'revenue_readiness', 0) >= 0.7:
                 revenue_ready += 1
+            
+            total_measures += len(getattr(table, 'measures', []))
         
         return {
             'total_objects': len(self.tables),
@@ -682,5 +755,6 @@ class SemanticAnalyzer:
             'total_relationships': len(self.relationships),
             'domain_type': self.domain.domain_type if self.domain else None,
             'revenue_analytics_enabled': self.domain.capabilities.get('customer_revenue_analysis', False) if self.domain else False,
-            'analysis_method': 'enhanced_revenue_detection'
+            'analysis_method': 'enhanced_column_discovery',
+            'total_discovered_measures': total_measures
         }

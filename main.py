@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Semantic Database RAG System - Main Entry Point
+Semantic Database RAG System - Enhanced Main Entry Point
 Simple, Readable, Maintainable - DRY, SOLID, YAGNI principles
 Function names: SemanticRAG (not SimplifiedSemanticRAG)
+FIXED: Only use discovered columns, enhanced safety validation
 """
 
 import asyncio
@@ -51,7 +52,7 @@ def check_dependencies() -> bool:
     return True
 
 class SemanticRAG:
-    """Semantic RAG system with enhanced revenue table detection"""
+    """Enhanced SemanticRAG system with discovered-columns-only approach"""
     
     def __init__(self):
         load_env()
@@ -75,23 +76,26 @@ class SemanticRAG:
                     missing.append("SQL Server (DATABASE_CONNECTION_STRING)")
                 raise RuntimeError(f"Configuration incomplete: {', '.join(missing)}")
             
-            print("🔧 Initializing system components...")
+            print("🔧 Initializing enhanced system components...")
             
             sys.path.insert(0, str(Path(__file__).parent))
             
             from db.discovery import DatabaseDiscovery
             self.discovery = DatabaseDiscovery(self.config)
             
+            # Import the enhanced semantic analyzer
             from semantic.analysis import SemanticAnalyzer
             self.analyzer = SemanticAnalyzer(self.config)
             
+            # Import the fixed query interface
             from interactive.query_interface import QueryInterface
             self.query_interface = QueryInterface(self.config)
             
-            print("✅ SemanticRAG System initialized")
-            print("   🎯 Revenue table detection enabled")
-            print("   📊 Smart table selection active")
-            print("   🛡️ Fixed safety validation")
+            print("✅ Enhanced SemanticRAG System initialized")
+            print("   🎯 Discovered-columns-only approach enabled")
+            print("   📊 Smart table selection with column validation")
+            print("   🛡️ Fixed safety validation with CTE support")
+            print("   🔍 Enhanced column discovery and classification")
             
         except Exception as e:
             print(f"❌ Initialization failed: {e}")
@@ -104,9 +108,9 @@ class SemanticRAG:
             raise
     
     async def run_discovery(self) -> bool:
-        """Run database discovery"""
-        print("\n🔍 SQL SERVER DISCOVERY WITH RDL INTEGRATION")
-        print("=" * 55)
+        """Run database discovery with enhanced column analysis"""
+        print("\n🔍 ENHANCED SQL SERVER DISCOVERY WITH RDL INTEGRATION")
+        print("=" * 60)
         
         try:
             success = await self.discovery.discover_database()
@@ -118,6 +122,8 @@ class SemanticRAG:
                 print(f"   👁️ Views: {stats['views']}")
                 print(f"   🔗 Relationships: {stats['relationships']}")
                 print(f"   📋 RDL references: {stats['rdl_references']}")
+                print(f"   🏷️ RDL fields: {stats['rdl_fields']}")
+                print(f"   🔄 RDL JOIN pairs: {stats['rdl_join_pairs']}")
                 return True
             else:
                 print("❌ Discovery failed")
@@ -128,9 +134,9 @@ class SemanticRAG:
             return False
     
     async def run_analysis(self) -> bool:
-        """Run semantic analysis with revenue focus"""
-        print("\n🧠 SEMANTIC ANALYSIS WITH REVENUE FOCUS")
-        print("=" * 45)
+        """Run enhanced semantic analysis with column discovery"""
+        print("\n🧠 ENHANCED SEMANTIC ANALYSIS WITH COLUMN DISCOVERY")
+        print("=" * 55)
         
         try:
             tables = self.discovery.get_tables()
@@ -145,11 +151,12 @@ class SemanticRAG:
             
             if success:
                 stats = self.analyzer.get_analysis_stats()
-                print("✅ Revenue-focused analysis completed!")
+                print("✅ Enhanced column-discovery analysis completed!")
                 print(f"   📊 Total objects: {stats['total_objects']}")
                 print(f"   💰 Revenue-ready: {stats['revenue_ready_tables']}")
                 print(f"   👥 Customer tables: {stats['customer_tables']}")
                 print(f"   💳 Payment tables: {stats['payment_tables']}")
+                print(f"   🔢 Discovered measures: {stats['total_discovered_measures']}")
                 
                 if stats['revenue_analytics_enabled']:
                     print("   🔥 Revenue analytics enabled!")
@@ -164,9 +171,9 @@ class SemanticRAG:
             return False
     
     async def run_queries(self) -> bool:
-        """Run query interface"""
-        print("\n💬 QUERY INTERFACE WITH REVENUE FOCUS")
-        print("=" * 40)
+        """Run enhanced query interface with discovered-columns-only approach"""
+        print("\n💬 ENHANCED QUERY INTERFACE - DISCOVERED COLUMNS ONLY")
+        print("=" * 55)
         
         try:
             tables = []
@@ -195,16 +202,32 @@ class SemanticRAG:
                 print("   2. Analysis")
                 return False
             
-            # Show revenue capabilities
-            revenue_ready = len([t for t in tables if getattr(t, 'revenue_readiness', 0) >= 0.7])
-            customer_tables = len([t for t in tables if t.entity_type == 'Customer'])
-            payment_tables = len([t for t in tables if t.entity_type in ['Payment', 'CustomerRevenue']])
+            # Validate tables have discovered columns
+            valid_tables = [t for t in tables if t.columns]
+            invalid_tables = len(tables) - len(valid_tables)
             
-            print(f"🚀 Query interface ready:")
-            print(f"   📊 Total objects: {len(tables)}")
+            if invalid_tables > 0:
+                print(f"   ⚠️ {invalid_tables} tables have no discovered columns")
+            
+            if not valid_tables:
+                print("❌ No tables with discovered columns found.")
+                print("   Please run Discovery and Analysis again.")
+                return False
+            
+            # Show enhanced capabilities
+            revenue_ready = len([t for t in valid_tables if getattr(t, 'revenue_readiness', 0) >= 0.7])
+            customer_tables = len([t for t in valid_tables if t.entity_type == 'Customer'])
+            payment_tables = len([t for t in valid_tables if t.entity_type in ['Payment', 'CustomerRevenue']])
+            total_measures = sum(len(getattr(t, 'measures', [])) for t in valid_tables)
+            total_names = sum(len(getattr(t, 'name_columns', [])) for t in valid_tables)
+            
+            print(f"🚀 Enhanced query interface ready:")
+            print(f"   📊 Valid tables: {len(valid_tables)}")
             print(f"   💰 Revenue-ready tables: {revenue_ready}")
             print(f"   👥 Customer tables: {customer_tables}")
             print(f"   💳 Payment tables: {payment_tables}")
+            print(f"   🔢 Total discovered measures: {total_measures}")
+            print(f"   🏷️ Total discovered names: {total_names}")
             
             if revenue_ready > 0:
                 print(f"   ✅ Revenue queries supported!")
@@ -214,7 +237,8 @@ class SemanticRAG:
                 for i, question in enumerate(domain.sample_questions[:4], 1):
                     print(f"   {i}. {question}")
             
-            await self.query_interface.start_session(tables, domain, relationships)
+            # Use valid tables for querying
+            await self.query_interface.start_session(valid_tables, domain, relationships)
             return True
             
         except Exception as e:
@@ -222,9 +246,9 @@ class SemanticRAG:
             return False
     
     def show_status(self) -> None:
-        """Show system status"""
-        print("\n📊 SYSTEM STATUS")
-        print("=" * 25)
+        """Show enhanced system status"""
+        print("\n📊 ENHANCED SYSTEM STATUS")
+        print("=" * 30)
         
         try:
             discovery_tables = self.discovery.get_tables()
@@ -240,14 +264,18 @@ class SemanticRAG:
             print(f"🔍 Discovery: {'✅ Ready' if discovery_tables else '❌ Incomplete'}")
             if discovery_tables:
                 stats = self.discovery.get_discovery_stats()
+                valid_tables = [t for t in discovery_tables if t.columns]
                 print(f"   📊 Objects: {stats['total_objects']}")
+                print(f"   ✅ With columns: {len(valid_tables)}")
                 print(f"   📋 RDL references: {stats['rdl_references']}")
+                print(f"   🏷️ RDL fields: {stats['rdl_fields']}")
             
             print(f"🧠 Analysis: {'✅ Ready' if analyzer_tables else '❌ Incomplete'}")
             if analyzer_tables:
                 stats = self.analyzer.get_analysis_stats()
                 print(f"   📊 Objects: {stats['total_objects']}")
                 print(f"   💰 Revenue-ready: {stats['revenue_ready_tables']}")
+                print(f"   🔢 Discovered measures: {stats['total_discovered_measures']}")
                 
                 if stats['revenue_analytics_enabled']:
                     print(f"   🔥 Revenue analytics: Enabled")
@@ -260,33 +288,44 @@ class SemanticRAG:
             print(f"   🗄️ Database: {'✅' if health['database_configured'] else '❌'}")
             print(f"   💾 Cache: {'✅' if health['cache_writable'] else '❌'}")
             
+            # Enhanced validation
+            if discovery_tables:
+                tables_with_columns = [t for t in discovery_tables if t.columns]
+                print(f"   📊 Tables with columns: {len(tables_with_columns)}/{len(discovery_tables)}")
+                
+                if analyzer_tables:
+                    tables_with_measures = [t for t in analyzer_tables if getattr(t, 'measures', [])]
+                    tables_with_names = [t for t in analyzer_tables if getattr(t, 'name_columns', [])]
+                    print(f"   🔢 Tables with measures: {len(tables_with_measures)}")
+                    print(f"   🏷️ Tables with names: {len(tables_with_names)}")
+            
         except Exception as e:
             print(f"⚠️ Status check error: {e}")
 
 def show_menu() -> None:
-    """Display main menu"""
-    print("\n" + "="*60)
-    print("SEMANTIC DATABASE RAG SYSTEM")
-    print("Revenue-Focused Table Selection")
-    print("="*60)
+    """Display enhanced main menu"""
+    print("\n" + "="*70)
+    print("ENHANCED SEMANTIC DATABASE RAG SYSTEM")
+    print("Discovered-Columns-Only Revenue-Focused Table Selection")
+    print("="*70)
     print("1. 🔍 SQL Server Discovery")
-    print("   • Discover tables and views")
-    print("   • Extract RDL business context")
-    print("   • Build relationship graph")
+    print("   • Discover tables, views, and columns")
+    print("   • Extract RDL business context and field mappings")
+    print("   • Build enhanced relationship graph with JOIN pairs")
     print()
-    print("2. 🧠 Revenue-Focused Analysis")
-    print("   • Classify tables for revenue queries")
-    print("   • Score revenue readiness")
-    print("   • Avoid lookup table selection")
+    print("2. 🧠 Enhanced Semantic Analysis")
+    print("   • Column discovery and classification")
+    print("   • Revenue table prioritization")
+    print("   • Only use discovered columns for queries")
     print()
-    print("3. 💬 Query Interface")
-    print("   • Smart revenue table selection")
-    print("   • Fixed safety validation")
-    print("   • Template-first SQL generation")
+    print("3. 💬 Enhanced Query Interface")
+    print("   • Discovered-columns-only SQL generation")
+    print("   • Fixed safety validation with CTE support")
+    print("   • Smart table selection with column validation")
     print()
-    print("4. 📊 System Status")
+    print("4. 📊 Enhanced System Status")
     print("0. Exit")
-    print("="*60)
+    print("="*70)
 
 async def handle_choice(system: SemanticRAG, choice: str) -> bool:
     """Handle menu choice"""
@@ -311,10 +350,10 @@ async def handle_choice(system: SemanticRAG, choice: str) -> bool:
         return True
 
 def main():
-    """Main entry point"""
-    print("🚀 SEMANTIC DATABASE RAG SYSTEM")
-    print("Revenue-Focused Table Selection")
-    print("=" * 60)
+    """Enhanced main entry point"""
+    print("🚀 ENHANCED SEMANTIC DATABASE RAG SYSTEM")
+    print("Discovered-Columns-Only Revenue-Focused Table Selection")
+    print("=" * 70)
     
     try:
         system = SemanticRAG()
@@ -329,7 +368,7 @@ def main():
             choice = input("Enter choice (0-4): ").strip()
             
             if choice == '0':
-                print("👋 Thanks for using Semantic Database RAG!")
+                print("👋 Thanks for using Enhanced Semantic Database RAG!")
                 break
             
             asyncio.run(handle_choice(system, choice))
