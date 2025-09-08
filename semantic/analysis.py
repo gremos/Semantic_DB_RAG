@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Semantic Analysis - Cross-Industry Entity Recognition
+Semantic Analysis - Enhanced Table Classification for Better Revenue Queries
 Simple, Readable, Maintainable - DRY, SOLID, YAGNI principles
+Enhanced: Better table classification to avoid selecting lookup tables for revenue queries
 """
 
 import asyncio
@@ -19,37 +20,37 @@ from shared.models import TableInfo, BusinessDomain, Relationship
 from shared.utils import parse_json_response
 
 class EntityAnalyzer:
-    """Cross-industry entity analyzer"""
+    """Enhanced entity analyzer with better revenue table detection"""
     
     def __init__(self, llm: AzureChatOpenAI):
         self.llm = llm
         
-        # Cross-industry entity taxonomy (Architecture requirement)
+        # Enhanced entity taxonomy with better classification
         self.entity_taxonomy = {
+            # Fact tables (transactional data)
+            'CustomerRevenue': ['customer_payment', 'customer_invoice', 'sales_transaction'],
+            'Payment': ['payment', 'transaction', 'invoice', 'billing', 'revenue_detail'],
+            'Order': ['order', 'purchase', 'sale', 'quote', 'contract_payment'],
+            
             # Core business entities
-            'Customer': ['customer', 'client', 'account', 'contact'],
-            'Payment': ['payment', 'transaction', 'invoice', 'billing'],
-            'Order': ['order', 'purchase', 'sale', 'quote'],
-            'Product': ['product', 'item', 'catalog', 'inventory'],
+            'Customer': ['customer', 'client', 'account', 'contact', 'business_point'],
             'Contract': ['contract', 'agreement', 'deal', 'συμβόλαια'],
-            'Address': ['address', 'location', 'geography'],
+            'Product': ['product', 'item', 'catalog', 'inventory'],
             
-            # Cross-industry extensions
+            # Reference/lookup tables (avoid for revenue queries)
+            'PaymentMethod': ['payment_method', 'advanced_payment_method'],
+            'Category': ['category', 'classification', 'type', 'status'],
+            'Lookup': ['lookup', 'reference', 'master', 'code'],
+            
+            # Other entities
             'Employee': ['employee', 'staff', 'worker', 'personnel'],
-            'Vendor': ['vendor', 'supplier', 'partner'],
-            'Project': ['project', 'task', 'work', 'job'],
-            'Asset': ['asset', 'equipment', 'resource'],
-            'Inventory': ['inventory', 'stock', 'warehouse'],
-            'Event': ['event', 'log', 'audit', 'activity'],
-            
-            # System entities
             'System': ['system', 'config', 'setting', 'log'],
             'Other': []
         }
     
     async def analyze_tables(self, tables: List[TableInfo], rdl_info: Dict = None) -> List[TableInfo]:
-        """Analyze tables with cross-industry taxonomy"""
-        print(f"🧠 Cross-industry analysis: {len(tables)} objects...")
+        """Enhanced table analysis with better revenue table detection"""
+        print(f"🧠 Enhanced table analysis: {len(tables)} objects...")
         
         batch_size = 3
         analyzed_objects = []
@@ -66,149 +67,118 @@ class EntityAnalyzer:
         return analyzed_objects
     
     async def _analyze_batch(self, batch: List[TableInfo], rdl_info: Dict = None) -> List[TableInfo]:
-        """Analyze batch of tables"""
+        """Analyze batch with enhanced revenue detection"""
         try:
-            prompt = self._create_analysis_prompt(batch, rdl_info)
+            prompt = self._create_enhanced_analysis_prompt(batch, rdl_info)
             response = await self._get_llm_response(prompt)
-            return self._apply_analysis(response, batch)
+            return self._apply_enhanced_analysis(response, batch)
         except Exception as e:
             print(f"   ⚠️ Batch analysis failed: {e}")
             return batch
     
-    def _create_analysis_prompt(self, batch: List[TableInfo], rdl_info: Dict = None) -> str:
-        """Create analysis prompt"""
+    def _create_enhanced_analysis_prompt(self, batch: List[TableInfo], rdl_info: Dict = None) -> str:
+        """Create enhanced analysis prompt focusing on revenue tables"""
         objects_info = []
         
         for table in batch:
-            columns_detail = []
-            for col in table.columns[:15]:
-                columns_detail.append({
-                    'name': col.get('name', ''),
-                    'type': col.get('data_type', ''),
-                    'nullable': col.get('is_nullable', True)
-                })
+            # Enhanced column analysis
+            revenue_indicators = []
+            customer_indicators = []
+            lookup_indicators = []
             
-            sample_detail = self._get_sample_insights(table)
+            for col in table.columns[:15]:
+                col_name = col.get('name', '').lower()
+                col_type = col.get('data_type', '').lower()
+                
+                # Revenue/amount indicators
+                if any(word in col_name for word in ['amount', 'total', 'revenue', 'value', 'price']):
+                    if col_type in ['decimal', 'money', 'float', 'numeric']:
+                        revenue_indicators.append(col_name)
+                
+                # Customer indicators
+                if any(word in col_name for word in ['customer', 'client', 'business_point']):
+                    customer_indicators.append(col_name)
+                
+                # Lookup table indicators
+                if any(word in col_name for word in ['method', 'type', 'category', 'status', 'classification']):
+                    lookup_indicators.append(col_name)
             
             obj_info = {
                 'name': table.full_name,
-                'object_type': table.object_type,
                 'row_count': table.row_count,
-                'columns': columns_detail,
-                'sample_insights': sample_detail
+                'revenue_indicators': revenue_indicators,
+                'customer_indicators': customer_indicators,
+                'lookup_indicators': lookup_indicators,
+                'total_columns': len(table.columns),
+                'sample_data_available': len(table.sample_data) > 0
             }
             
             objects_info.append(obj_info)
         
         rdl_context = ""
         if rdl_info:
-            rdl_context = f"\nRDL CONTEXT: Report references: {', '.join(rdl_info.get('referenced_tables', [])[:5])}"
+            rdl_tables = rdl_info.get('referenced_tables', [])
+            rdl_context = f"\nRDL BUSINESS CONTEXT: {', '.join(rdl_tables[:5])}"
         
-        return f"""Analyze these database objects for business intelligence using cross-industry entity recognition.
+        return f"""Analyze these database objects for CUSTOMER REVENUE ANALYTICS.
 
-CROSS-INDUSTRY ENTITY TAXONOMY:
-- Customer: customer master data, accounts, contacts
-- Payment: financial transactions, payments, invoices
-- Order: sales orders, purchases, quotes  
-- Product: items, catalog, inventory
-- Contract: agreements, deals, contracts
-- Employee: staff data, personnel, workers
-- Vendor: supplier data, partners
-- Project: project management, tasks
-- Asset: equipment, resources, property
-- Inventory: stock data, warehouse
-- Event: activity logs, audit trails
-- System: configuration, settings
-- Other: specify if none fit
+CRITICAL: For "top customers by revenue" queries, we need FACT TABLES with:
+1. Customer identifiers (customer_id, business_point_id)
+2. Amount/revenue columns (amount, total, revenue)
+3. Transaction-level data (NOT lookup tables)
+
+AVOID selecting lookup/reference tables like PaymentMethod, Category, Classification.
 
 DATABASE OBJECTS:
-{json.dumps(objects_info, indent=2, default=str)}
+{json.dumps(objects_info, indent=2)}
 
 {rdl_context}
 
-For each object, provide analysis:
+For each object, classify as:
 
-1. ENTITY_TYPE: Select from taxonomy above
-2. BUSINESS_CONTEXT: Specific business purpose
-3. COLUMN_ANALYSIS: Categorize by function:
-   - MEASURES: numeric columns for aggregation
-   - ENTITY_KEYS: identifiers for joining
-   - NAME_COLUMNS: descriptive text for display
-   - TIME_COLUMNS: dates and timestamps
-   - CATEGORY_COLUMNS: classification data
-4. BI_ROLE: fact (transactional) or dimension (reference)
-5. BUSINESS_PRIORITY: high (core), medium (supporting), low (system)
-6. DATA_QUALITY: production, test, or archive
+ENTITY TYPES:
+- CustomerRevenue: Tables with customer+amount data (BEST for revenue queries)
+- Payment: Payment transaction tables
+- Customer: Customer master data
+- PaymentMethod: Payment method lookup (AVOID for revenue)
+- Category: Classification lookup (AVOID for revenue)  
+- Contract: Contract/agreement data
+- System: System/configuration tables
+- Other: Everything else
 
-Respond with JSON only:
+BI_ROLE:
+- fact: Transaction data with measures (PREFER for revenue)
+- dimension: Reference/lookup data
+- lookup: Small reference tables (AVOID for revenue)
+
+BUSINESS_PRIORITY:
+- high: Core revenue/customer tables
+- medium: Supporting business tables
+- low: System/lookup tables
+
+Respond with JSON:
 {{
   "analysis": [
     {{
       "object_name": "[schema].[table]",
-      "entity_type": "Customer",
-      "business_context": "Customer master data",
-      "column_analysis": {{
-        "measures": ["amount", "total"],
-        "entity_keys": ["customer_id"],
-        "name_columns": ["customer_name"],
-        "time_columns": ["created_date"],
-        "category_columns": ["status"]
-      }},
-      "bi_role": "dimension",
+      "entity_type": "CustomerRevenue",
+      "bi_role": "fact",
       "business_priority": "high",
-      "data_quality": "production"
+      "revenue_capability": "excellent|good|poor|none",
+      "customer_capability": "excellent|good|poor|none",
+      "measures": ["amount_column"],
+      "entity_keys": ["customer_id"],
+      "name_columns": ["customer_name"],
+      "time_columns": ["date_column"]
     }}
   ]
 }}"""
     
-    def _get_sample_insights(self, table: TableInfo) -> Dict:
-        """Get sample data insights"""
-        if not table.sample_data:
-            return {'status': 'no_data'}
-        
-        insights = []
-        first_row = table.sample_data[0]
-        
-        for key, value in list(first_row.items())[:6]:
-            if key.startswith('__'):
-                continue
-            
-            insight = self._analyze_column_value(key, value)
-            if insight:
-                insights.append(insight)
-        
-        return {
-            'status': 'has_data',
-            'insights': insights
-        }
-    
-    def _analyze_column_value(self, column_name: str, value: Any) -> str:
-        """Analyze column value for insights"""
-        col_lower = column_name.lower()
-        
-        if isinstance(value, (int, float)) and abs(value) > 0:
-            if any(word in col_lower for word in ['amount', 'total', 'price']):
-                return f"{column_name}: monetary value - likely measure"
-            elif any(word in col_lower for word in ['count', 'quantity']):
-                return f"{column_name}: numeric value - likely measure"
-            else:
-                return f"{column_name}: numeric - potential identifier"
-        
-        elif isinstance(value, str) and len(value) > 2:
-            if any(word in col_lower for word in ['name', 'title', 'description']):
-                return f"{column_name}: text - likely display name"
-            elif any(word in col_lower for word in ['status', 'type', 'category']):
-                return f"{column_name}: text - likely classification"
-            else:
-                return f"{column_name}: text - potential name or category"
-        
-        return ""
-    
     async def _get_llm_response(self, prompt: str) -> str:
         """Get LLM response"""
         try:
-            system_msg = """You are a business intelligence analyst. Analyze database objects by understanding business purpose from table names, column patterns, and sample values.
-Use cross-industry entity taxonomy to classify business data accurately.
+            system_msg = """You are a business intelligence analyst specializing in customer revenue analytics.
+Classify tables to ensure revenue queries select FACT TABLES with customer+amount data, NOT lookup tables.
 Respond with valid JSON only."""
             
             messages = [
@@ -222,11 +192,11 @@ Respond with valid JSON only."""
             print(f"   ⚠️ LLM request failed: {e}")
             return ""
     
-    def _apply_analysis(self, response: str, batch: List[TableInfo]) -> List[TableInfo]:
-        """Apply LLM analysis results"""
+    def _apply_enhanced_analysis(self, response: str, batch: List[TableInfo]) -> List[TableInfo]:
+        """Apply enhanced analysis with better classification"""
         data = parse_json_response(response)
         if not data or 'analysis' not in data:
-            return batch
+            return self._fallback_classification(batch)
         
         analysis_map = {
             item.get('object_name', ''): item 
@@ -239,157 +209,182 @@ Respond with valid JSON only."""
             if analysis:
                 # Core classification
                 table.entity_type = analysis.get('entity_type', 'Other')
-                table.business_role = analysis.get('business_context', 'Unknown')
-                table.confidence = 0.9
-                
-                # Column analysis
-                col_analysis = analysis.get('column_analysis', {})
-                table.measures = col_analysis.get('measures', [])
-                table.entity_keys = col_analysis.get('entity_keys', [])
-                table.name_columns = col_analysis.get('name_columns', [])
-                table.time_columns = col_analysis.get('time_columns', [])
-                
-                # BI properties
                 table.bi_role = analysis.get('bi_role', 'dimension')
                 table.business_priority = analysis.get('business_priority', 'medium')
-                table.data_type = 'operational' if table.bi_role == 'fact' else 'reference'
+                table.confidence = 0.9
                 
-                print(f"   ✅ {table.name}: {table.entity_type} ({table.bi_role})")
+                # Enhanced revenue scoring
+                revenue_cap = analysis.get('revenue_capability', 'none')
+                customer_cap = analysis.get('customer_capability', 'none')
+                
+                # Calculate revenue readiness score
+                if revenue_cap == 'excellent' and customer_cap in ['excellent', 'good']:
+                    table.revenue_readiness = 1.0
+                elif revenue_cap == 'good' and customer_cap in ['excellent', 'good']:
+                    table.revenue_readiness = 0.8
+                elif revenue_cap in ['excellent', 'good']:
+                    table.revenue_readiness = 0.6
+                else:
+                    table.revenue_readiness = 0.1
+                
+                # Column analysis
+                table.measures = analysis.get('measures', [])
+                table.entity_keys = analysis.get('entity_keys', [])
+                table.name_columns = analysis.get('name_columns', [])
+                table.time_columns = analysis.get('time_columns', [])
+                
+                # Set business role based on analysis
+                if table.entity_type in ['CustomerRevenue', 'Payment', 'Order']:
+                    table.business_role = "Revenue Analytics"
+                elif table.entity_type == 'Customer':
+                    table.business_role = "Customer Master Data"
+                elif table.entity_type in ['PaymentMethod', 'Category']:
+                    table.business_role = "Lookup Data"
+                    table.business_priority = 'low'  # Downgrade lookup tables
+                
+                print(f"   ✅ {table.name}: {table.entity_type} (revenue={revenue_cap})")
             else:
-                # Fallback
-                table.entity_type = self._classify_by_name(table.name)
+                # Enhanced fallback
+                self._enhanced_fallback_classification(table)
         
         return batch
     
-    def _classify_by_name(self, table_name: str) -> str:
-        """Fallback classification by name"""
-        name_lower = table_name.lower()
+    def _fallback_classification(self, batch: List[TableInfo]) -> List[TableInfo]:
+        """Enhanced fallback classification"""
+        for table in batch:
+            self._enhanced_fallback_classification(table)
+        return batch
+    
+    def _enhanced_fallback_classification(self, table: TableInfo) -> None:
+        """Enhanced fallback with revenue detection"""
+        name_lower = table.name.lower()
         
-        for entity_type, keywords in self.entity_taxonomy.items():
-            if any(keyword in name_lower for keyword in keywords):
-                return entity_type
+        # Revenue table detection
+        has_customer = any(word in name_lower for word in ['customer', 'client', 'business'])
+        has_amount = any(col.get('name', '').lower() in ['amount', 'total', 'revenue'] 
+                        for col in table.columns)
+        has_numeric = any(col.get('data_type', '').lower() in ['decimal', 'money', 'float'] 
+                         for col in table.columns)
         
-        # Additional patterns
-        if any(word in name_lower for word in ['συμβόλαια', 'contract']):
-            return 'Contract'
-        elif 'business' in name_lower:
-            return 'Customer'
+        if has_customer and (has_amount or has_numeric) and table.row_count > 100:
+            table.entity_type = 'CustomerRevenue'
+            table.bi_role = 'fact'
+            table.business_priority = 'high'
+            table.revenue_readiness = 0.9
+        elif 'payment' in name_lower and not 'method' in name_lower:
+            table.entity_type = 'Payment'
+            table.bi_role = 'fact'
+            table.business_priority = 'high'
+            table.revenue_readiness = 0.8
+        elif any(word in name_lower for word in ['method', 'category', 'classification', 'type']):
+            table.entity_type = 'Category'
+            table.bi_role = 'lookup'
+            table.business_priority = 'low'
+            table.revenue_readiness = 0.1
+        elif 'customer' in name_lower:
+            table.entity_type = 'Customer'
+            table.bi_role = 'dimension'
+            table.business_priority = 'high'
+            table.revenue_readiness = 0.5
+        else:
+            table.entity_type = 'Other'
+            table.bi_role = 'dimension'
+            table.business_priority = 'medium'
+            table.revenue_readiness = 0.3
         
-        return 'Other'
+        # Extract columns
+        table.measures = [col.get('name') for col in table.columns 
+                         if col.get('data_type', '').lower() in ['decimal', 'money', 'float'] 
+                         and any(word in col.get('name', '').lower() 
+                               for word in ['amount', 'total', 'revenue'])][:3]
+        
+        table.entity_keys = [col.get('name') for col in table.columns 
+                           if col.get('name', '').lower().endswith('id')][:3]
+        
+        table.name_columns = [col.get('name') for col in table.columns 
+                            if any(word in col.get('name', '').lower() 
+                                 for word in ['name', 'title', 'description'])][:3]
 
 class DomainAnalyzer:
-    """Business domain analysis"""
+    """Enhanced domain analysis"""
     
     def determine_domain(self, tables: List[TableInfo], rdl_info: Dict = None) -> Optional[BusinessDomain]:
-        """Determine business domain"""
+        """Determine business domain with enhanced capabilities"""
         if not tables:
             return None
         
-        # Count entity types
+        # Enhanced entity counting
         entity_counts = {}
+        revenue_ready_tables = 0
+        
         for table in tables:
             entity_type = table.entity_type
             entity_counts[entity_type] = entity_counts.get(entity_type, 0) + 1
+            
+            if getattr(table, 'revenue_readiness', 0) >= 0.7:
+                revenue_ready_tables += 1
         
-        # Build capabilities
+        # Enhanced capabilities
         capabilities = {
             'data_exploration': True,
-            'basic_reporting': len(tables) > 0
+            'basic_reporting': len(tables) > 0,
+            'revenue_analytics': revenue_ready_tables > 0,
+            'customer_analytics': entity_counts.get('Customer', 0) > 0
         }
         
-        for entity_type, count in entity_counts.items():
-            if count >= 1:
-                capability_name = f"{entity_type.lower()}_analysis"
-                capabilities[capability_name] = True
-        
-        # Special combinations
-        if entity_counts.get('Customer', 0) >= 1 and entity_counts.get('Payment', 0) >= 1:
+        # Special revenue capabilities
+        if (entity_counts.get('CustomerRevenue', 0) > 0 or 
+            (entity_counts.get('Customer', 0) > 0 and entity_counts.get('Payment', 0) > 0)):
             capabilities['customer_revenue_analysis'] = True
-        
-        if entity_counts.get('Employee', 0) >= 1:
-            capabilities['hr_analytics'] = True
-        
-        if entity_counts.get('Contract', 0) >= 1:
-            capabilities['contract_management'] = True
+            capabilities['top_customers_by_revenue'] = True
         
         # Determine domain type
-        domain_confidence = 0.8
-        if rdl_info and rdl_info.get('business_priority_signals'):
-            domain_confidence = 0.95
-        
-        # Create domain based on entity mix
-        primary_entity = max(entity_counts.items(), key=lambda x: x[1])[0] if entity_counts else 'Business'
-        
-        if entity_counts.get('Contract', 0) >= 1 and rdl_info:
-            domain_type = "Contract Analytics"
+        if capabilities.get('customer_revenue_analysis'):
+            domain_type = "Customer Revenue Analytics"
             sample_questions = [
-                "Show contract details",
-                "What is our total contract value?",
-                "List contracts by customer"
+                "Who are our top customers by revenue?",
+                "What is our total revenue this year?",
+                "Show customer payment trends",
+                "List customers with highest spending"
             ]
-        elif entity_counts.get('Customer', 0) >= 1 and entity_counts.get('Payment', 0) >= 1:
-            domain_type = "Customer & Financial Analytics"
+        elif entity_counts.get('Customer', 0) > 0:
+            domain_type = "Customer Analytics" 
             sample_questions = [
-                "Who are our top customers?",
-                "What is our total revenue?",
-                "Show customer payment trends"
-            ]
-        elif entity_counts.get('Employee', 0) >= 1:
-            domain_type = "HR Analytics"
-            sample_questions = [
-                "Show employee headcount",
-                "List departments and staff",
-                "Show employee data"
+                "Show customer information",
+                "List all customers",
+                "Count active customers"
             ]
         else:
-            domain_type = f"{primary_entity} Analytics"
+            domain_type = "Business Analytics"
             sample_questions = [
-                f"Show {primary_entity.lower()} data",
-                f"List all {primary_entity.lower()} records",
-                "Show data summary"
+                "Show business data",
+                "List available information",
+                "Display data summary"
             ]
         
         return BusinessDomain(
             domain_type=domain_type,
-            industry=self._determine_industry(entity_counts, rdl_info),
-            confidence=domain_confidence,
+            industry="Business Intelligence",
+            confidence=0.9 if revenue_ready_tables > 0 else 0.7,
             sample_questions=sample_questions,
             capabilities=capabilities
         )
-    
-    def _determine_industry(self, entity_counts: Dict, rdl_info: Dict = None) -> str:
-        """Determine industry from entity patterns"""
-        if rdl_info:
-            report_title = rdl_info.get('report_title', '').lower()
-            if 'absentees' in report_title:
-                return "Human Resources"
-            if 'contract' in report_title:
-                return "Contract Management"
-        
-        if entity_counts.get('Employee', 0) > 2:
-            return "Human Resources"
-        elif entity_counts.get('Contract', 0) > 0:
-            return "Legal/Contracts"
-        elif entity_counts.get('Customer', 0) > 0:
-            return "Business/Commerce"
-        else:
-            return "Business Intelligence"
 
 class CacheManager:
-    """Cache management for semantic analysis (COMPLIANT - uses existing cache)"""
+    """Simple cache management"""
     
     def __init__(self, config: Config):
         self.config = config
     
     def save_analysis(self, tables: List[TableInfo], domain: Optional[BusinessDomain], relationships: List[Relationship]):
-        """Save semantic analysis to cache"""
+        """Save semantic analysis"""
         cache_file = self.config.get_cache_path("semantic_analysis.json")
         
         data = {
             'metadata': {
                 'analyzed': datetime.now().isoformat(),
-                'version': '3.0-cross-industry',
-                'analysis_method': 'cross_industry_llm'
+                'version': '3.1-enhanced-revenue',
+                'analysis_method': 'enhanced_revenue_detection'
             },
             'tables': [self._table_to_dict(t) for t in tables],
             'domain': self._domain_to_dict(domain) if domain else None,
@@ -399,12 +394,12 @@ class CacheManager:
         try:
             with open(cache_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False, default=str)
-            print(f"   💾 Semantic analysis cached: {cache_file}")
+            print(f"   💾 Enhanced analysis cached: {cache_file}")
         except Exception as e:
             print(f"   ⚠️ Cache save failed: {e}")
     
     def load_analysis(self):
-        """Load semantic analysis from cache"""
+        """Load analysis from cache"""
         cache_file = self.config.get_cache_path("semantic_analysis.json")
         
         if not cache_file.exists():
@@ -446,7 +441,8 @@ class CacheManager:
             'measures': getattr(table, 'measures', []),
             'name_columns': getattr(table, 'name_columns', []),
             'entity_keys': getattr(table, 'entity_keys', []),
-            'time_columns': getattr(table, 'time_columns', [])
+            'time_columns': getattr(table, 'time_columns', []),
+            'revenue_readiness': getattr(table, 'revenue_readiness', 0.0)
         }
     
     def _dict_to_table(self, data: Dict) -> TableInfo:
@@ -472,6 +468,7 @@ class CacheManager:
         table.name_columns = data.get('name_columns', [])
         table.entity_keys = data.get('entity_keys', [])
         table.time_columns = data.get('time_columns', [])
+        table.revenue_readiness = data.get('revenue_readiness', 0.0)
         
         return table
     
@@ -516,7 +513,7 @@ class CacheManager:
         )
 
 class SemanticAnalyzer:
-    """Enhanced semantic analyzer with cross-industry support"""
+    """Enhanced semantic analyzer with better revenue table detection"""
     
     def __init__(self, config: Config):
         self.config = config
@@ -540,24 +537,26 @@ class SemanticAnalyzer:
         self.relationships: List[Relationship] = []
         self.domain: Optional[BusinessDomain] = None
         
-        print("✅ Cross-Industry Semantic Analyzer initialized")
+        print("✅ Enhanced Semantic Analyzer initialized")
+        print("   🎯 Revenue table detection enabled")
+        print("   📊 Fact table prioritization active")
     
     async def analyze_tables(self, tables: List[TableInfo], discovery=None) -> bool:
-        """Enhanced analysis with cross-industry entities"""
-        print("🧠 CROSS-INDUSTRY SEMANTIC ANALYSIS")
-        print("=" * 40)
+        """Enhanced analysis with revenue focus"""
+        print("🧠 ENHANCED REVENUE-FOCUSED ANALYSIS")
+        print("=" * 50)
         
         try:
             start_time = time.time()
             
-            # Get RDL context if available
+            # Get RDL context
             rdl_info = {}
             if discovery and hasattr(discovery, 'get_rdl_info'):
                 rdl_info = discovery.get_rdl_info()
                 if rdl_info:
                     print(f"   📋 RDL context: {rdl_info.get('report_count', 0)} reports")
             
-            # Entity analysis
+            # Enhanced entity analysis
             self.tables = await self.entity_analyzer.analyze_tables(tables, rdl_info)
             
             # Domain analysis
@@ -570,11 +569,11 @@ class SemanticAnalyzer:
             self.cache_manager.save_analysis(self.tables, self.domain, self.relationships)
             
             # Show summary
-            self._show_summary(time.time() - start_time)
+            self._show_enhanced_summary(time.time() - start_time)
             
             return True
         except Exception as e:
-            print(f"❌ Analysis failed: {e}")
+            print(f"❌ Enhanced analysis failed: {e}")
             return False
     
     def load_from_cache(self) -> bool:
@@ -611,34 +610,45 @@ class SemanticAnalyzer:
         
         return relationships
     
-    def _show_summary(self, elapsed_time: float):
-        """Show analysis summary"""
+    def _show_enhanced_summary(self, elapsed_time: float):
+        """Show enhanced analysis summary"""
         entity_counts = {}
+        revenue_ready = 0
+        fact_tables = 0
+        
         for table in self.tables:
             entity_type = table.entity_type
             entity_counts[entity_type] = entity_counts.get(entity_type, 0) + 1
+            
+            if getattr(table, 'revenue_readiness', 0) >= 0.7:
+                revenue_ready += 1
+            
+            if getattr(table, 'bi_role', '') == 'fact':
+                fact_tables += 1
         
-        fact_tables = len([t for t in self.tables if getattr(t, 'bi_role', '') == 'fact'])
-        high_priority = len([t for t in self.tables if getattr(t, 'business_priority', '') == 'high'])
-        
-        print(f"\n✅ CROSS-INDUSTRY ANALYSIS COMPLETED:")
+        print(f"\n✅ ENHANCED REVENUE-FOCUSED ANALYSIS COMPLETED:")
         print(f"   ⏱️ Time: {elapsed_time:.1f}s")
         print(f"   📊 Total objects: {len(self.tables)}")
-        print(f"   🌐 Entity types: {len(entity_counts)}")
-        
-        # Show top entities
-        sorted_entities = sorted(entity_counts.items(), key=lambda x: x[1], reverse=True)
-        for entity_type, count in sorted_entities[:6]:
-            priority_emoji = "🔥" if entity_type in ['Customer', 'Payment', 'Contract'] else "📋"
-            print(f"   {priority_emoji} {entity_type}: {count}")
-        
+        print(f"   💰 Revenue-ready tables: {revenue_ready}")
         print(f"   📈 Fact tables: {fact_tables}")
-        print(f"   🎯 High priority: {high_priority}")
-        print(f"   🔗 Relationships: {len(self.relationships)}")
+        
+        # Show revenue capabilities
+        if entity_counts.get('CustomerRevenue', 0) > 0:
+            print(f"   🔥 CustomerRevenue tables: {entity_counts['CustomerRevenue']}")
+        if entity_counts.get('Payment', 0) > 0:
+            print(f"   💳 Payment tables: {entity_counts['Payment']}")
+        if entity_counts.get('Customer', 0) > 0:
+            print(f"   👥 Customer tables: {entity_counts['Customer']}")
+        
+        # Warn about lookup tables
+        lookup_count = entity_counts.get('PaymentMethod', 0) + entity_counts.get('Category', 0)
+        if lookup_count > 0:
+            print(f"   ⚠️ Lookup tables (low priority): {lookup_count}")
         
         if self.domain:
             print(f"   🏢 Domain: {self.domain.domain_type}")
-            print(f"   🏭 Industry: {self.domain.industry}")
+            if self.domain.capabilities.get('customer_revenue_analysis'):
+                print(f"   ✅ Revenue analytics enabled")
     
     # Public API
     def get_tables(self) -> List[TableInfo]:
@@ -652,26 +662,25 @@ class SemanticAnalyzer:
     
     def get_analysis_stats(self) -> Dict[str, Any]:
         entity_counts = {}
+        revenue_ready = 0
+        
         for table in self.tables:
             entity_type = table.entity_type
             entity_counts[entity_type] = entity_counts.get(entity_type, 0) + 1
-        
-        fact_tables = len([t for t in self.tables if getattr(t, 'bi_role', '') == 'fact'])
-        high_priority = len([t for t in self.tables if getattr(t, 'business_priority', '') == 'high'])
+            
+            if getattr(table, 'revenue_readiness', 0) >= 0.7:
+                revenue_ready += 1
         
         return {
             'total_objects': len(self.tables),
-            'total_tables': len([t for t in self.tables if t.object_type != 'VIEW']),
-            'total_views': len([t for t in self.tables if t.object_type == 'VIEW']),
-            'entity_types_found': len(entity_counts),
-            'customer_tables': entity_counts.get('Customer', 0),
+            'revenue_ready_tables': revenue_ready,
+            'customer_revenue_tables': entity_counts.get('CustomerRevenue', 0),
             'payment_tables': entity_counts.get('Payment', 0),
-            'contract_tables': entity_counts.get('Contract', 0),
-            'employee_tables': entity_counts.get('Employee', 0),
-            'fact_tables': fact_tables,
-            'high_priority_tables': high_priority,
+            'customer_tables': entity_counts.get('Customer', 0),
+            'lookup_tables': entity_counts.get('PaymentMethod', 0) + entity_counts.get('Category', 0),
+            'entity_types_found': len(entity_counts),
             'total_relationships': len(self.relationships),
             'domain_type': self.domain.domain_type if self.domain else None,
-            'industry': self.domain.industry if self.domain else None,
-            'analysis_method': 'cross_industry_llm'
+            'revenue_analytics_enabled': self.domain.capabilities.get('customer_revenue_analysis', False) if self.domain else False,
+            'analysis_method': 'enhanced_revenue_detection'
         }

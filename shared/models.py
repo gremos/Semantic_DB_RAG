@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Data Models - Enhanced with LLM Analysis Results
-Simple, clean, maintainable
+Data Models - Enhanced for Better Revenue Table Selection
+Simple, Readable, Maintainable - DRY, SOLID, YAGNI principles
+Enhanced: Revenue readiness scoring, better table classification
 """
 
 from dataclasses import dataclass, field
@@ -22,7 +23,7 @@ class DatabaseObject:
 
 @dataclass
 class TableInfo:
-    """Enhanced table information with LLM analysis results"""
+    """Enhanced table information with revenue readiness scoring"""
     # Basic table info
     name: str
     schema: str
@@ -33,85 +34,165 @@ class TableInfo:
     sample_data: List[Dict[str, Any]]
     relationships: List[str] = field(default_factory=list)
     
-    # LLM Analysis Results
-    entity_type: str = "Unknown"              # Customer, Payment, Order, etc.
-    business_role: str = "Unknown"            # Master data, transactions, etc.
+    # Enhanced LLM Analysis Results
+    entity_type: str = "Unknown"              # Customer, Payment, CustomerRevenue, etc.
+    business_role: str = "Unknown"            # Revenue Analytics, Customer Master Data, etc.
     business_purpose: str = "Unknown"         # Specific business purpose
     confidence: float = 0.0                   # Analysis confidence
     
-    # Table Quality Assessment
-    table_quality: str = "production"         # production, test_copy, backup, archive
+    # Enhanced Revenue Analytics Support
+    revenue_readiness: float = 0.0            # 0.0-1.0 score for revenue queries
+    bi_role: str = "dimension"               # fact, dimension, lookup
     business_priority: str = "medium"         # high, medium, low
     
-    # BI Properties (from LLM analysis)
-    bi_role: str = "dimension"               # fact (transactions) or dimension (reference)
-    measures: List[str] = field(default_factory=list)      # Numeric columns for aggregation
+    # Enhanced Column Classification
+    measures: List[str] = field(default_factory=list)      # Amount/revenue columns
     name_columns: List[str] = field(default_factory=list)  # Display name columns
-    key_columns: List[str] = field(default_factory=list)   # ID and key columns
+    entity_keys: List[str] = field(default_factory=list)   # ID/key columns
     time_columns: List[str] = field(default_factory=list)  # Date/time columns
     
-    # Legacy properties for compatibility
-    entity_keys: List[str] = field(default_factory=list)   # Same as key_columns
+    # Legacy compatibility
+    key_columns: List[str] = field(default_factory=list)   # Same as entity_keys
     data_type: str = "reference"             # operational or reference
     grain: str = "unknown"                   # customer, transaction, etc.
+    table_quality: str = "production"        # production, test, archive
     
     def __post_init__(self):
-        """Sync legacy properties with new ones"""
+        """Sync legacy properties and calculate derived scores"""
+        # Sync legacy properties
         if not self.entity_keys and self.key_columns:
             self.entity_keys = self.key_columns
         elif self.entity_keys and not self.key_columns:
             self.key_columns = self.entity_keys
+        
+        # Auto-calculate revenue readiness if not set
+        if self.revenue_readiness == 0.0:
+            self.revenue_readiness = self._calculate_revenue_readiness()
     
-    # Utility methods
-    def has_names(self) -> bool:
-        """Check if table has display name columns"""
-        return len(self.name_columns) > 0
+    def _calculate_revenue_readiness(self) -> float:
+        """Calculate revenue readiness score based on table characteristics"""
+        score = 0.0
+        
+        # Entity type scoring (40% weight)
+        entity_scores = {
+            'CustomerRevenue': 1.0,    # Perfect for revenue queries
+            'Payment': 0.9,            # Excellent for revenue queries
+            'Order': 0.8,              # Good for revenue queries
+            'Customer': 0.6,           # Supports revenue with joins
+            'Contract': 0.7,           # Good for contract revenue
+            'PaymentMethod': 0.1,      # Poor - lookup table
+            'Category': 0.1,           # Poor - lookup table
+            'System': 0.0,             # Not suitable
+            'Other': 0.3               # Unknown potential
+        }
+        score += entity_scores.get(self.entity_type, 0.3) * 0.4
+        
+        # BI role scoring (25% weight)
+        if self.bi_role == 'fact':
+            score += 0.25
+        elif self.bi_role == 'dimension':
+            score += 0.15
+        elif self.bi_role == 'lookup':
+            score += 0.05
+        
+        # Measures availability (20% weight)
+        if len(self.measures) >= 2:
+            score += 0.20
+        elif len(self.measures) == 1:
+            score += 0.15
+        elif self._has_revenue_columns():
+            score += 0.10
+        
+        # Data volume (10% weight)
+        if self.row_count > 1000:
+            score += 0.10
+        elif self.row_count > 100:
+            score += 0.07
+        elif self.row_count > 10:
+            score += 0.03
+        
+        # Customer linkage (5% weight)
+        if len(self.entity_keys) > 0 or self._has_customer_keys():
+            score += 0.05
+        
+        return min(score, 1.0)
     
-    def has_amounts(self) -> bool:
-        """Check if table has amount/measure columns"""
-        return len(self.measures) > 0
+    def _has_revenue_columns(self) -> bool:
+        """Check if table has revenue-like columns"""
+        revenue_keywords = ['amount', 'total', 'revenue', 'value', 'price', 'cost']
+        for col in self.columns:
+            col_name = col.get('name', '').lower()
+            col_type = col.get('data_type', '').lower()
+            if (any(keyword in col_name for keyword in revenue_keywords) and
+                col_type in ['decimal', 'money', 'float', 'numeric']):
+                return True
+        return False
     
-    def has_data(self) -> bool:
-        """Check if table has data"""
-        return self.row_count > 0
+    def _has_customer_keys(self) -> bool:
+        """Check if table has customer-related keys"""
+        customer_keywords = ['customer', 'client', 'account', 'business_point']
+        for col in self.columns:
+            col_name = col.get('name', '').lower()
+            if (any(keyword in col_name for keyword in customer_keywords) and
+                col_name.endswith('id')):
+                return True
+        return False
     
-    def has_dates(self) -> bool:
-        """Check if table has time columns"""
-        return len(self.time_columns) > 0
-    
-    def is_production_quality(self) -> bool:
-        """Check if table is production quality"""
-        return self.table_quality == 'production'
-    
-    def is_high_priority(self) -> bool:
-        """Check if table is high business priority"""
-        return self.business_priority == 'high'
+    # Enhanced Utility Methods
+    def is_revenue_ready(self) -> bool:
+        """Check if table is ready for revenue queries"""
+        return self.revenue_readiness >= 0.7
     
     def is_fact_table(self) -> bool:
-        """Check if table is a fact table (contains measures)"""
+        """Check if table is a fact table"""
         return self.bi_role == 'fact' or len(self.measures) > 0
     
-    def is_dimension_table(self) -> bool:
-        """Check if table is a dimension table (reference data)"""
-        return self.bi_role == 'dimension'
+    def is_lookup_table(self) -> bool:
+        """Check if table is a lookup/reference table"""
+        return (self.bi_role == 'lookup' or 
+                self.entity_type in ['PaymentMethod', 'Category'] or
+                self.row_count < 50)
     
     def is_customer_related(self) -> bool:
         """Check if customer-related table"""
-        return (self.entity_type == 'Customer' or 
+        return (self.entity_type in ['Customer', 'CustomerRevenue'] or 
                 'customer' in self.name.lower() or
                 'client' in self.name.lower())
     
     def is_payment_related(self) -> bool:
         """Check if payment-related table"""
-        return (self.entity_type == 'Payment' or
+        return (self.entity_type in ['Payment', 'CustomerRevenue'] or
                 any(word in self.name.lower() 
                     for word in ['payment', 'transaction', 'invoice', 'billing']))
     
-    def is_order_related(self) -> bool:
-        """Check if order-related table"""
-        return (self.entity_type == 'Order' or
-                any(word in self.name.lower()
-                    for word in ['order', 'purchase', 'sale']))
+    def supports_revenue_queries(self) -> bool:
+        """Check if table supports revenue queries"""
+        return (self.is_revenue_ready() and 
+                not self.is_lookup_table() and
+                (self.is_customer_related() or self.is_payment_related()))
+    
+    def get_revenue_score(self) -> float:
+        """Get comprehensive revenue query score"""
+        if self.is_lookup_table():
+            return 0.1  # Strongly discourage lookup tables
+        
+        base_score = self.revenue_readiness
+        
+        # Boost for customer + payment combination
+        if self.entity_type == 'CustomerRevenue':
+            base_score *= 1.2
+        elif self.entity_type == 'Payment' and self._has_customer_keys():
+            base_score *= 1.1
+        
+        # Penalty for small tables (likely lookup)
+        if self.row_count < 100:
+            base_score *= 0.7
+        
+        # Boost for high business priority
+        if self.business_priority == 'high':
+            base_score *= 1.1
+        
+        return min(base_score, 1.0)
     
     def get_display_columns(self, max_cols: int = 3) -> List[str]:
         """Get best columns for display"""
@@ -123,12 +204,12 @@ class TableInfo:
         # Then key columns if we need more
         remaining = max_cols - len(display_cols)
         if remaining > 0:
-            display_cols.extend(self.key_columns[:remaining])
+            display_cols.extend(self.entity_keys[:remaining])
         
         # Then first few regular columns
         remaining = max_cols - len(display_cols)
         if remaining > 0:
-            for col in self.columns[:remaining + 5]:  # Check more columns
+            for col in self.columns[:remaining + 5]:
                 col_name = col.get('name', '')
                 if (col_name and 
                     col_name not in display_cols and 
@@ -137,23 +218,35 @@ class TableInfo:
         
         return display_cols
     
-    def get_sort_column(self) -> Optional[str]:
-        """Get best column for sorting results"""
-        # Prefer measure columns for sorting
+    def get_best_measure_column(self) -> Optional[str]:
+        """Get best measure column for revenue queries"""
         if self.measures:
             return self.measures[0]
         
-        # Then time columns
-        if self.time_columns:
-            return self.time_columns[0]
+        # Look for revenue-like columns
+        revenue_keywords = ['amount', 'total', 'revenue', 'value', 'price']
+        for col in self.columns:
+            col_name = col.get('name', '').lower()
+            col_type = col.get('data_type', '').lower()
+            if (any(keyword in col_name for keyword in revenue_keywords) and
+                col_type in ['decimal', 'money', 'float', 'numeric']):
+                return col.get('name')
         
-        # Then key columns
-        if self.key_columns:
-            return self.key_columns[0]
+        return None
+    
+    def get_best_customer_key(self) -> Optional[str]:
+        """Get best customer key column"""
+        customer_keywords = ['customer', 'client', 'account', 'business_point']
         
-        # Finally, any column
-        if self.columns:
-            return self.columns[0].get('name')
+        for col in self.columns:
+            col_name = col.get('name', '').lower()
+            if (any(keyword in col_name for keyword in customer_keywords) and
+                col_name.endswith('id')):
+                return col.get('name')
+        
+        # Fallback to any ID column
+        if self.entity_keys:
+            return self.entity_keys[0]
         
         return None
     
@@ -161,8 +254,13 @@ class TableInfo:
         """Get human-readable table summary"""
         parts = [f"{self.entity_type}"]
         
-        if self.business_purpose != "Unknown":
-            parts.append(f"({self.business_purpose})")
+        if self.business_role != "Unknown":
+            parts.append(f"({self.business_role})")
+        
+        if self.is_revenue_ready():
+            parts.append("[Revenue Ready]")
+        elif self.is_lookup_table():
+            parts.append("[Lookup]")
         
         if self.row_count > 0:
             parts.append(f"[{self.row_count:,} rows]")
@@ -180,15 +278,15 @@ class BusinessDomain:
     
     def has_customer_analytics(self) -> bool:
         """Check if domain supports customer analytics"""
-        return self.capabilities.get('customer_analysis', False)
+        return self.capabilities.get('customer_analytics', False)
     
-    def has_payment_analytics(self) -> bool:
-        """Check if domain supports payment analytics"""
-        return self.capabilities.get('payment_analysis', False)
+    def has_revenue_analytics(self) -> bool:
+        """Check if domain supports revenue analytics"""
+        return self.capabilities.get('revenue_analytics', False)
     
-    def has_order_analytics(self) -> bool:
-        """Check if domain supports order analytics"""
-        return self.capabilities.get('order_analysis', False)
+    def has_customer_revenue_analysis(self) -> bool:
+        """Check if domain supports customer revenue analysis"""
+        return self.capabilities.get('customer_revenue_analysis', False)
 
 @dataclass
 class Relationship:
@@ -221,7 +319,7 @@ class QueryResult:
     # Analysis metadata
     intent_confidence: float = 0.0
     table_selection_method: str = "scoring"
-    sql_generation_method: str = "llm"
+    sql_generation_method: str = "template"
     
     def is_successful(self) -> bool:
         """Check if query was successful"""
@@ -313,20 +411,23 @@ class EvidenceScore:
     data_availability: float = 0.0
     column_relevance: float = 0.0
     business_priority: float = 0.0
+    revenue_readiness: float = 0.0  # Enhanced: Revenue readiness scoring
     
     @property
     def total_score(self) -> float:
-        """Calculate total weighted score"""
+        """Calculate total weighted score with revenue emphasis"""
         weights = {
-            'entity_match': 0.3,
-            'purpose_match': 0.2,
-            'quality_score': 0.2,
-            'data_availability': 0.1,
-            'column_relevance': 0.1,
-            'business_priority': 0.1
+            'entity_match': 0.25,
+            'revenue_readiness': 0.25,     # Enhanced: High weight for revenue
+            'purpose_match': 0.15,
+            'quality_score': 0.15,
+            'data_availability': 0.10,
+            'column_relevance': 0.05,
+            'business_priority': 0.05
         }
         
         return (self.entity_match * weights['entity_match'] +
+                self.revenue_readiness * weights['revenue_readiness'] +
                 self.purpose_match * weights['purpose_match'] +
                 self.quality_score * weights['quality_score'] +
                 self.data_availability * weights['data_availability'] +
@@ -336,6 +437,10 @@ class EvidenceScore:
     def is_high_score(self) -> bool:
         """Check if score is high enough"""
         return self.total_score >= 0.7
+    
+    def is_revenue_suitable(self) -> bool:
+        """Check if suitable for revenue queries"""
+        return self.revenue_readiness >= 0.7 and self.total_score >= 0.6
 
 # Type aliases for clarity
 TableList = List[TableInfo]

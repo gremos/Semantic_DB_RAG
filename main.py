@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Enhanced Semantic Database RAG System - SQL Server Architecture
-Architecture: SQL Server sys.* metadata, RDL integration, sqlglot validation, cross-industry entities
+Semantic Database RAG System - Main Entry Point
 Simple, Readable, Maintainable - DRY, SOLID, YAGNI principles
 Function names: SemanticRAG (not SimplifiedSemanticRAG)
 """
@@ -42,8 +41,7 @@ def check_dependencies() -> bool:
         import sqlglot
         print("✅ sqlglot: SQL parsing and validation")
     except ImportError:
-        print("⚠️ sqlglot: Not available - SQL safety validation will be basic only")
-        print("   Install with: pip install sqlglot")
+        print("⚠️ sqlglot: Not available - using basic SQL validation")
     
     if missing_deps:
         print(f"❌ Missing critical dependencies: {', '.join(missing_deps)}")
@@ -53,14 +51,14 @@ def check_dependencies() -> bool:
     return True
 
 class SemanticRAG:
-    """Enhanced semantic RAG system with SQL Server architecture integration"""
+    """Semantic RAG system with enhanced revenue table detection"""
     
     def __init__(self):
         load_env()
         self._initialize_system()
     
     def _initialize_system(self):
-        """Initialize system with architecture components"""
+        """Initialize system components"""
         try:
             if not check_dependencies():
                 raise RuntimeError("Missing critical dependencies")
@@ -77,7 +75,7 @@ class SemanticRAG:
                     missing.append("SQL Server (DATABASE_CONNECTION_STRING)")
                 raise RuntimeError(f"Configuration incomplete: {', '.join(missing)}")
             
-            print("🔧 Initializing enhanced architecture components...")
+            print("🔧 Initializing system components...")
             
             sys.path.insert(0, str(Path(__file__).parent))
             
@@ -90,14 +88,13 @@ class SemanticRAG:
             from interactive.query_interface import QueryInterface
             self.query_interface = QueryInterface(self.config)
             
-            print("✅ Enhanced SemanticRAG System initialized")
-            print("   🏢 Architecture: SQL Server sys.* metadata + RDL integration")
-            print("   🌐 Entities: Cross-industry taxonomy")
-            print("   ⚡ SQL Generation: Fixed templates with LLM fallback")
-            print("   🛡️ Safety: sqlglot validation")
+            print("✅ SemanticRAG System initialized")
+            print("   🎯 Revenue table detection enabled")
+            print("   📊 Smart table selection active")
+            print("   🛡️ Fixed safety validation")
             
         except Exception as e:
-            print(f"❌ Enhanced initialization failed: {e}")
+            print(f"❌ Initialization failed: {e}")
             print("\n🔧 Setup Checklist:")
             print("   1. Copy env_example.txt to .env")
             print("   2. Set AZURE_OPENAI_API_KEY")
@@ -107,23 +104,23 @@ class SemanticRAG:
             raise
     
     async def run_discovery(self) -> bool:
-        """Run enhanced database discovery with SQL Server sys.* and RDL integration"""
-        print("\n🔍 ENHANCED SQL SERVER DISCOVERY + RDL INTEGRATION")
-        print("=" * 70)
+        """Run database discovery"""
+        print("\n🔍 SQL SERVER DISCOVERY WITH RDL INTEGRATION")
+        print("=" * 55)
         
         try:
             success = await self.discovery.discover_database()
             
             if success:
                 stats = self.discovery.get_discovery_stats()
-                print(f"✅ Enhanced discovery completed!")
+                print(f"✅ Discovery completed!")
                 print(f"   📊 Tables: {stats['tables']}")
                 print(f"   👁️ Views: {stats['views']}")
                 print(f"   🔗 Relationships: {stats['relationships']}")
                 print(f"   📋 RDL references: {stats['rdl_references']}")
                 return True
             else:
-                print("❌ Enhanced discovery failed")
+                print("❌ Discovery failed")
                 return False
                 
         except Exception as e:
@@ -131,9 +128,9 @@ class SemanticRAG:
             return False
     
     async def run_analysis(self) -> bool:
-        """Run enhanced semantic analysis with cross-industry entities"""
-        print("\n🧠 ENHANCED CROSS-INDUSTRY SEMANTIC ANALYSIS")
-        print("=" * 65)
+        """Run semantic analysis with revenue focus"""
+        print("\n🧠 SEMANTIC ANALYSIS WITH REVENUE FOCUS")
+        print("=" * 45)
         
         try:
             tables = self.discovery.get_tables()
@@ -141,21 +138,25 @@ class SemanticRAG:
                 if self.discovery.load_from_cache():
                     tables = self.discovery.get_tables()
                 else:
-                    print("❌ No tables found. Run Enhanced Discovery first.")
+                    print("❌ No tables found. Run Discovery first.")
                     return False
             
             success = await self.analyzer.analyze_tables(tables, self.discovery)
             
             if success:
                 stats = self.analyzer.get_analysis_stats()
-                print("✅ Enhanced cross-industry analysis completed!")
+                print("✅ Revenue-focused analysis completed!")
                 print(f"   📊 Total objects: {stats['total_objects']}")
-                print(f"   🌐 Entity types: {stats['entity_types_found']}")
-                print(f"   🔥 High priority: {stats['high_priority_tables']}")
-                print(f"   🏢 Domain: {stats['domain_type']}")
+                print(f"   💰 Revenue-ready: {stats['revenue_ready_tables']}")
+                print(f"   👥 Customer tables: {stats['customer_tables']}")
+                print(f"   💳 Payment tables: {stats['payment_tables']}")
+                
+                if stats['revenue_analytics_enabled']:
+                    print("   🔥 Revenue analytics enabled!")
+                
                 return True
             else:
-                print("❌ Enhanced analysis failed")
+                print("❌ Analysis failed")
                 return False
                 
         except Exception as e:
@@ -163,9 +164,9 @@ class SemanticRAG:
             return False
     
     async def run_queries(self) -> bool:
-        """Run enhanced query interface with fixed templates and safety validation"""
-        print("\n💬 ENHANCED QUERY INTERFACE")
-        print("=" * 75)
+        """Run query interface"""
+        print("\n💬 QUERY INTERFACE WITH REVENUE FOCUS")
+        print("=" * 40)
         
         try:
             tables = []
@@ -178,7 +179,7 @@ class SemanticRAG:
                 relationships = self.analyzer.get_relationships()
             
             if not tables:
-                print("   🔄 Loading from enhanced caches...")
+                print("   🔄 Loading from caches...")
                 
                 if self.analyzer.load_from_cache():
                     tables = self.analyzer.get_tables()
@@ -189,34 +190,27 @@ class SemanticRAG:
                     relationships = self.discovery.get_relationships()
             
             if not tables:
-                print("❌ No enhanced data available. Please run:")
-                print("   1. Enhanced SQL Server Discovery")
-                print("   2. Enhanced Cross-Industry Analysis")
+                print("❌ No data available. Please run:")
+                print("   1. Discovery")
+                print("   2. Analysis")
                 return False
             
-            entities = {}
-            for table in tables:
-                entity = table.entity_type
-                entities[entity] = entities.get(entity, 0) + 1
+            # Show revenue capabilities
+            revenue_ready = len([t for t in tables if getattr(t, 'revenue_readiness', 0) >= 0.7])
+            customer_tables = len([t for t in tables if t.entity_type == 'Customer'])
+            payment_tables = len([t for t in tables if t.entity_type in ['Payment', 'CustomerRevenue']])
             
-            print(f"🚀 Enhanced query interface ready:")
+            print(f"🚀 Query interface ready:")
             print(f"   📊 Total objects: {len(tables)}")
-            print(f"   🌐 Entity types: {len(entities)}")
+            print(f"   💰 Revenue-ready tables: {revenue_ready}")
+            print(f"   👥 Customer tables: {customer_tables}")
+            print(f"   💳 Payment tables: {payment_tables}")
             
-            sorted_entities = sorted(entities.items(), key=lambda x: x[1], reverse=True)[:8]
-            priority_entities = ['Customer', 'Payment', 'Contract', 'Order', 'Employee']
-            
-            for entity, count in sorted_entities:
-                priority_emoji = "🔥" if entity in priority_entities else "📋"
-                print(f"   {priority_emoji} {entity}: {count} objects")
-            
-            print(f"   🔄 Enhanced Pipeline:")
-            print(f"      1. Cross-Industry Intent Analysis")
-            print(f"      2. Smart Multi-Factor Table Selection")
-            print(f"      3. Fixed SQL Templates + Safety Validation")
+            if revenue_ready > 0:
+                print(f"   ✅ Revenue queries supported!")
             
             if domain and domain.sample_questions:
-                print(f"\n💡 Sample questions for {domain.domain_type}:")
+                print(f"\n💡 Try asking:")
                 for i, question in enumerate(domain.sample_questions[:4], 1):
                     print(f"   {i}. {question}")
             
@@ -224,13 +218,13 @@ class SemanticRAG:
             return True
             
         except Exception as e:
-            print(f"❌ Enhanced query interface error: {e}")
+            print(f"❌ Query interface error: {e}")
             return False
     
     def show_status(self) -> None:
-        """Show enhanced system status"""
-        print("\n📊 ENHANCED SYSTEM STATUS")
-        print("=" * 55)
+        """Show system status"""
+        print("\n📊 SYSTEM STATUS")
+        print("=" * 25)
         
         try:
             discovery_tables = self.discovery.get_tables()
@@ -243,55 +237,56 @@ class SemanticRAG:
                 self.analyzer.load_from_cache()
                 analyzer_tables = self.analyzer.get_tables()
             
-            print(f"🔍 Enhanced Discovery: {'✅ Ready' if discovery_tables else '❌ Incomplete'}")
+            print(f"🔍 Discovery: {'✅ Ready' if discovery_tables else '❌ Incomplete'}")
             if discovery_tables:
                 stats = self.discovery.get_discovery_stats()
                 print(f"   📊 Objects: {stats['total_objects']}")
                 print(f"   📋 RDL references: {stats['rdl_references']}")
-                print(f"   ⚙️ SQL parsing: {'✅ sqlglot' if stats['sqlglot_available'] else '⚠️ basic'}")
             
-            print(f"🧠 Enhanced Analysis: {'✅ Ready' if analyzer_tables else '❌ Incomplete'}")
+            print(f"🧠 Analysis: {'✅ Ready' if analyzer_tables else '❌ Incomplete'}")
             if analyzer_tables:
                 stats = self.analyzer.get_analysis_stats()
                 print(f"   📊 Objects: {stats['total_objects']}")
-                print(f"   🌐 Entity types: {stats['entity_types_found']}")
-                print(f"   🏢 Domain: {stats.get('domain_type', 'Unknown')}")
+                print(f"   💰 Revenue-ready: {stats['revenue_ready_tables']}")
+                
+                if stats['revenue_analytics_enabled']:
+                    print(f"   🔥 Revenue analytics: Enabled")
             
-            print(f"💬 Enhanced Queries: {'✅ Ready' if (analyzer_tables or discovery_tables) else '❌ Not ready'}")
+            print(f"💬 Queries: {'✅ Ready' if (analyzer_tables or discovery_tables) else '❌ Not ready'}")
             
             health = self.config.get_health_check()
-            print(f"\n🏥 System Health:")
-            print(f"   🔑 LLM configured: {'✅' if health['llm_configured'] else '❌'}")
-            print(f"   🗄️ Database configured: {'✅' if health['database_configured'] else '❌'}")
-            print(f"   💾 Cache writable: {'✅' if health['cache_writable'] else '❌'}")
+            print(f"\n🏥 Health:")
+            print(f"   🔑 LLM: {'✅' if health['llm_configured'] else '❌'}")
+            print(f"   🗄️ Database: {'✅' if health['database_configured'] else '❌'}")
+            print(f"   💾 Cache: {'✅' if health['cache_writable'] else '❌'}")
             
         except Exception as e:
             print(f"⚠️ Status check error: {e}")
 
 def show_menu() -> None:
-    """Display enhanced main menu"""
-    print("\n" + "="*70)
-    print("ENHANCED SEMANTIC DATABASE RAG SYSTEM")
-    print("SQL Server Architecture + Cross-Industry + Safety")
-    print("="*70)
-    print("1. 🔍 Enhanced SQL Server Discovery")
-    print("   • SQL Server sys.* metadata")
-    print("   • RDL business context integration")
-    print("   • First 3 + Last 3 sampling")
+    """Display main menu"""
+    print("\n" + "="*60)
+    print("SEMANTIC DATABASE RAG SYSTEM")
+    print("Revenue-Focused Table Selection")
+    print("="*60)
+    print("1. 🔍 SQL Server Discovery")
+    print("   • Discover tables and views")
+    print("   • Extract RDL business context")
+    print("   • Build relationship graph")
     print()
-    print("2. 🧠 Enhanced Cross-Industry Analysis")
-    print("   • Cross-industry entity taxonomy")
-    print("   • Customer, Contract, Employee, etc.")
-    print("   • RDL business priority boosting")
+    print("2. 🧠 Revenue-Focused Analysis")
+    print("   • Classify tables for revenue queries")
+    print("   • Score revenue readiness")
+    print("   • Avoid lookup table selection")
     print()
-    print("3. 💬 Enhanced Query Interface")
-    print("   • Fixed SQL templates with LLM fallback")
-    print("   • sqlglot safety validation")
-    print("   • Smart table selection")
+    print("3. 💬 Query Interface")
+    print("   • Smart revenue table selection")
+    print("   • Fixed safety validation")
+    print("   • Template-first SQL generation")
     print()
-    print("4. 📊 Enhanced System Status")
+    print("4. 📊 System Status")
     print("0. Exit")
-    print("="*70)
+    print("="*60)
 
 async def handle_choice(system: SemanticRAG, choice: str) -> bool:
     """Handle menu choice"""
@@ -316,15 +311,15 @@ async def handle_choice(system: SemanticRAG, choice: str) -> bool:
         return True
 
 def main():
-    """Enhanced main entry point"""
-    print("🚀 ENHANCED SEMANTIC DATABASE RAG SYSTEM")
-    print("SQL Server Architecture + Cross-Industry + Safety Validation")
-    print("=" * 75)
+    """Main entry point"""
+    print("🚀 SEMANTIC DATABASE RAG SYSTEM")
+    print("Revenue-Focused Table Selection")
+    print("=" * 60)
     
     try:
         system = SemanticRAG()
     except Exception:
-        print("\n❌ Enhanced system initialization failed")
+        print("\n❌ System initialization failed")
         return
     
     while True:
@@ -334,7 +329,7 @@ def main():
             choice = input("Enter choice (0-4): ").strip()
             
             if choice == '0':
-                print("👋 Thanks for using Enhanced Semantic Database RAG!")
+                print("👋 Thanks for using Semantic Database RAG!")
                 break
             
             asyncio.run(handle_choice(system, choice))

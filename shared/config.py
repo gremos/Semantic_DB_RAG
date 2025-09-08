@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Configuration - Enhanced and Clean
-Simple settings with smart defaults
+Configuration - Simple and Clean
+Simple, Readable, Maintainable - DRY, SOLID, YAGNI principles
 """
 
 import os
@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import List, Dict, Any
 
 class Config:
-    """Clean, focused configuration with smart defaults"""
+    """Simple, focused configuration with smart defaults"""
     
     def __init__(self):
         # Essential LLM settings
@@ -26,24 +26,19 @@ class Config:
         self.discovery_cache_hours = self._get_int('DISCOVERY_CACHE_HOURS', 24)
         self.semantic_cache_hours = self._get_int('SEMANTIC_CACHE_HOURS', 24)
         
-        # Intelligent exclusions
+        # Table exclusions
         self.table_exclusions = self._get_list('TABLE_EXCLUSIONS')
         self.schema_exclusions = self._get_list('SCHEMA_EXCLUSIONS', ['sys', 'information_schema'])
         
-        # Feature flags for enhanced functionality
-        self.enable_view_analysis = self._get_bool('ENABLE_VIEW_ANALYSIS', True)
-        self.enable_duplicate_detection = self._get_bool('ENABLE_DUPLICATE_DETECTION', True)
-        self.enable_quality_assessment = self._get_bool('ENABLE_QUALITY_ASSESSMENT', True)
-        
         # Performance settings
         self.query_timeout = self._get_int('QUERY_TIMEOUT_SECONDS', 30)
-        self.max_sample_rows = self._get_int('MAX_SAMPLE_ROWS', 6)  # First 3 + Last 3
-        self.max_tables_per_batch = self._get_int('MAX_TABLES_PER_BATCH', 5)
+        self.max_sample_rows = self._get_int('MAX_SAMPLE_ROWS', 6)
+        self.max_tables_per_batch = self._get_int('MAX_TABLES_PER_BATCH', 3)
         
         # International support
         self.utf8_encoding = self._get_bool('UTF8_ENCODING', True)
         
-        # Cache directory with smart creation
+        # Cache directory
         self.cache_directory = Path('data')
         self.cache_directory.mkdir(exist_ok=True)
         
@@ -97,9 +92,8 @@ class Config:
         if 'Driver=' not in self.connection_string:
             raise ValueError("DATABASE_CONNECTION_STRING must include Driver= parameter")
     
-    # Smart path methods
     def get_cache_path(self, filename: str) -> Path:
-        """Get cache file path with smart directory creation"""
+        """Get cache file path"""
         cache_file = self.cache_directory / filename
         cache_file.parent.mkdir(parents=True, exist_ok=True)
         return cache_file
@@ -125,31 +119,13 @@ class Config:
         
         return smart_defaults + self.table_exclusions
     
-    def is_view_analysis_enabled(self) -> bool:
-        """Check if view analysis is enabled"""
-        return self.enable_view_analysis
-    
-    def is_duplicate_detection_enabled(self) -> bool:
-        """Check if duplicate detection is enabled"""
-        return self.enable_duplicate_detection
-    
-    def is_quality_assessment_enabled(self) -> bool:
-        """Check if table quality assessment is enabled"""
-        return self.enable_quality_assessment
-    
     def get_health_check(self) -> Dict[str, Any]:
-        """Get comprehensive system health status"""
+        """Get system health status"""
         health = {
             'llm_configured': bool(self.azure_endpoint and self.api_key),
             'database_configured': bool(self.connection_string),
             'cache_directory_exists': self.cache_directory.exists(),
-            'cache_writable': self._check_cache_writable(),
-            'utf8_support': self.utf8_encoding,
-            'enhanced_features': {
-                'view_analysis': self.enable_view_analysis,
-                'duplicate_detection': self.enable_duplicate_detection,
-                'quality_assessment': self.enable_quality_assessment
-            }
+            'cache_writable': self._check_cache_writable()
         }
         
         # Overall health score
@@ -180,16 +156,6 @@ class Config:
             'max_tables_per_batch': self.max_tables_per_batch,
             'cache_hours_discovery': self.discovery_cache_hours,
             'cache_hours_semantic': self.semantic_cache_hours
-        }
-    
-    def get_analysis_settings(self) -> Dict[str, Any]:
-        """Get analysis-related settings"""
-        return {
-            'enable_view_analysis': self.enable_view_analysis,
-            'enable_duplicate_detection': self.enable_duplicate_detection,
-            'enable_quality_assessment': self.enable_quality_assessment,
-            'sampling_method': 'first_3_plus_last_3',
-            'max_tables_per_batch': self.max_tables_per_batch
         }
     
     def validate_llm_config(self) -> bool:
@@ -230,5 +196,4 @@ class Config:
         return f"""Config:
   LLM: {self.deployment_name} @ {self.azure_endpoint}
   Cache: {self.cache_directory}
-  Features: View={self.enable_view_analysis}, Duplicates={self.enable_duplicate_detection}
   Performance: {self.max_tables_per_batch} tables/batch, {self.query_timeout}s timeout"""

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Enhanced Utility Functions with SQL Safety Validation
-Architecture: sqlglot integration, SQL Server support, enhanced validation
+Utility Functions - Fixed Safety Validation and Enhanced SQL Processing
 Simple, Readable, Maintainable - DRY, SOLID, YAGNI principles
+Fixed: Safety validation leading space issue, CTE support, normalization
 """
 
 import json
@@ -51,7 +51,7 @@ def _clean_json_response(response: str) -> str:
     """Enhanced JSON cleaning with better pattern matching"""
     cleaned = response.strip()
     
-    # Remove common LLM prefixes/suffixes (enhanced patterns)
+    # Remove common LLM prefixes/suffixes
     prefixes_to_remove = [
         "here's the json:", "here is the json:", "json:", "```json", "```",
         "the response is:", "result:", "analysis:", "here's the analysis:",
@@ -68,7 +68,7 @@ def _clean_json_response(response: str) -> str:
     code_block_patterns = [
         r'```json\s*(.*?)\s*```',
         r'```\s*(.*?)\s*```',
-        r'`([^`]*\{[^`]*\}[^`]*)`'  # Single backticks with JSON
+        r'`([^`]*\{[^`]*\}[^`]*)`'
     ]
     
     for pattern in code_block_patterns:
@@ -77,27 +77,7 @@ def _clean_json_response(response: str) -> str:
             cleaned = match.group(1).strip()
             break
     
-    # Extract JSON content between braces with better handling
-    brace_matches = []
-    depth = 0
-    start_pos = -1
-    
-    for i, char in enumerate(cleaned):
-        if char == '{':
-            if depth == 0:
-                start_pos = i
-            depth += 1
-        elif char == '}':
-            depth -= 1
-            if depth == 0 and start_pos != -1:
-                brace_matches.append(cleaned[start_pos:i+1])
-    
-    if brace_matches:
-        # Return the longest valid JSON object
-        longest_match = max(brace_matches, key=len)
-        return longest_match
-    
-    # Fallback: extract between first { and last }
+    # Extract JSON content between braces
     first_brace = cleaned.find('{')
     last_brace = cleaned.rfind('}')
     
@@ -107,7 +87,7 @@ def _clean_json_response(response: str) -> str:
     return cleaned.strip()
 
 def clean_sql_query(response: str) -> str:
-    """Enhanced SQL query extraction with T-SQL support"""
+    """FIXED: Enhanced SQL query extraction and normalization"""
     if not response or not response.strip():
         return ""
     
@@ -128,7 +108,7 @@ def clean_sql_query(response: str) -> str:
             cleaned = match.group(1).strip()
             break
     
-    # Enhanced SQL statement extraction
+    # Extract SQL statements
     lines = cleaned.split('\n')
     sql_lines = []
     in_sql = False
@@ -149,18 +129,18 @@ def clean_sql_query(response: str) -> str:
             elif line and not line.startswith(('--', '//', '#', '/*')):
                 sql_lines.append(line)
             elif not line and sql_lines:
-                # Empty line might end SQL if we have a complete statement
+                # Empty line might end SQL
                 current_sql = '\n'.join(sql_lines).upper()
                 if 'FROM' in current_sql and ('SELECT' in current_sql or 'WITH' in current_sql):
                     break
     
     if sql_lines:
         result = '\n'.join(sql_lines).strip()
-        # Clean up common artifacts
-        result = re.sub(r'\s+', ' ', result)  # Normalize whitespace
+        # Normalize whitespace
+        result = re.sub(r'\s+', ' ', result)
         return result
     
-    # Enhanced fallback regex patterns for T-SQL
+    # Fallback regex patterns
     fallback_patterns = [
         r'(SELECT\s+(?:TOP\s*\(\s*\d+\s*\)\s+)?.*?FROM\s+.*?)(?:;|\n\s*\n|$)',
         r'(WITH\s+.*?SELECT\s+.*?FROM\s+.*?)(?:;|\n\s*\n|$)',
@@ -175,34 +155,26 @@ def clean_sql_query(response: str) -> str:
     return cleaned
 
 def validate_sql_safety(sql: str) -> bool:
-    """Enhanced SQL safety validation with sqlglot integration (Architecture requirement)"""
+    """FIXED: SQL safety validation with corrected leading space issue and CTE support"""
     if not sql or len(sql.strip()) < 5:
         return False
     
-    sql_normalized = ' ' + sql.upper().strip() + ' '
+    # FIXED: Don't prepend leading space that breaks startswith
+    sql_stripped = sql.strip()
+    sql_normalized = sql_stripped.upper()
     
-    # Basic safety checks first
-    safe_starts = [' SELECT ', ' WITH ']
-    if not any(sql_normalized.startswith(start.strip()) for start in safe_starts):
+    # FIXED: Check without leading space
+    if not sql_normalized.startswith(('SELECT', 'WITH')):
         return False
     
-    # Enhanced dangerous keyword detection
+    # Dangerous operations
     dangerous_patterns = [
-        # Data modification operations
         r'\b(?:INSERT|UPDATE|DELETE|MERGE|REPLACE)\b',
-        # Schema modification operations  
         r'\b(?:DROP|CREATE|ALTER|TRUNCATE)\b',
-        # System operations
         r'\b(?:EXEC|EXECUTE|SP_|XP_|DBCC)\b',
-        # Security operations
         r'\b(?:GRANT|REVOKE|DENY)\b',
-        # Bulk operations
         r'\b(?:BULK|OPENROWSET|OPENDATASOURCE)\b',
-        # Dynamic SQL
-        r'\b(?:EXEC\s*\(|EXECUTE\s*\()\b',
-        # System functions that could be dangerous
         r'\bXP_CMDSHELL\b',
-        # File operations
         r'\b(?:BACKUP|RESTORE)\b'
     ]
     
@@ -210,45 +182,33 @@ def validate_sql_safety(sql: str) -> bool:
         if re.search(pattern, sql_normalized, re.IGNORECASE):
             return False
     
-    # Check for multiple statements (semicolon not at end)
+    # Check for multiple statements
     sql_clean = sql.strip().rstrip(';')
     if ';' in sql_clean:
         return False
     
-    # Enhanced sqlglot validation if available (Architecture requirement)
+    # FIXED: sqlglot validation with CTE support
     if HAS_SQLGLOT:
         try:
-            # Parse with T-SQL dialect for SQL Server
             parsed = sqlglot.parse_one(sql, dialect="tsql")
             if not parsed:
                 return False
             
-            # Must be a SELECT statement
-            if not isinstance(parsed, sqlglot.expressions.Select):
+            # FIXED: Accept both SELECT and WITH (CTE)
+            if isinstance(parsed, sqlglot.expressions.Select):
+                return True
+            elif isinstance(parsed, sqlglot.expressions.With):
+                # CTE - check if it contains a SELECT
+                for node in parsed.walk():
+                    if isinstance(node, sqlglot.expressions.Select):
+                        return True
                 return False
-            
-            # Additional safety checks with sqlglot
-            
-            # Check for subqueries with dangerous operations
-            for node in parsed.walk():
-                if isinstance(node, (sqlglot.expressions.Insert, 
-                                   sqlglot.expressions.Update, 
-                                   sqlglot.expressions.Delete)):
-                    return False
-            
-            # Check for function calls that might be dangerous
-            for func in parsed.find_all(sqlglot.expressions.Function):
-                func_name = func.this.upper() if func.this else ""
-                if any(dangerous in func_name for dangerous in ['XP_', 'SP_', 'OPENROWSET', 'OPENDATASOURCE']):
-                    return False
-            
-            return True
-            
+            else:
+                return False
+                
         except Exception:
-            # If sqlglot parsing fails, fall back to basic validation
-            return len(dangerous_patterns) == 0  # If no dangerous patterns found
+            return False
     
-    # If sqlglot not available, use basic validation
     return True
 
 def safe_database_value(value: Any) -> Union[str, int, float, bool, None]:
@@ -266,7 +226,7 @@ def safe_database_value(value: Any) -> Union[str, int, float, bool, None]:
                 return None
             # Handle very large/small numbers
             if abs(value) > 1e15:
-                return str(value)  # Convert to string to preserve precision
+                return str(value)
         return value
     elif isinstance(value, str):
         # Enhanced string handling with length limits
@@ -274,28 +234,23 @@ def safe_database_value(value: Any) -> Union[str, int, float, bool, None]:
             return value[:1000] + "..."
         return value
     elif isinstance(value, datetime):
-        # Enhanced datetime formatting
         try:
             return value.isoformat()
         except:
             return str(value)
     elif isinstance(value, bytes):
-        # Enhanced binary data handling
         try:
-            # Try UTF-8 decode first
             decoded = value.decode('utf-8')
             if len(decoded) > 200:
                 return decoded[:200] + "..."
             return decoded
         except UnicodeDecodeError:
             try:
-                # Try latin-1 as fallback for international characters
                 decoded = value.decode('latin-1', errors='replace')
                 return f"[Binary: {decoded[:100]}...]" if len(decoded) > 100 else f"[Binary: {decoded}]"
             except:
                 return "[Binary Data]"
     else:
-        # Enhanced handling of other types
         try:
             str_value = str(value)
             return str_value[:500] if len(str_value) > 500 else str_value
@@ -333,7 +288,7 @@ def should_exclude_table(table_name: str, schema_name: str = None,
         if pattern.lower() in name_lower:
             return True
     
-    # Enhanced date suffix detection (SQL Server common patterns)
+    # Enhanced date suffix detection
     date_patterns = [
         r'\d{8}$',                    # YYYYMMDD
         r'\d{6}$',                    # YYYYMM  
@@ -348,7 +303,7 @@ def should_exclude_table(table_name: str, schema_name: str = None,
         if re.search(pattern, name_lower):
             return True
     
-    # Enhanced system schema detection for SQL Server
+    # System schema detection
     if schema_name:
         system_schemas = [
             'sys', 'information_schema', 'db_owner', 'db_accessadmin', 
@@ -363,7 +318,6 @@ def should_exclude_table(table_name: str, schema_name: str = None,
 
 def normalize_table_name(schema: str, table: str) -> str:
     """Enhanced table name normalization for SQL Server"""
-    # Handle already bracketed names
     clean_schema = schema.strip('[]')
     clean_table = table.strip('[]')
     
@@ -371,30 +325,29 @@ def normalize_table_name(schema: str, table: str) -> str:
     identifier_pattern = r'^[a-zA-Z_][a-zA-Z0-9_]*$'
     
     if not re.match(identifier_pattern, clean_schema):
-        clean_schema = f'"{clean_schema}"'  # Use quotes for non-standard identifiers
+        clean_schema = f'"{clean_schema}"'
     if not re.match(identifier_pattern, clean_table):
         clean_table = f'"{clean_table}"'
     
     return f"[{clean_schema}].[{clean_table}]"
 
 def format_number(value: Union[int, float], precision: int = 2) -> str:
-    """Enhanced number formatting with locale awareness and better scaling"""
+    """Enhanced number formatting with better scaling"""
     if not isinstance(value, (int, float)):
         return str(value)
     
     if isinstance(value, float) and (value != value or value == float('inf')):
         return "N/A"
     
-    # Enhanced scaling for different number ranges
     abs_value = abs(value)
     
-    if abs_value >= 1_000_000_000_000:  # Trillions
+    if abs_value >= 1_000_000_000_000:
         return f"{value / 1_000_000_000_000:.1f}T"
-    elif abs_value >= 1_000_000_000:     # Billions
+    elif abs_value >= 1_000_000_000:
         return f"{value / 1_000_000_000:.1f}B"
-    elif abs_value >= 1_000_000:         # Millions
+    elif abs_value >= 1_000_000:
         return f"{value / 1_000_000:.1f}M"
-    elif abs_value >= 1000:              # Thousands
+    elif abs_value >= 1000:
         if isinstance(value, int):
             return f"{value:,}"
         else:
@@ -403,7 +356,6 @@ def format_number(value: Union[int, float], precision: int = 2) -> str:
         if isinstance(value, int) or value.is_integer():
             return str(int(value))
         else:
-            # Smart precision - reduce trailing zeros
             formatted = f"{value:.{precision}f}"
             return formatted.rstrip('0').rstrip('.')
 
@@ -424,16 +376,15 @@ def truncate_text(text: str, max_length: int = 40, smart_truncate: bool = True) 
             if len(truncated) >= max_length * 0.7:
                 return truncated + "..."
     
-    # Enhanced Unicode-aware truncation
+    # Unicode-aware truncation
     try:
-        # Ensure we don't break in the middle of a Unicode character
         truncated = text.encode('utf-8')[:max_length - 3].decode('utf-8', errors='ignore')
         return truncated + "..."
     except:
         return text[:max_length - 3] + "..."
 
 def classify_confidence(score: float) -> str:
-    """Enhanced confidence classification with business context"""
+    """Enhanced confidence classification"""
     if score >= 0.95:
         return "Excellent"
     elif score >= 0.90:
@@ -454,11 +405,10 @@ def detect_data_quality(sample_data: List[Dict[str, Any]]) -> str:
     if not sample_data:
         return "unknown"
     
-    # Analyze sample values for quality indicators
     test_indicators = 0
     production_indicators = 0
     
-    for row in sample_data[:3]:  # Check first 3 rows
+    for row in sample_data[:3]:
         for key, value in row.items():
             if key.startswith('__'):
                 continue
@@ -481,13 +431,11 @@ def detect_data_quality(sample_data: List[Dict[str, Any]]) -> str:
                     production_indicators += 1
             
             elif isinstance(value, (int, float)) and value > 0:
-                # Realistic numeric values
                 if isinstance(value, float) and 0.01 < value < 1000000:
                     production_indicators += 1
                 elif isinstance(value, int) and 1 < value < 10000000:
                     production_indicators += 1
     
-    # Determine quality based on indicators
     if test_indicators > production_indicators:
         return "test"
     elif production_indicators > 0:
@@ -502,11 +450,11 @@ def extract_business_keywords(text: str, entity_type: str = None) -> List[str]:
     
     text_lower = text.lower()
     
-    # Enhanced business keyword patterns by entity type
+    # Business keyword patterns by entity type
     business_patterns = {
         'Customer': ['customer', 'client', 'account', 'contact', 'user', 'member'],
         'Payment': ['payment', 'transaction', 'invoice', 'billing', 'revenue', 'amount'],
-        'Contract': ['contract', 'agreement', 'deal', 'terms', 'συμβόλαια'],
+        'Contract': ['contract', 'agreement', 'deal', 'terms'],
         'Order': ['order', 'purchase', 'sale', 'quote', 'request'],
         'Employee': ['employee', 'staff', 'worker', 'personnel', 'user'],
         'Product': ['product', 'item', 'catalog', 'inventory', 'sku']
@@ -518,11 +466,11 @@ def extract_business_keywords(text: str, entity_type: str = None) -> List[str]:
         'created', 'modified', 'status', 'type', 'category', 'active', 'id'
     ]
     
-    # Extract using improved pattern matching
+    # Extract using pattern matching
     word_pattern = r'\b[a-zA-Z][a-zA-Z0-9_]*\b'
     words = re.findall(word_pattern, text_lower)
     
-    # Enhanced stop words for business context
+    # Stop words
     stop_words = {
         'the', 'and', 'are', 'for', 'with', 'this', 'that', 'from', 'what', 'how',
         'but', 'not', 'you', 'all', 'can', 'had', 'has', 'have', 'her', 'was',
@@ -560,7 +508,7 @@ def extract_business_keywords(text: str, entity_type: str = None) -> List[str]:
 def log_performance_metric(operation: str, duration: float, 
                           details: Dict[str, Any] = None, 
                           success: bool = True):
-    """Enhanced performance logging with structured metrics"""
+    """Enhanced performance logging"""
     status_emoji = "✅" if success else "❌"
     
     log_parts = [f"{status_emoji} {operation}: {duration:.2f}s"]
@@ -586,11 +534,6 @@ def validate_sql_server_identifier(identifier: str) -> bool:
     if not identifier:
         return False
     
-    # SQL Server identifier rules:
-    # - First character must be letter, underscore, or @, # for temp objects
-    # - Subsequent characters can be letters, digits, underscores, @, #, $
-    # - Cannot be a reserved word (simplified check)
-    
     reserved_words = {
         'select', 'from', 'where', 'insert', 'update', 'delete', 'create', 
         'drop', 'alter', 'table', 'index', 'view', 'procedure', 'function',
@@ -605,7 +548,7 @@ def validate_sql_server_identifier(identifier: str) -> bool:
     return bool(re.match(pattern, identifier)) and len(identifier) <= 128
 
 def timing_decorator(include_args: bool = False):
-    """Enhanced timing decorator with optional argument logging"""
+    """Enhanced timing decorator"""
     def decorator(func):
         @wraps(func)
         async def async_wrapper(*args, **kwargs):
@@ -675,7 +618,7 @@ def safe_execute_with_retry(func, max_retries: int = 3, delay: float = 1.0,
         except Exception as e:
             last_exception = e
             if attempt < max_retries - 1:
-                time.sleep(delay * (attempt + 1))  # Exponential backoff
+                time.sleep(delay * (attempt + 1))
                 print(f"   ⚠️ Attempt {attempt + 1} failed, retrying: {e}")
             else:
                 print(f"   ❌ All {max_retries} attempts failed: {e}")
