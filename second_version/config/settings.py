@@ -13,7 +13,7 @@ class Settings:
         """Fail fast if required env vars are missing."""
         required = [
             'DEPLOYMENT_NAME',
-            'MODEL_VERSION',
+            'API_VERSION',
             'AZURE_ENDPOINT',
             'AZURE_OPENAI_API_KEY',
             'DATABASE_CONNECTION_STRING'
@@ -28,8 +28,8 @@ class Settings:
         return os.getenv('DEPLOYMENT_NAME')
     
     @property
-    def model_version(self) -> str:
-        return os.getenv('MODEL_VERSION')
+    def api_version(self) -> str:
+        return os.getenv('API_VERSION', '2024-02-15-preview')
     
     @property
     def azure_endpoint(self) -> str:
