@@ -62,6 +62,20 @@ class Settings:
     @property
     def semantic_cache_hours(self) -> int:
         return int(os.getenv('SEMANTIC_CACHE_HOURS', '168'))
+    
+    @property
+    def table_exclusions(self) -> List[str]:
+        """Patterns for table names to exclude."""
+        return os.getenv(
+            'TABLE_EXCLUSIONS', 
+            'temp_,test_,backup_,old_,archive_,copy_,bak_,_copy,_backup,_old,_archive,_bak,_staging,staging_'
+        ).split(',')
+
+    @property
+    def table_name_patterns_to_exclude(self) -> List[str]:
+        """Regex patterns for excluding similar tables."""
+        default_patterns = r'.*_\d{8}$,.*_\d{6}$,.*_backup.*,.*_archive.*,.*_copy.*,.*_old.*'
+        return os.getenv('TABLE_EXCLUSION_PATTERNS', default_patterns).split(',')
 
 
 settings = Settings()

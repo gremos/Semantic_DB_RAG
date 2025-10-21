@@ -13,7 +13,7 @@ class AzureLLMClient:
             api_version=settings.api_version, 
             azure_endpoint=settings.azure_endpoint,
             api_key=settings.azure_api_key,
-            temperature=0,
+            # temperature=0,
             max_tokens=4000
         )
     

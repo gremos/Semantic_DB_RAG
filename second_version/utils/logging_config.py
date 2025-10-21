@@ -27,6 +27,11 @@ def setup_logging(level=logging.INFO):
     root_logger.addHandler(console_handler)
     root_logger.addHandler(file_handler)
     
+    # Suppress noisy loggers
+    logging.getLogger('sqlglot').setLevel(logging.ERROR)  # Only show errors
+    logging.getLogger('httpx').setLevel(logging.WARNING)   # Only warnings and errors
+    logging.getLogger('openai').setLevel(logging.WARNING)  # Only warnings and errors
+    
     return root_logger
 
 logger = setup_logging()

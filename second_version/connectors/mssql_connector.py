@@ -1,12 +1,45 @@
 from typing import List, Dict, Any, Optional
-from sqlalchemy import create_engine, text, inspect
+from sqlalchemy import create_engine, text, inspect, Integer, Numeric, String
+from sqlalchemy.dialects import mssql
 from .base import DatabaseConnector
+
+# Register custom SQL Server types
+class TableID(Integer):
+    """Custom TableID type - treat as Integer"""
+    __visit_name__ = 'TableID'
+
+class MoneyValue(Numeric):
+    """Custom MoneyValue type - treat as Numeric"""
+    __visit_name__ = 'MoneyValue'
+
+class PercentageValue(Numeric):
+    """Custom PercentageValue type - treat as Numeric"""
+    __visit_name__ = 'PercentageValue'
+
+# Register with SQLAlchemy's type map
+mssql.base.ischema_names['TableID'] = TableID
+mssql.base.ischema_names['MoneyValue'] = MoneyValue
+mssql.base.ischema_names['PercentageValue'] = PercentageValue
 
 class MSSQLConnector(DatabaseConnector):
     """SQL Server connector implementation."""
     
     def __init__(self, connection_string: str):
-        self.engine = create_engine(connection_string)
+        # Add connection parameters to prevent timeouts
+        if '?' in connection_string:
+            connection_string += '&timeout=120&connect_timeout=30'
+        else:
+            connection_string += '?timeout=120&connect_timeout=30'
+        
+        self.engine = create_engine(
+            connection_string,
+            pool_pre_ping=True,  # Verify connections before using
+            pool_recycle=3600,   # Recycle connections after 1 hour
+            connect_args={
+                'timeout': 120,
+                'connect_timeout': 30
+            }
+        )
         self.inspector = inspect(self.engine)
     
     def get_vendor_version(self) -> Dict[str, str]:

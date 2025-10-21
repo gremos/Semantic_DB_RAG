@@ -1,0 +1,433 @@
+{
+  "entities": [
+    {
+      "name": "BusinessPoint",
+      "source": "dbo.BusinessPoint",
+      "primary_key": [
+        "ID"
+      ],
+      "description": "Customer or business location record (master customer object)"
+    },
+    {
+      "name": "Advertisement",
+      "source": "dbo.Advertisement",
+      "primary_key": [
+        "ID"
+      ],
+      "description": "Advertisement/order linked to a contract product"
+    },
+    {
+      "name": "Address",
+      "source": "dbo.Address",
+      "primary_key": [
+        "ID"
+      ],
+      "description": "Physical address lookup for business points"
+    },
+    {
+      "name": "PaymentMethod",
+      "source": "dbo.PaymentMethod",
+      "primary_key": [
+        "ID"
+      ],
+      "description": "Payment method details associated to a contract or sale"
+    },
+    {
+      "name": "Customer",
+      "source": "dbo.BusinessPointListing",
+      "primary_key": [
+        "ID"
+      ],
+      "description": "Business point listing records representing customer listings and their metadata"
+    },
+    {
+      "name": "Contact",
+      "source": "dbo.Contact",
+      "primary_key": [
+        "ID"
+      ],
+      "description": "Contact person details"
+    },
+    {
+      "name": "ContactRelationship",
+      "source": "dbo.ContactRelationship",
+      "primary_key": [
+        "ID"
+      ],
+      "description": "Association between contacts and business points (relationship records)"
+    }
+  ],
+  "dimensions": [
+    {
+      "name": "AddressDimension",
+      "source": "dbo.Address",
+      "keys": [
+        "ID"
+      ],
+      "attributes": [
+        "Line1",
+        "Line2",
+        "Line3",
+        "Line4",
+        "Longitude",
+        "Latitude",
+        "NumericZip",
+        "CountryID"
+      ]
+    },
+    {
+      "name": "PaymentMethodDimension",
+      "source": "dbo.PaymentMethod",
+      "keys": [
+        "ID"
+      ],
+      "attributes": [
+        "PaymentMethodTypeID",
+        "Installments",
+        "Interval",
+        "PaymentMonth",
+        "AdvancedPayment",
+        "IsExchangeSale",
+        "NumberOfInvoices"
+      ]
+    },
+    {
+      "name": "VersionGroupItemDimension",
+      "source": "dbo.VersionGroupItem",
+      "keys": [
+        "ID"
+      ],
+      "attributes": [
+        "Description",
+        "Type",
+        "IsActive"
+      ]
+    },
+    {
+      "name": "FreeListingSearchItem",
+      "source": "dbo.FreeListingSearchItem",
+      "keys": [
+        "BusinessPointID"
+      ],
+      "attributes": [
+        "BusinessPointCode",
+        "BrandName",
+        "BusinessPointName",
+        "City",
+        "PrefectureName",
+        "AreaName",
+        "Address",
+        "CompanyPhone",
+        "MainActivityID",
+        "MainActivityName",
+        "LastSignedDate",
+        "IsRegular",
+        "IsProspect"
+      ]
+    },
+    {
+      "name": "TaxCode",
+      "source": "dbo.TaxCode",
+      "keys": [
+        "ID"
+      ],
+      "attributes": [
+        "TaxCode",
+        "CountryID"
+      ]
+    }
+  ],
+  "facts": [
+    {
+      "name": "SalesItem",
+      "source": "dbo.ContractProduct",
+      "grain": [
+        "ID"
+      ],
+      "measures": [
+        {
+          "name": "NetAmount",
+          "expression": "SUM(CASE WHEN CancelledOn IS NULL THEN (Price * Quantity) - COALESCE(Discount,0) - COALESCE(RulesDiscount,0) ELSE 0 END)",
+          "datatype": "decimal",
+          "format": "currency",
+          "depends_on": [
+            "Price",
+            "Quantity",
+            "Discount",
+            "RulesDiscount",
+            "CancelledOn"
+          ]
+        },
+        {
+          "name": "TotalQuantity",
+          "expression": "SUM(Quantity)",
+          "datatype": "integer",
+          "format": "number",
+          "depends_on": [
+            "Quantity"
+          ]
+        },
+        {
+          "name": "ContractCount",
+          "expression": "COUNT(ID)",
+          "datatype": "integer",
+          "format": "number",
+          "depends_on": [
+            "ID"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "column": "BusinessPointID",
+          "references": "BusinessPoint"
+        },
+        {
+          "column": "PaymentMethodID",
+          "references": "PaymentMethod"
+        }
+      ]
+    },
+    {
+      "name": "AdvertisementEntry",
+      "source": "dbo.Advertisement",
+      "grain": [
+        "ID"
+      ],
+      "measures": [
+        {
+          "name": "AdvPrice",
+          "expression": "SUM(Price)",
+          "datatype": "decimal",
+          "format": "currency",
+          "depends_on": [
+            "Price"
+          ]
+        },
+        {
+          "name": "AdvOneTimeAmount",
+          "expression": "SUM(COALESCE(OneTimeAmount,0))",
+          "datatype": "decimal",
+          "format": "currency",
+          "depends_on": [
+            "OneTimeAmount"
+          ]
+        }
+      ],
+      "foreign_keys": [
+        {
+          "column": "ContractProductID",
+          "references": "SalesItem"
+        },
+        {
+          "column": "BusinessPointID",
+          "references": "BusinessPoint"
+        }
+      ]
+    },
+    {
+      "name": "BatchActionHistory",
+      "source": "dbo.BatchActionHistory",
+      "grain": [
+        "ID"
+      ],
+      "measures": [
+        {
+          "name": "ActionsCount",
+          "expression": "COUNT(ID)",
+          "datatype": "integer",
+          "format": "number",
+          "depends_on": [
+            "ID"
+          ]
+        },
+        {
+          "name": "TotalRowsAffected",
+          "expression": "SUM(ISNULL(RowsAffected,0))",
+          "datatype": "integer",
+          "format": "number",
+          "depends_on": [
+            "RowsAffected"
+          ]
+        },
+        {
+          "name": "DistinctBatchCount",
+          "expression": "COUNT(DISTINCT BatchID)",
+          "datatype": "integer",
+          "format": "number",
+          "depends_on": [
+            "BatchID"
+          ]
+        }
+      ],
+      "foreign_keys": []
+    }
+  ],
+  "relationships": [
+    {
+      "from": "SalesItem",
+      "to": "BusinessPoint",
+      "cardinality": "many-to-one",
+      "type": "foreign_key"
+    },
+    {
+      "from": "SalesItem",
+      "to": "PaymentMethod",
+      "cardinality": "many-to-one",
+      "type": "foreign_key"
+    },
+    {
+      "from": "AdvertisementEntry",
+      "to": "SalesItem",
+      "cardinality": "many-to-one",
+      "type": "foreign_key"
+    },
+    {
+      "from": "BusinessPoint",
+      "to": "Address",
+      "cardinality": "many-to-one",
+      "type": "foreign_key"
+    },
+    {
+      "from": "ContactRelationship",
+      "to": "Contact",
+      "cardinality": "many-to-one",
+      "type": "foreign_key"
+    }
+  ],
+  "metrics": [
+    {
+      "name": "Total Sales Amount",
+      "purpose": "Measure total revenue from active contract products",
+      "logic": "Sum of NetAmount from SalesItem excluding cancelled contracts",
+      "inputs": [
+        "SalesItem.NetAmount"
+      ],
+      "constraints": [
+        "ContractProduct.CancelledOn IS NULL"
+      ],
+      "explain": "Calculates total sales by summing NetAmount for contract products that are not cancelled."
+    },
+    {
+      "name": "Average Price Per Unit",
+      "purpose": "Average net revenue per unit sold",
+      "logic": "Total Sales Amount divided by TotalQuantity (null-safe)",
+      "inputs": [
+        "SalesItem.NetAmount",
+        "SalesItem.TotalQuantity"
+      ],
+      "constraints": [
+        "ContractProduct.CancelledOn IS NULL",
+        "SalesItem.TotalQuantity <> 0"
+      ],
+      "explain": "Computes average revenue per unit by dividing total net sales by the total quantity sold, excluding cancelled contracts."
+    },
+    {
+      "name": "Number of Active Contracts",
+      "purpose": "Count active contract product records",
+      "logic": "Count of SalesItem records where CancelledOn is null",
+      "inputs": [
+        "SalesItem.ContractCount"
+      ],
+      "constraints": [
+        "ContractProduct.CancelledOn IS NULL"
+      ],
+      "explain": "Counts contract product rows considered active (not cancelled) to indicate sales volume."
+    },
+    {
+      "name": "Total Batch Actions",
+      "purpose": "Track total number of batch actions recorded",
+      "logic": "Count of action records in BatchActionHistory",
+      "inputs": [
+        "BatchActionHistory.ActionsCount"
+      ],
+      "constraints": [],
+      "explain": "Total number of batch action records (COUNT of IDs) from BatchActionHistory"
+    },
+    {
+      "name": "Total Rows Affected",
+      "purpose": "Measure total rows affected by batch operations",
+      "logic": "Sum of RowsAffected across all batch actions",
+      "inputs": [
+        "BatchActionHistory.TotalRowsAffected"
+      ],
+      "constraints": [],
+      "explain": "Sum of RowsAffected for all batch actions; null RowsAffected are treated as zero"
+    },
+    {
+      "name": "Average Rows Affected per Action",
+      "purpose": "Average impact of each batch action",
+      "logic": "Total Rows Affected divided by Total Batch Actions",
+      "inputs": [
+        "BatchActionHistory.TotalRowsAffected",
+        "BatchActionHistory.ActionsCount"
+      ],
+      "constraints": [
+        "BatchActionHistory.ActionsCount > 0"
+      ],
+      "explain": "Computes average rows affected per action. Requires at least one action to avoid division by zero."
+    }
+  ],
+  "audit": {
+    "dialect": "tsql",
+    "source_assets_used": [
+      {
+        "kind": "table",
+        "name_or_path": "dbo.ContractProduct"
+      },
+      {
+        "kind": "table",
+        "name_or_path": "dbo.BusinessPoint"
+      },
+      {
+        "kind": "table",
+        "name_or_path": "dbo.PaymentMethod"
+      },
+      {
+        "kind": "table",
+        "name_or_path": "dbo.Advertisement"
+      },
+      {
+        "kind": "table",
+        "name_or_path": "dbo.Address"
+      },
+      {
+        "kind": "table",
+        "name_or_path": "dbo.VersionGroupItem"
+      },
+      {
+        "kind": "table",
+        "name_or_path": "dbo.BatchActionHistory"
+      },
+      {
+        "kind": "table",
+        "name_or_path": "dbo.BusinessPointListing"
+      },
+      {
+        "kind": "table",
+        "name_or_path": "dbo.Contact"
+      },
+      {
+        "kind": "table",
+        "name_or_path": "dbo.ContactRelationship"
+      },
+      {
+        "kind": "table",
+        "name_or_path": "dbo.FreeListingSearchItem"
+      },
+      {
+        "kind": "table",
+        "name_or_path": "dbo.TaxCode"
+      }
+    ],
+    "assumptions": [
+      "Price, Discount and RulesDiscount are monetary values and stored in ContractProduct (MONEY/decimal).",
+      "CancelledOn IS NULL indicates an active sale; non-null CancelledOn indicates cancelled/voided contract product rows.",
+      "Quantities are integers and represent sold units.",
+      "No tables outside the provided discovery set were referenced.",
+      "RowsAffected NULL values are treated as zero when aggregating",
+      "BatchActionHistory.TimeStamp values are stored in UTC or consistent timezone",
+      "BusinessPointListing is used as the business 'Customer' representation for listing metadata"
+    ]
+  }
+}

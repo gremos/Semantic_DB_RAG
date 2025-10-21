@@ -136,10 +136,11 @@ class SemanticPipeline:
             logger.info(f"Answering question: {question}")
             answerer = SQLAnswerer(self.llm, self.validator, self.normalizer)
             
+            # Pass ONLY semantic model, NOT discovery_data
             success, answer, error = answerer.answer_question(
                 question,
                 self.semantic_model,
-                self.discovery_data
+                None  # Changed from self.discovery_data to None
             )
             
             if not success:
