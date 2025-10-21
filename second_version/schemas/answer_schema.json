@@ -1,0 +1,98 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["status"],
+  "properties": {
+    "status": {"type": "string", "enum": ["ok", "refuse"]},
+    "sql": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["dialect", "statement", "explanation", "evidence", "limits"],
+        "properties": {
+          "dialect": {"type": "string"},
+          "statement": {"type": "string"},
+          "explanation": {"type": "string"},
+          "evidence": {
+            "type": "object",
+            "properties": {
+              "entities": {"type": "array", "items": {"type": "string"}},
+              "measures": {"type": "array", "items": {"type": "string"}},
+              "metrics": {"type": "array", "items": {"type": "string"}}
+            }
+          },
+          "limits": {
+            "type": "object",
+            "properties": {
+              "row_limit": {"type": "integer"},
+              "timeout_sec": {"type": "integer"}
+            }
+          }
+        }
+      }
+    },
+    "next_steps": {"type": "array", "items": {"type": "string"}},
+    "refusal": {
+      "type": "object",
+      "properties": {
+        "reason": {"type": "string"},
+        "missing_objects": {"type": "array", "items": {"type": "string"}},
+        "clarifying_questions": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}
+```
+
+## Prompts
+
+**prompts/modeling_prompt.txt**
+```
+You are a semantic modeling assistant.
+
+Input: Discovery JSON (database metadata + normalized SQL + optional RDL dataset info).
+
+Task: Produce a neutral semantic model with: entities, dimensions, facts, measures, relationships, metrics, and audit, following the Semantic Model JSON schema.
+
+Use business-friendly names and typical analytical logic (Revenue, ARPU, AOV, Churn Rate, Upsell).
+
+Map every object to concrete sources (tables/views/SP outputs).
+
+Follow star-schema bias: infer candidate facts (transactions, events, balances) and dimensions (customer/product/date).
+
+For measures, use typical analytical expressions: SUM, AVG, COUNT, MAX, MIN.
+
+For metrics, create curated business-facing definitions combining measures + filters/time (e.g., "Upsell Opportunities = customers with ≥1 purchase in last 90 days AND no purchase of product family X").
+
+Source mapping: each semantic object must reference concrete source tables/views (or stored procedure outputs if stable).
+
+Do NOT invent fields, tables, or logic. If missing info prevents accurate modeling, return a JSON object with "status": "refuse" and "refusal": {"reason": "<explanation>", "missing_objects": ["list", "of", "missing"]}.
+
+Return only JSON matching the Semantic Model JSON schema. No markdown, no explanations outside the JSON.
+```
+
+**prompts/qa_prompt.txt**
+```
+You are a SQL answering agent.
+
+Input: Semantic Model JSON + a natural-language question.
+
+Output: Answer JSON containing only SQL statements that can be derived from the model, with evidence mapping.
+
+Map the question to metrics/measures/dimensions in the model.
+
+Propose one or more candidate SQL queries (normalized) that compute the answer; include filters, joins, and grain explicitly.
+
+Each SQL statement must:
+- Use only tables, columns, and relationships from the semantic model
+- Include explicit JOIN conditions matching the relationships
+- Specify the grain clearly (GROUP BY if aggregating)
+- Apply row_limit: 1000 and timeout_sec: 60
+
+If information is insufficient or ambiguous, return "status": "refuse" with "refusal": {"reason": "<explanation>", "clarifying_questions": ["question1", "question2", "question3"]}.
+
+Prefer existing views and stored procedures from the model's source_assets_used when they cover the question.
+
+Never reference objects outside the model; never fabricate fields; never output anything but JSON.
+
+Return only JSON matching the Answer JSON schema. No markdown, no explanations outside the JSON.

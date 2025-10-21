@@ -1,0 +1,89 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["database", "dialect", "schemas", "named_assets"],
+  "properties": {
+    "database": {
+      "type": "object",
+      "required": ["vendor", "version"],
+      "properties": {
+        "vendor": {"type": "string"},
+        "version": {"type": "string"}
+      }
+    },
+    "dialect": {"type": "string"},
+    "schemas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "tables"],
+        "properties": {
+          "name": {"type": "string"},
+          "tables": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "type", "columns"],
+              "properties": {
+                "name": {"type": "string"},
+                "type": {"type": "string", "enum": ["table", "view"]},
+                "columns": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["name", "type", "nullable"],
+                    "properties": {
+                      "name": {"type": "string"},
+                      "type": {"type": "string"},
+                      "nullable": {"type": "boolean"}
+                    }
+                  }
+                },
+                "primary_key": {"type": "array", "items": {"type": "string"}},
+                "foreign_keys": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["column", "ref_table", "ref_column"],
+                    "properties": {
+                      "column": {"type": "string"},
+                      "ref_table": {"type": "string"},
+                      "ref_column": {"type": "string"}
+                    }
+                  }
+                },
+                "rowcount_sample": {"type": ["integer", "null"]},
+                "source_assets": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["kind", "path", "note"],
+                    "properties": {
+                      "kind": {"type": "string"},
+                      "path": {"type": "string"},
+                      "note": {"type": "string"}
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "named_assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "name"],
+        "properties": {
+          "kind": {"type": "string"},
+          "name": {"type": "string"},
+          "sql_normalized": {"type": "string"},
+          "path": {"type": "string"},
+          "datasets": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    }
+  }
+}

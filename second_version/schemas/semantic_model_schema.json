@@ -1,0 +1,117 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["entities", "dimensions", "facts", "relationships", "metrics", "audit"],
+  "properties": {
+    "entities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "source", "primary_key", "description"],
+        "properties": {
+          "name": {"type": "string"},
+          "source": {"type": "string"},
+          "primary_key": {"type": "array", "items": {"type": "string"}},
+          "description": {"type": "string"}
+        }
+      }
+    },
+    "dimensions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "source", "keys", "attributes"],
+        "properties": {
+          "name": {"type": "string"},
+          "source": {"type": "string"},
+          "keys": {"type": "array", "items": {"type": "string"}},
+          "attributes": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "facts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "source", "grain", "measures", "foreign_keys"],
+        "properties": {
+          "name": {"type": "string"},
+          "source": {"type": "string"},
+          "grain": {"type": "array", "items": {"type": "string"}},
+          "measures": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "expression", "datatype", "format", "depends_on"],
+              "properties": {
+                "name": {"type": "string"},
+                "expression": {"type": "string"},
+                "datatype": {"type": "string"},
+                "format": {"type": "string"},
+                "depends_on": {"type": "array", "items": {"type": "string"}}
+              }
+            }
+          },
+          "foreign_keys": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["column", "references"],
+              "properties": {
+                "column": {"type": "string"},
+                "references": {"type": "string"}
+              }
+            }
+          }
+        }
+      }
+    },
+    "relationships": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["from", "to", "cardinality", "type"],
+        "properties": {
+          "from": {"type": "string"},
+          "to": {"type": "string"},
+          "cardinality": {"type": "string"},
+          "type": {"type": "string"}
+        }
+      }
+    },
+    "metrics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "purpose", "logic", "inputs", "constraints", "explain"],
+        "properties": {
+          "name": {"type": "string"},
+          "purpose": {"type": "string"},
+          "logic": {"type": "string"},
+          "inputs": {"type": "array", "items": {"type": "string"}},
+          "constraints": {"type": "array", "items": {"type": "string"}},
+          "explain": {"type": "string"}
+        }
+      }
+    },
+    "audit": {
+      "type": "object",
+      "required": ["dialect", "source_assets_used", "assumptions"],
+      "properties": {
+        "dialect": {"type": "string"},
+        "source_assets_used": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["kind", "name_or_path"],
+            "properties": {
+              "kind": {"type": "string"},
+              "name_or_path": {"type": "string"}
+            }
+          }
+        },
+        "assumptions": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}
