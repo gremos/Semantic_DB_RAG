@@ -1,62 +1,46 @@
-from typing import Dict, Any
+from typing import Dict, Any, List
 from connectors.base import DatabaseConnector
-from normalization.sql_normalizer import SQLNormalizer
 from .catalog_reader import CatalogReader
-from .asset_parser import AssetParser
-from .rdl_parser import RDLParser
+from .column_sampler import ColumnSampler
+from .discovery_compressor import DiscoveryCompressor
 from config.settings import settings
+import logging
+
+logger = logging.getLogger(__name__)
 
 class DiscoveryService:
-    """Orchestrate full discovery process."""
+    """Orchestrate discovery process - simplified for incremental approach."""
     
     def __init__(self, connector: DatabaseConnector):
         self.connector = connector
-        self.normalizer = SQLNormalizer()
         self.catalog_reader = CatalogReader(connector)
-        self.asset_parser = AssetParser(connector, self.normalizer)
-        self.rdl_parser = RDLParser()
+        self.column_sampler = ColumnSampler(connector, max_samples=30)
+        self.compressor = DiscoveryCompressor()
     
     def discover(self) -> Dict[str, Any]:
         """
-        Execute full discovery process.
+        Execute discovery and return compressed format.
         
-        Returns: Discovery JSON matching schema.
+        Returns: Compressed discovery JSON
         """
         # Phase 1: Catalog
+        logger.info("Phase 1: Reading database catalog...")
         discovery = self.catalog_reader.read_full_catalog()
         
-        # Phase 2: Named assets (views, SPs)
-        schemas = [s["name"] for s in discovery["schemas"]]
+        # Phase 2: Selective column sampling
+        logger.info("Phase 2: Sampling key columns...")
+        sample_targets = self.column_sampler.identify_sample_targets(discovery)
+        logger.info(f"  Sampling {len(sample_targets)} columns")
         
-        views = self.asset_parser.parse_views(schemas)
-        stored_procs = self.asset_parser.parse_stored_procedures(schemas)
+        if sample_targets:
+            column_samples = self.column_sampler.sample_columns(sample_targets)
+            discovery["column_samples"] = column_samples
+        else:
+            discovery["column_samples"] = {}
         
-        # Phase 3: RDL files
-        rdl_assets = []
-        rdl_files = self.rdl_parser.find_rdl_files("./data_upload")
+        # Phase 3: Compress for incremental processing
+        logger.info("Phase 3: Compressing discovery data...")
+        compressed = self.compressor.compress(discovery)
         
-        for rdl_file in rdl_files:
-            rdl_data = self.rdl_parser.parse_rdl(rdl_file)
-            rdl_assets.append({
-                "kind": "rdl",
-                "name": rdl_data["path"],
-                "path": rdl_data["path"],
-                "datasets": rdl_data["datasets"]
-            })
-            
-            # Also add queries as named assets
-            for query_info in rdl_data.get("queries", []):
-                success, normalized, error = self.normalizer.normalize(
-                    query_info["query"], 
-                    discovery["dialect"]
-                )
-                views.append({
-                    "kind": "rdl_query",
-                    "name": f"RDL:{query_info['name']}",
-                    "sql_normalized": normalized if success else query_info["query"]
-                })
-        
-        # Combine all assets
-        discovery["named_assets"] = views + stored_procs + rdl_assets
-        
-        return discovery
+        logger.info(f"Discovery complete: {len(compressed['tables'])} tables")
+        return compressed

@@ -4,6 +4,10 @@ from dotenv import load_dotenv
 
 class Settings:
     """Environment configuration with fail-fast validation."""
+
+    # Cache TTL (Time To Live) in hours
+    discovery_cache_hours: int = 168  # 7 days
+    semantic_cache_hours: int = 168   # 7 days
     
     def __init__(self):
         load_dotenv()

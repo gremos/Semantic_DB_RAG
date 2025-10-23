@@ -12,7 +12,23 @@
           "name": {"type": "string"},
           "source": {"type": "string"},
           "primary_key": {"type": "array", "items": {"type": "string"}},
-          "description": {"type": "string"}
+          "description": {"type": "string"},
+          "columns": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "type"],
+              "properties": {
+                "name": {"type": "string"},
+                "type": {"type": "string"},
+                "nullable": {"type": "boolean"},
+                "semantic_role": {"type": "string"},
+                "description": {"type": "string"},
+                "sample_values": {"type": ["array", "null"]},
+                "cardinality_estimate": {"type": ["string", "null"]}
+              }
+            }
+          }
         }
       }
     },
@@ -25,7 +41,23 @@
           "name": {"type": "string"},
           "source": {"type": "string"},
           "keys": {"type": "array", "items": {"type": "string"}},
-          "attributes": {"type": "array", "items": {"type": "string"}}
+          "attributes": {"type": "array", "items": {"type": "string"}},
+          "columns": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "type"],
+              "properties": {
+                "name": {"type": "string"},
+                "type": {"type": "string"},
+                "nullable": {"type": "boolean"},
+                "semantic_role": {"type": "string"},
+                "description": {"type": "string"},
+                "sample_values": {"type": ["array", "null"]},
+                "cardinality_estimate": {"type": ["string", "null"]}
+              }
+            }
+          }
         }
       }
     },
@@ -38,6 +70,22 @@
           "name": {"type": "string"},
           "source": {"type": "string"},
           "grain": {"type": "array", "items": {"type": "string"}},
+          "columns": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "type"],
+              "properties": {
+                "name": {"type": "string"},
+                "type": {"type": "string"},
+                "nullable": {"type": "boolean"},
+                "semantic_role": {"type": "string"},
+                "description": {"type": "string"},
+                "sample_values": {"type": ["array", "null"]},
+                "cardinality_estimate": {"type": ["string", "null"]}
+              }
+            }
+          },
           "measures": {
             "type": "array",
             "items": {
@@ -48,7 +96,9 @@
                 "expression": {"type": "string"},
                 "datatype": {"type": "string"},
                 "format": {"type": "string"},
-                "depends_on": {"type": "array", "items": {"type": "string"}}
+                "depends_on": {"type": "array", "items": {"type": "string"}},
+                "filters_applied": {"type": "array", "items": {"type": "string"}},
+                "description": {"type": "string"}
               }
             }
           },

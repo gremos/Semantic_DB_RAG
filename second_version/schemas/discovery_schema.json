@@ -79,10 +79,19 @@
         "properties": {
           "kind": {"type": "string"},
           "name": {"type": "string"},
-          "sql_normalized": {"type": "string"},
+          "sql_normalized": {"type": ["string", "null"]},
           "path": {"type": "string"},
-          "datasets": {"type": "array", "items": {"type": "string"}}
+          "datasets": {"type": "array", "items": {"type": "string"}},
+          "available": {"type": "boolean"}
         }
+      }
+    },
+    "column_samples": {
+      "type": "object",
+      "description": "Map of 'schema.table.column' to sample values",
+      "additionalProperties": {
+        "type": "array",
+        "items": {}
       }
     }
   }

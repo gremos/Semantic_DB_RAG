@@ -154,9 +154,9 @@ class SQLAnswerer:
         return (True, refusal, "")
     
     def _build_user_prompt(self, question: str, semantic_model: Dict[str, Any]) -> str:
-        """Build user prompt with question and model ONLY (no discovery data)."""
+        """Build user prompt with question and FULL model including columns."""
         
-        # Extract only what's needed from semantic model
+        # Extract model summary INCLUDING columns
         model_summary = {
             "entities": semantic_model.get("entities", []),
             "dimensions": semantic_model.get("dimensions", []),
@@ -166,26 +166,57 @@ class SQLAnswerer:
             "dialect": semantic_model.get("audit", {}).get("dialect", "tsql")
         }
         
-        # Add specific guidance for this model
-        guidance = """
-IMPORTANT: In this semantic model:
-- Revenue data is in the SalesItem fact (source: dbo.ContractProduct)
-- Use the NetAmount measure for revenue calculations
-- Customers are represented by the BusinessPoint entity
-- Join SalesItem to BusinessPoint via BusinessPointID foreign key
-"""
+        # Build column index for quick reference
+        column_guide = self._build_column_guide(semantic_model)
         
-        return f"""# Semantic Model
-{json.dumps(model_summary, indent=2)}
+        return f"""# Semantic Model (WITH COMPLETE COLUMN METADATA)
+    {json.dumps(model_summary, indent=2)}
 
-{guidance}
+    # Column Quick Reference
+    {column_guide}
 
-# Question
-{question}
+    # Question
+    {question}
 
-# Task
-Generate SQL to answer the question. Return ONLY valid JSON matching the Answer schema.
-"""
+    # Task
+    Generate SQL to answer the question using BOTH pre-defined measures AND raw columns as needed.
+
+    REMEMBER:
+    1. Check if measures already have the filters you need (see filters_applied)
+    2. For status questions (active/cancelled/etc), look at status_indicator columns
+    3. Read column descriptions to understand filter logic
+    4. Build WHERE clauses using the columns directly when needed
+
+    Return ONLY valid JSON matching the Answer schema.
+    """
+
+    def _build_column_guide(self, semantic_model: Dict[str, Any]) -> str:
+        """Build a quick reference guide for important columns."""
+        guide_lines = []
+        
+        # Find all status indicator columns
+        guide_lines.append("## Status Indicator Columns (use these for filtering active/cancelled/etc):")
+        
+        for fact in semantic_model.get("facts", []):
+            fact_name = fact.get("name")
+            for col in fact.get("columns", []):
+                if col.get("semantic_role") == "status_indicator":
+                    guide_lines.append(
+                        f"- {fact_name}.{col['name']}: {col.get('description', 'No description')}"
+                    )
+        
+        # List measure filters
+        guide_lines.append("\n## Measures with Built-in Filters:")
+        for fact in semantic_model.get("facts", []):
+            fact_name = fact.get("name")
+            for measure in fact.get("measures", []):
+                filters = measure.get("filters_applied", [])
+                if filters:
+                    guide_lines.append(
+                        f"- {fact_name}.{measure['name']}: Already applies {filters}"
+                    )
+        
+        return "\n".join(guide_lines)
     
     def _extract_json(self, response: str) -> Dict[str, Any]:
         """Extract JSON from response."""
