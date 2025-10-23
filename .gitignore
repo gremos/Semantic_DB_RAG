@@ -1,5 +1,6 @@
 .env
 .log
+.rdl
 venv/
 data/
 */__pycache__/
