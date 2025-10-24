@@ -8,6 +8,12 @@ class Settings:
     # Cache TTL (Time To Live) in hours
     discovery_cache_hours: int = 168  # 7 days
     semantic_cache_hours: int = 168   # 7 days
+    entity_batch_size: int = int(os.getenv('ENTITY_BATCH_SIZE', '10'))
+    dimension_batch_size: int = int(os.getenv('DIMENSION_BATCH_SIZE', '10'))
+    fact_batch_size: int = int(os.getenv('FACT_BATCH_SIZE', '5'))
+    
+    # Assembly retry settings
+    assembly_max_retries: int = int(os.getenv('ASSEMBLY_MAX_RETRIES', '2'))
     
     def __init__(self):
         load_dotenv()
