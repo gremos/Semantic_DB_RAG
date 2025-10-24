@@ -1679,14 +1679,10 @@ second_version/
 | `TOP_P` | ❌ | 0.95 | LLM top_p |
 | `LOG_LEVEL` | ❌ | INFO | Logging level |
 
-### Support & Contact
-
-- GitHub Issues: [repository-url]/issues
-- Documentation: [repository-url]/wiki
-- Email: your-email@example.com
-
----
-
-**Last Updated:** 2025-10-23  
-**Version:** 1.0  
-**License:** MIT
+### also added 
+✅ Product Name Problem: Enhanced column sampler now identifies ALL name/description columns and creates NL mappings
+✅ Token Limit Compliance: Selective sampling (100 cols/table) + focused prompts keep token usage under limits
+✅ Column Discovery: Expanded from 30 status columns to 100+ semantic columns per table
+✅ Natural Language Mapping: Created alias system mapping "product name" → ProductName column
+✅ Semantic Classification: Every column now classified by role (name, status, identifier, amount, etc.)
+✅ Q&A Intelligence: Query prompt now includes focused column guide based on question terms
