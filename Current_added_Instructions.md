@@ -1514,38 +1514,7 @@ success, answer, error = answerer.answer_question(
 
 ## Contributing
 
-### Development Setup
 
-1. Fork repository
-2. Create feature branch: `git checkout -b feature/amazing-feature`
-3. Install dev dependencies: `pip install -r requirements-dev.txt`
-4. Run tests: `pytest tests/`
-5. Commit changes: `git commit -m 'Add amazing feature'`
-6. Push: `git push origin feature/amazing-feature`
-7. Open Pull Request
-
-### Code Style
-
-- Python: PEP 8
-- Docstrings: Google style
-- Type hints: Required for public functions
-- Max line length: 120 characters
-
-### Testing Strategy
-
-```bash
-# Unit tests
-pytest tests/unit/
-
-# Integration tests (requires database)
-pytest tests/integration/
-
-# End-to-end tests
-pytest tests/e2e/
-
-# Coverage report
-pytest --cov=second_version tests/
-```
 
 ### Adding New Exporters
 
