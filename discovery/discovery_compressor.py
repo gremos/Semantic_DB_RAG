@@ -4,12 +4,15 @@ import logging
 logger = logging.getLogger(__name__)
 
 class DiscoveryCompressor:
-    """Compress discovery data for incremental LLM processing."""
+    """Compress discovery data while PRESERVING critical column metadata."""
     
     @staticmethod
-    def compress(discovery_data: Dict[str, Any]) -> Dict[str, Any]:
+    def compress(
+        discovery_data: Dict[str, Any],
+        column_samples: Dict[str, Any]  # NEW: Enhanced samples with classifications
+    ) -> Dict[str, Any]:
         """
-        Compress discovery to minimal representation.
+        Compress discovery to minimal representation while preserving semantic intelligence.
         
         Returns: Compressed discovery suitable for incremental processing.
         """
@@ -17,8 +20,13 @@ class DiscoveryCompressor:
             "database": discovery_data.get("database"),
             "dialect": discovery_data.get("dialect"),
             "tables": {},
-            "column_samples": discovery_data.get("column_samples", {})
+            "column_samples": {},  # Will be enhanced
+            "column_classifications": {},  # NEW: Semantic role mappings
+            "nl_mappings": {}  # NEW: Natural language → column mappings
         }
+        
+        # Build NL mappings index for fast lookup
+        nl_mappings = {}
         
         # Compress each table
         for schema in discovery_data.get("schemas", []):
@@ -28,30 +36,63 @@ class DiscoveryCompressor:
                 table_name = table["name"]
                 full_name = f"{schema_name}.{table_name}"
                 
+                # Compress columns with ENHANCED metadata
+                columns_compressed = []
+                for col in table.get("columns", []):
+                    col_name = col["name"]
+                    full_col = f"{full_name}.{col_name}"
+                    
+                    # Get classification if available
+                    sample_data = column_samples.get(full_col, {})
+                    classification = sample_data.get("classification", {})
+                    
+                    col_compressed = {
+                        "name": col_name,
+                        "type": col["type"],
+                        "nullable": col.get("nullable", True),
+                        "semantic_role": classification.get("semantic_role"),
+                        "priority": classification.get("priority"),
+                        "is_pk": classification.get("is_pk", False),
+                        "is_fk": classification.get("is_fk", False)
+                    }
+                    
+                    columns_compressed.append(col_compressed)
+                    
+                    # Store classification separately for easy lookup
+                    if classification:
+                        compressed["column_classifications"][full_col] = classification
+                        
+                        # Build NL mappings
+                        for alias in classification.get("nl_aliases", []):
+                            if alias not in nl_mappings:
+                                nl_mappings[alias] = []
+                            nl_mappings[alias].append(full_col)
+                    
+                    # Store sample values
+                    if sample_data.get("values"):
+                        compressed["column_samples"][full_col] = {
+                            "values": sample_data["values"],
+                            "distinct_count": sample_data.get("distinct_count", 0)
+                        }
+                
                 compressed["tables"][full_name] = {
                     "name": table_name,
                     "schema": schema_name,
                     "type": table.get("type"),
-                    "columns": DiscoveryCompressor._compress_columns(table.get("columns", [])),
+                    "columns": columns_compressed,
                     "pk": table.get("primary_key", []),
                     "fks": DiscoveryCompressor._compress_fks(table.get("foreign_keys", [])),
                     "rows": table.get("rowcount_sample", 0)
                 }
         
+        # Store NL mappings for Q&A phase
+        compressed["nl_mappings"] = nl_mappings
+        
         logger.info(f"Compressed {len(compressed['tables'])} tables")
+        logger.info(f"Created {len(nl_mappings)} natural language mappings")
+        logger.info(f"Classified {len(compressed['column_classifications'])} columns")
+        
         return compressed
-    
-    @staticmethod
-    def _compress_columns(columns: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Compress column list to essential info only."""
-        return [
-            {
-                "name": col["name"],
-                "type": col["type"],
-                "nullable": col.get("nullable", True)
-            }
-            for col in columns
-        ]
     
     @staticmethod
     def _compress_fks(fks: List[Dict[str, str]]) -> List[str]:
@@ -61,6 +102,7 @@ class DiscoveryCompressor:
             for fk in fks
         ]
     
+    # Rest of the methods remain the same...
     @staticmethod
     def get_table_for_classification(
         compressed: Dict[str, Any], 
@@ -77,6 +119,7 @@ class DiscoveryCompressor:
             "full_name": table_name,
             "column_names": [c["name"] for c in table["columns"]],
             "column_types": [c["type"] for c in table["columns"]],
+            "column_roles": [c.get("semantic_role") for c in table["columns"]],  # NEW
             "has_pk": len(table["pk"]) > 0,
             "has_fks": len(table["fks"]) > 0,
             "row_count": table["rows"],
@@ -104,3 +147,28 @@ class DiscoveryCompressor:
         if not table:
             return []
         return table["fks"]
+    
+    @staticmethod
+    def get_nl_mapping(
+        compressed: Dict[str, Any],
+        natural_language_phrase: str
+    ) -> List[str]:
+        """
+        NEW: Get columns that match a natural language phrase.
+        
+        Returns list of full column names (schema.table.column)
+        """
+        phrase_lower = natural_language_phrase.lower()
+        nl_mappings = compressed.get("nl_mappings", {})
+        
+        # Direct match
+        if phrase_lower in nl_mappings:
+            return nl_mappings[phrase_lower]
+        
+        # Fuzzy match (contains)
+        matches = []
+        for alias, columns in nl_mappings.items():
+            if phrase_lower in alias or alias in phrase_lower:
+                matches.extend(columns)
+        
+        return list(set(matches))  # Remove duplicates

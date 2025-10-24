@@ -512,3 +512,197 @@
 2025-10-23 16:14:08 - qa.sql_answerer - INFO - Skipping SQL verification (no discovery data provided)
 2025-10-23 16:14:08 - qa.sql_answerer - INFO - Answer generated successfully
 2025-10-23 16:14:08 - orchestration.pipeline - INFO - Answer status: ok
+2025-10-23 22:05:41 - caching.cache_manager - INFO - Cache directory initialized: /mnt/c/code/Personal/Semantic_DB_RAG/.cache
+2025-10-23 22:05:41 - caching.cache_manager - INFO - Loading existing caches...
+2025-10-23 22:05:41 - caching.cache_manager - INFO - Loaded cache from .cache/discovery_cache.pkl: 1 entries
+2025-10-23 22:05:41 - caching.cache_manager - INFO - Loaded cache from .cache/semantic_cache.pkl: 1 entries
+2025-10-23 22:05:41 - caching.cache_manager - INFO - Discovery cache entries: 1
+2025-10-23 22:05:41 - caching.cache_manager - INFO - Semantic cache entries: 1
+2025-10-23 22:05:41 - caching.cache_manager - INFO - Clearing all caches
+2025-10-23 22:05:41 - caching.cache_manager - INFO - Deleted .cache/discovery_cache.pkl
+2025-10-23 22:05:41 - caching.cache_manager - INFO - Deleted .cache/semantic_cache.pkl
+2025-10-23 22:06:04 - caching.cache_manager - INFO - Cache directory initialized: /mnt/c/code/Personal/Semantic_DB_RAG/.cache
+2025-10-23 22:06:04 - caching.cache_manager - INFO - Loading existing caches...
+2025-10-23 22:06:04 - caching.cache_manager - INFO - No existing cache file: .cache/discovery_cache.pkl
+2025-10-23 22:06:04 - caching.cache_manager - INFO - No existing cache file: .cache/semantic_cache.pkl
+2025-10-23 22:06:04 - caching.cache_manager - INFO - Discovery cache entries: 0
+2025-10-23 22:06:04 - caching.cache_manager - INFO - Semantic cache entries: 0
+2025-10-23 22:06:04 - root - INFO - Loading discovery and model (will use cache if available)...
+2025-10-23 22:06:04 - orchestration.pipeline - INFO - Connecting to database...
+2025-10-23 22:06:04 - orchestration.pipeline - INFO - Database fingerprint: 00bcea3e08424449...
+2025-10-23 22:06:04 - orchestration.pipeline - INFO - Checking discovery cache...
+2025-10-23 22:06:04 - caching.cache_manager - INFO - Discovery cache miss
+2025-10-23 22:06:04 - orchestration.pipeline - INFO - Running enhanced database discovery...
+2025-10-23 22:06:04 - discovery.discovery_service - INFO - Phase 1: Reading database catalog...
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO - Found 22 schemas to process
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO - Processing schema 1/22: db_accessadmin
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO -   Completed schema db_accessadmin: 0 tables processed
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO - Processing schema 2/22: db_backupoperator
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO -   Completed schema db_backupoperator: 0 tables processed
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO - Processing schema 3/22: db_datareader
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO -   Completed schema db_datareader: 0 tables processed
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO - Processing schema 4/22: db_datawriter
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO -   Completed schema db_datawriter: 0 tables processed
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO - Processing schema 5/22: db_ddladmin
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO -   Completed schema db_ddladmin: 0 tables processed
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO - Processing schema 6/22: db_denydatareader
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO -   Completed schema db_denydatareader: 0 tables processed
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO - Processing schema 7/22: db_denydatawriter
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO -   Completed schema db_denydatawriter: 0 tables processed
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO - Processing schema 8/22: db_owner
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO -   Completed schema db_owner: 0 tables processed
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO - Processing schema 9/22: db_securityadmin
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO -   Completed schema db_securityadmin: 0 tables processed
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO - Processing schema 10/22: dbo
+2025-10-23 22:06:04 - discovery.catalog_reader - INFO -   Found 663 tables/views before deduplication
+2025-10-23 22:06:09 - discovery.catalog_reader - INFO -   Kept 492 tables/views after deduplication
+2025-10-23 22:06:13 - discovery.catalog_reader - INFO -   Limited to top 50 tables by row count
+2025-10-23 22:06:14 - discovery.catalog_reader - INFO -     Processing table 10/50
+2025-10-23 22:06:16 - discovery.catalog_reader - INFO -     Processing table 20/50
+2025-10-23 22:06:16 - discovery.catalog_reader - INFO -     Processing table 30/50
+2025-10-23 22:06:17 - discovery.catalog_reader - INFO -     Processing table 40/50
+2025-10-23 22:06:18 - discovery.catalog_reader - INFO -     Processing table 50/50
+2025-10-23 22:06:18 - discovery.catalog_reader - INFO -   Completed schema dbo: 50 tables processed
+2025-10-23 22:06:18 - discovery.catalog_reader - INFO - Processing schema 11/22: DPS
+2025-10-23 22:06:18 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
+2025-10-23 22:06:18 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
+2025-10-23 22:06:18 - discovery.catalog_reader - INFO -   Completed schema DPS: 0 tables processed
+2025-10-23 22:06:18 - discovery.catalog_reader - INFO - Processing schema 12/22: guest
+2025-10-23 22:06:18 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
+2025-10-23 22:06:18 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
+2025-10-23 22:06:18 - discovery.catalog_reader - INFO -   Completed schema guest: 0 tables processed
+2025-10-23 22:06:18 - discovery.catalog_reader - INFO - Processing schema 13/22: HEADQUARTERS\atzifa
+2025-10-23 22:06:18 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
+2025-10-23 22:06:18 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
+2025-10-23 22:06:18 - discovery.catalog_reader - INFO -   Completed schema HEADQUARTERS\atzifa: 0 tables processed
+2025-10-23 22:06:18 - discovery.catalog_reader - INFO - Processing schema 14/22: HEADQUARTERS\cstraitchof
+2025-10-23 22:06:18 - discovery.catalog_reader - INFO -   Found 2 tables/views before deduplication
+2025-10-23 22:06:18 - discovery.catalog_reader - INFO -   Kept 1 tables/views after deduplication
+2025-10-23 22:06:18 - discovery.catalog_reader - INFO -   Completed schema HEADQUARTERS\cstraitchof: 1 tables processed
+2025-10-23 22:06:18 - discovery.catalog_reader - INFO - Processing schema 15/22: HEADQUARTERS\kskarmoutsos
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO -   Completed schema HEADQUARTERS\kskarmoutsos: 0 tables processed
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO - Processing schema 16/22: HEADQUARTERS\spitsaris
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO -   Found 3 tables/views before deduplication
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO -   Kept 2 tables/views after deduplication
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO -   Completed schema HEADQUARTERS\spitsaris: 2 tables processed
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO - Processing schema 17/22: HEADQUARTERS\svytinioti
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO -   Found 2 tables/views before deduplication
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO -   Kept 1 tables/views after deduplication
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO -   Completed schema HEADQUARTERS\svytinioti: 1 tables processed
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO - Processing schema 18/22: HEADQUARTERS\vkapetanakis
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO -   Completed schema HEADQUARTERS\vkapetanakis: 0 tables processed
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO - Processing schema 19/22: INFORMATION_SCHEMA
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO -   Completed schema INFORMATION_SCHEMA: 0 tables processed
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO - Processing schema 20/22: MigrationSteps
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO -   Found 8 tables/views before deduplication
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO -   Kept 7 tables/views after deduplication
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO -   Completed schema MigrationSteps: 7 tables processed
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO - Processing schema 21/22: TMP
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO -   Completed schema TMP: 0 tables processed
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO - Processing schema 22/22: YPS
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO -   Completed schema YPS: 0 tables processed
+2025-10-23 22:06:19 - discovery.catalog_reader - INFO - Discovery complete: 5 schemas, 61 tables
+2025-10-23 22:06:19 - discovery.discovery_service - INFO - Phase 2: Classifying and sampling columns...
+2025-10-23 22:06:19 - discovery.column_sampler - INFO - Identified 734 columns to sample across all tables
+2025-10-23 22:06:19 - discovery.column_sampler - INFO - Classified 734 columns by semantic role
+2025-10-23 22:06:19 - discovery.discovery_service - INFO -   Classified 734 columns
+2025-10-23 22:06:19 - discovery.discovery_service - INFO -   Selected 734 columns for value sampling
+2025-10-23 22:37:45 - discovery.column_sampler - INFO - Sampled 306 columns successfully
+2025-10-23 22:37:46 - discovery.discovery_service - INFO - Phase 3: Compressing discovery data with semantic preservation...
+2025-10-23 22:37:46 - discovery.discovery_compressor - INFO - Compressed 61 tables
+2025-10-23 22:37:46 - discovery.discovery_compressor - INFO - Created 740 natural language mappings
+2025-10-23 22:37:46 - discovery.discovery_compressor - INFO - Classified 734 columns
+2025-10-23 22:37:46 - discovery.discovery_service - INFO - Discovery complete: 61 tables
+2025-10-23 22:37:46 - discovery.discovery_service - INFO -   - 734 columns classified
+2025-10-23 22:37:46 - discovery.discovery_service - INFO -   - 740 NL mappings created
+2025-10-23 22:37:46 - discovery.discovery_service - INFO -   - 306 columns sampled
+2025-10-23 22:37:46 - orchestration.pipeline - INFO - Saving discovery to cache...
+2025-10-23 22:37:46 - caching.cache_manager - INFO - Caching discovery data: 00bcea3e08424449...
+2025-10-23 22:37:46 - caching.cache_manager - INFO - Saved cache to .cache/discovery_cache.pkl: 1 entries, 519,817 bytes
+2025-10-23 22:37:46 - orchestration.pipeline - INFO - Discovery complete: 61 tables
+2025-10-23 22:37:46 - orchestration.pipeline - INFO -   - 734 columns classified
+2025-10-23 22:37:46 - orchestration.pipeline - INFO -   - 740 NL mappings
+2025-10-23 22:37:46 - orchestration.pipeline - INFO - Semantic model fingerprint: 00bcea3e08424449...
+2025-10-23 22:37:46 - orchestration.pipeline - INFO - Checking semantic model cache...
+2025-10-23 22:37:46 - caching.cache_manager - INFO - Semantic model cache miss
+2025-10-23 22:37:46 - orchestration.pipeline - INFO - Creating semantic model via incremental approach...
+2025-10-23 22:37:46 - modeling.incremental_modeler - INFO - === PHASE 1: TABLE CLASSIFICATION ===
+2025-10-23 22:37:46 - modeling.incremental_modeler - INFO -   Classifying 61 tables...
+2025-10-23 22:39:36 - modeling.incremental_modeler - INFO -     Progress: 20/61 tables classified
+2025-10-23 22:41:14 - modeling.incremental_modeler - INFO -     Progress: 40/61 tables classified
+2025-10-23 22:42:56 - modeling.incremental_modeler - INFO -     Progress: 60/61 tables classified
+2025-10-23 22:43:07 - modeling.incremental_modeler - INFO -   Classified 61 tables
+2025-10-23 22:43:07 - modeling.incremental_modeler - INFO - === PHASE 2: MEASURE IDENTIFICATION ===
+2025-10-23 22:43:07 - modeling.incremental_modeler - INFO -   Identifying measures for 32 fact tables...
+2025-10-23 22:46:47 - modeling.incremental_modeler - INFO -     Progress: 10/32 facts processed
+2025-10-23 22:49:05 - modeling.phases.measure_identifier - WARNING - Failed to identify measures for dbo.Advertisement, using defaults
+2025-10-23 22:50:24 - modeling.phases.measure_identifier - WARNING - Failed to identify measures for dbo.ContractProduct, using defaults
+2025-10-23 22:51:36 - modeling.phases.measure_identifier - WARNING - Failed to identify measures for dbo.CampaignScoreHistoryDetail, using defaults
+2025-10-23 22:52:00 - modeling.incremental_modeler - INFO -     Progress: 20/32 facts processed
+2025-10-23 22:56:08 - modeling.phases.measure_identifier - WARNING - Failed to identify measures for dbo.FreeTemplateAdvertisement, using defaults
+2025-10-23 22:57:06 - modeling.incremental_modeler - INFO -     Progress: 30/32 facts processed
+2025-10-23 22:58:16 - modeling.incremental_modeler - INFO -   Identified measures for 32 fact tables
+2025-10-23 22:58:16 - modeling.incremental_modeler - INFO - === PHASE 3: STATUS COLUMN ANALYSIS ===
+2025-10-23 22:58:16 - modeling.incremental_modeler - INFO -   Analyzing 112 status columns...
+2025-10-23 23:00:32 - modeling.incremental_modeler - INFO -     Progress: 10/112 status columns analyzed
+2025-10-23 23:02:45 - modeling.incremental_modeler - INFO -     Progress: 20/112 status columns analyzed
+2025-10-23 23:04:49 - modeling.incremental_modeler - INFO -     Progress: 30/112 status columns analyzed
+2025-10-23 23:06:47 - modeling.incremental_modeler - INFO -     Progress: 40/112 status columns analyzed
+2025-10-23 23:09:03 - modeling.incremental_modeler - INFO -     Progress: 50/112 status columns analyzed
+2025-10-23 23:11:00 - modeling.incremental_modeler - INFO -     Progress: 60/112 status columns analyzed
+2025-10-23 23:13:21 - modeling.incremental_modeler - INFO -     Progress: 70/112 status columns analyzed
+2025-10-23 23:15:35 - modeling.incremental_modeler - INFO -     Progress: 80/112 status columns analyzed
+2025-10-23 23:18:16 - modeling.incremental_modeler - INFO -     Progress: 90/112 status columns analyzed
+2025-10-23 23:20:18 - modeling.incremental_modeler - INFO -     Progress: 100/112 status columns analyzed
+2025-10-23 23:22:21 - modeling.incremental_modeler - INFO -     Progress: 110/112 status columns analyzed
+2025-10-23 23:22:58 - modeling.incremental_modeler - INFO -   Analyzed 112 status columns
+2025-10-23 23:22:58 - modeling.incremental_modeler - INFO - === PHASE 4: RELATIONSHIP INFERENCE ===
+2025-10-23 23:22:58 - modeling.incremental_modeler - INFO -   Inferring 0 relationships...
+2025-10-23 23:22:58 - modeling.incremental_modeler - INFO -   Inferred 0 relationships
+2025-10-23 23:22:58 - modeling.incremental_modeler - INFO - === PHASE 5: MODEL ASSEMBLY ===
+2025-10-23 23:22:58 - modeling.phases.model_assembler - INFO - Assembly summary size: 24075 characters
+2025-10-23 23:23:49 - modeling.phases.model_assembler - INFO - Assembly response size: 0 characters
+2025-10-23 23:23:49 - utils.json_extractor - ERROR - Empty response received
+2025-10-23 23:23:49 - modeling.phases.model_assembler - ERROR - Failed to assemble model, trying fallback
+2025-10-23 23:23:49 - modeling.phases.model_assembler - INFO - Using fallback manual assembly
+2025-10-23 23:23:49 - modeling.incremental_modeler - INFO - Validating semantic model...
+2025-10-23 23:23:49 - modeling.incremental_modeler - INFO - Semantic model created successfully via incremental approach
+2025-10-23 23:23:49 - orchestration.pipeline - INFO - Saving semantic model to cache...
+2025-10-23 23:23:49 - caching.cache_manager - INFO - Caching semantic model: 00bcea3e08424449...
+2025-10-23 23:23:49 - caching.cache_manager - INFO - Saved cache to .cache/semantic_cache.pkl: 1 entries, 200,662 bytes
+2025-10-23 23:23:49 - orchestration.pipeline - INFO - Semantic model created successfully
+2025-10-23 23:23:49 - orchestration.pipeline - INFO - Answering question: show me customer names and their total sales
+2025-10-23 23:23:49 - qa.sql_answerer - INFO - Mapped question terms to 44 columns: ['dbo.FreeListingSearchItem.AreaName', 'dbo.DialerBusinessPoint.HandlerName', 'dbo.Contact.Firstname', 'dbo.FreeListingSearchItem.MainActivityName', 'dbo.CampaignScoreHistoryDetail.NewSalesmanName']...
+2025-10-23 23:23:49 - qa.sql_answerer - INFO - Q&A attempt 1/2
+2025-10-23 23:24:02 - qa.sql_answerer - WARNING - SQL verification failed: ["Table 'DialerBusinessPoint' not in semantic model"]
+2025-10-23 23:24:02 - qa.sql_answerer - INFO - Q&A attempt 2/2
+2025-10-23 23:24:17 - qa.sql_answerer - WARNING - SQL verification failed: ["Table 'DialerBusinessPoint' not in semantic model"]
+2025-10-23 23:24:17 - orchestration.pipeline - INFO - Answer status: refuse

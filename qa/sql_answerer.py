@@ -1,5 +1,5 @@
 import json
-from typing import Dict, Any, Tuple, Optional
+from typing import Dict, Any, Tuple, Optional, List
 from llm.azure_client import AzureLLMClient
 from validation.schema_validator import SchemaValidator
 from validation.sql_verifier import SQLVerifier
@@ -10,7 +10,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class SQLAnswerer:
-    """Phase 3: Question Answering using LLM."""
+    """Phase 3: Question Answering with Natural Language Understanding."""
     
     def __init__(
         self, 
@@ -32,21 +32,32 @@ class SQLAnswerer:
         self,
         question: str,
         semantic_model: Dict[str, Any],
-        discovery_data: Optional[Dict[str, Any]] = None
+        compressed_discovery: Optional[Dict[str, Any]] = None  # NEW: Need this for NL mappings
     ) -> Tuple[bool, Dict[str, Any], str]:
         """
-        Answer natural language question with SQL.
+        Answer natural language question with SQL using enhanced semantic understanding.
         
         Args:
             question: Natural language question
             semantic_model: Semantic model JSON
-            discovery_data: Optional discovery data for verification
+            compressed_discovery: REQUIRED for NL mappings
         
         Returns:
             (success, answer_json, error_message)
         """
-        # Build user prompt (semantic model only)
-        user_prompt = self._build_user_prompt(question, semantic_model)
+        if not compressed_discovery:
+            logger.warning("No compressed_discovery provided - NL mapping disabled")
+        
+        # STEP 1: Extract key terms from question and map to columns
+        column_hints = self._extract_column_hints(question, compressed_discovery) if compressed_discovery else {}
+        
+        # STEP 2: Build enhanced user prompt with column hints
+        user_prompt = self._build_enhanced_user_prompt(
+            question, 
+            semantic_model, 
+            compressed_discovery,
+            column_hints
+        )
         
         # Try up to 2 times
         for attempt in range(2):
@@ -56,24 +67,25 @@ class SQLAnswerer:
                 # Generate answer
                 response = self.llm.generate(self.system_prompt, user_prompt)
                 
-                # DEBUG: Log response
                 logger.debug(f"Raw LLM response (first 500 chars): {response[:500]}")
                 
                 # Parse JSON
                 answer_json = self._extract_json(response)
                 if not answer_json:
                     logger.warning("Failed to extract JSON from response")
-                    logger.debug(f"Full response: {response}")
                     continue
                 
-                # DEBUG: Log extracted structure
+                # Auto-correct status field if needed (documented issue)
+                if answer_json.get("status") == "success":
+                    logger.warning("Auto-correcting status 'success' to 'ok'")
+                    answer_json["status"] = "ok"
+                
                 logger.debug(f"Extracted JSON keys: {list(answer_json.keys())}")
                 
                 # Validate schema
                 valid, schema_error = self.validator.validate(answer_json, "answer")
                 if not valid:
                     logger.warning(f"Schema validation failed: {schema_error}")
-                    logger.debug(f"Invalid answer structure: {json.dumps(answer_json, indent=2)[:1000]}")
                     if attempt == 0:
                         continue
                     return (False, {}, f"Schema validation failed: {schema_error}")
@@ -83,10 +95,13 @@ class SQLAnswerer:
                     logger.info("LLM refused to answer - requesting clarification")
                     return (True, answer_json, "")
                 
-                # Verify SQL only if we have discovery data
-                if discovery_data:
+                # Verify SQL if we have discovery data
+                if compressed_discovery:
+                    # Reconstruct discovery format for verifier
+                    discovery_for_verifier = self._reconstruct_discovery(compressed_discovery)
+                    
                     dialect = semantic_model.get("audit", {}).get("dialect", "tsql")
-                    sql_verifier = SQLVerifier(semantic_model, discovery_data)
+                    sql_verifier = SQLVerifier(semantic_model, discovery_for_verifier)
                     
                     all_valid = True
                     issues = []
@@ -120,10 +135,7 @@ class SQLAnswerer:
                         )
                         return (True, refusal, "")
                 else:
-                    # Skip verification if no discovery data
-                    logger.info("Skipping SQL verification (no discovery data provided)")
-                    
-                    # Still do basic parse check
+                    # Basic parse check only
                     dialect = semantic_model.get("audit", {}).get("dialect", "tsql")
                     for sql_obj in answer_json.get("sql", []):
                         sql_stmt = sql_obj.get("statement", "")
@@ -153,50 +165,167 @@ class SQLAnswerer:
         )
         return (True, refusal, "")
     
-    def _build_user_prompt(self, question: str, semantic_model: Dict[str, Any]) -> str:
-        """Build user prompt with question and FULL model including columns."""
+    def _extract_column_hints(
+        self, 
+        question: str, 
+        compressed_discovery: Dict[str, Any]
+    ) -> Dict[str, List[str]]:
+        """
+        NEW: Extract key terms from question and map to columns using NL mappings.
         
-        # Extract model summary INCLUDING columns
+        Returns:
+            {
+                "matched_terms": ["product name", "total sales", ...],
+                "column_suggestions": ["dbo.Product.ProductName", "dbo.Sales.TotalAmount", ...]
+            }
+        """
+        from discovery.discovery_compressor import DiscoveryCompressor
+        
+        question_lower = question.lower()
+        hints = {
+            "matched_terms": [],
+            "column_suggestions": []
+        }
+        
+        # Extract potential column references from question
+        # Common patterns: "get product name", "total sales", "customer email"
+        potential_terms = [
+            "product name", "name", "title",
+            "customer name", "customer email",
+            "total", "amount", "price", "quantity",
+            "date", "status", "description"
+        ]
+        
+        for term in potential_terms:
+            if term in question_lower:
+                columns = DiscoveryCompressor.get_nl_mapping(compressed_discovery, term)
+                if columns:
+                    hints["matched_terms"].append(term)
+                    hints["column_suggestions"].extend(columns)
+        
+        # Remove duplicates
+        hints["column_suggestions"] = list(set(hints["column_suggestions"]))
+        
+        if hints["column_suggestions"]:
+            logger.info(f"Mapped question terms to {len(hints['column_suggestions'])} columns: {hints['column_suggestions'][:5]}...")
+        
+        return hints
+    
+    def _build_enhanced_user_prompt(
+        self, 
+        question: str, 
+        semantic_model: Dict[str, Any],
+        compressed_discovery: Optional[Dict[str, Any]],
+        column_hints: Dict[str, List[str]]
+    ) -> str:
+        """Build user prompt with ENHANCED column information and NL hints."""
+        
+        # Build focused column guide based on question
+        focused_guide = self._build_focused_column_guide(
+            semantic_model, 
+            compressed_discovery, 
+            column_hints
+        )
+        
+        # Extract model summary (lighter than before)
         model_summary = {
-            "entities": semantic_model.get("entities", []),
-            "dimensions": semantic_model.get("dimensions", []),
-            "facts": semantic_model.get("facts", []),
-            "relationships": semantic_model.get("relationships", []),
-            "metrics": semantic_model.get("metrics", []),
+            "facts": [
+                {
+                    "name": f["name"],
+                    "source": f["source"],
+                    "measures": [m["name"] for m in f.get("measures", [])]
+                }
+                for f in semantic_model.get("facts", [])
+            ],
+            "dimensions": [
+                {
+                    "name": d["name"],
+                    "source": d["source"],
+                    "attributes": d.get("attributes", [])[:10]  # Limit
+                }
+                for d in semantic_model.get("dimensions", [])
+            ],
+            "entities": [e["name"] for e in semantic_model.get("entities", [])],
             "dialect": semantic_model.get("audit", {}).get("dialect", "tsql")
         }
         
-        # Build column index for quick reference
-        column_guide = self._build_column_guide(semantic_model)
+        prompt_parts = [
+            "# Semantic Model Summary",
+            json.dumps(model_summary, indent=2),
+            "",
+            "# IMPORTANT: Focused Column Guide for This Question",
+            focused_guide,
+            "",
+            "# Natural Language Hints",
+            f"Detected terms: {', '.join(column_hints.get('matched_terms', []))}",
+            f"Suggested columns: {', '.join(column_hints.get('column_suggestions', [])[:10])}",
+            "",
+            "# Question",
+            question,
+            "",
+            "# Task",
+            "Generate SQL to answer the question.",
+            "",
+            "CRITICAL INSTRUCTIONS:",
+            "1. Use the 'Focused Column Guide' above - it shows the EXACT columns you need",
+            "2. Pay attention to 'Natural Language Hints' - these map question terms to columns",
+            "3. For 'product name' queries, use columns with semantic_role='name'",
+            "4. For status questions, use columns with semantic_role='status_indicator'",
+            "5. Build WHERE clauses using the column descriptions provided",
+            "",
+            "Return ONLY valid JSON matching the Answer schema."
+        ]
         
-        return f"""# Semantic Model (WITH COMPLETE COLUMN METADATA)
-    {json.dumps(model_summary, indent=2)}
-
-    # Column Quick Reference
-    {column_guide}
-
-    # Question
-    {question}
-
-    # Task
-    Generate SQL to answer the question using BOTH pre-defined measures AND raw columns as needed.
-
-    REMEMBER:
-    1. Check if measures already have the filters you need (see filters_applied)
-    2. For status questions (active/cancelled/etc), look at status_indicator columns
-    3. Read column descriptions to understand filter logic
-    4. Build WHERE clauses using the columns directly when needed
-
-    Return ONLY valid JSON matching the Answer schema.
-    """
-
-    def _build_column_guide(self, semantic_model: Dict[str, Any]) -> str:
-        """Build a quick reference guide for important columns."""
+        return "\n".join(prompt_parts)
+    
+    def _build_focused_column_guide(
+        self,
+        semantic_model: Dict[str, Any],
+        compressed_discovery: Optional[Dict[str, Any]],
+        column_hints: Dict[str, List[str]]
+    ) -> str:
+        """
+        NEW: Build a FOCUSED column guide showing only relevant columns for this question.
+        """
+        if not compressed_discovery:
+            return "No column metadata available"
+        
+        suggested_cols = column_hints.get("column_suggestions", [])
+        
         guide_lines = []
+        guide_lines.append("## Key Columns for This Query:")
+        guide_lines.append("")
         
-        # Find all status indicator columns
-        guide_lines.append("## Status Indicator Columns (use these for filtering active/cancelled/etc):")
+        # Get classifications
+        classifications = compressed_discovery.get("column_classifications", {})
+        column_samples = compressed_discovery.get("column_samples", {})
         
+        # Show suggested columns first (high priority)
+        if suggested_cols:
+            guide_lines.append("### Columns Matching Your Question:")
+            for full_col in suggested_cols[:15]:  # Limit to 15
+                classification = classifications.get(full_col, {})
+                sample_data = column_samples.get(full_col, {})
+                
+                # Parse full_col: schema.table.column
+                parts = full_col.split('.')
+                if len(parts) == 3:
+                    table_name = parts[1]
+                    col_name = parts[2]
+                    
+                    role = classification.get("semantic_role", "unknown")
+                    aliases = classification.get("nl_aliases", [])
+                    values = sample_data.get("values", [])
+                    
+                    guide_lines.append(f"- **{table_name}.{col_name}**")
+                    guide_lines.append(f"  - Role: {role}")
+                    guide_lines.append(f"  - Natural language: {', '.join(aliases[:3])}")
+                    if values:
+                        guide_lines.append(f"  - Sample values: {', '.join(str(v) for v in values[:5])}")
+                    guide_lines.append("")
+        
+        # Always show status indicators (critical for filtering)
+        guide_lines.append("### Status Indicator Columns (for filtering active/cancelled):")
         for fact in semantic_model.get("facts", []):
             fact_name = fact.get("name")
             for col in fact.get("columns", []):
@@ -205,18 +334,43 @@ class SQLAnswerer:
                         f"- {fact_name}.{col['name']}: {col.get('description', 'No description')}"
                     )
         
-        # List measure filters
-        guide_lines.append("\n## Measures with Built-in Filters:")
+        # Show available measures
+        guide_lines.append("\n### Pre-Calculated Measures:")
         for fact in semantic_model.get("facts", []):
             fact_name = fact.get("name")
             for measure in fact.get("measures", []):
                 filters = measure.get("filters_applied", [])
                 if filters:
                     guide_lines.append(
-                        f"- {fact_name}.{measure['name']}: Already applies {filters}"
+                        f"- {fact_name}.{measure['name']}: {measure['expression']} (Filters: {', '.join(filters)})"
+                    )
+                else:
+                    guide_lines.append(
+                        f"- {fact_name}.{measure['name']}: {measure['expression']}"
                     )
         
         return "\n".join(guide_lines)
+    
+    def _reconstruct_discovery(self, compressed: Dict[str, Any]) -> Dict[str, Any]:
+        """Reconstruct discovery format for SQL verifier."""
+        schemas = {}
+        for table_name, table_data in compressed.get("tables", {}).items():
+            schema_name = table_data["schema"]
+            if schema_name not in schemas:
+                schemas[schema_name] = {"name": schema_name, "tables": []}
+            
+            schemas[schema_name]["tables"].append({
+                "name": table_data["name"],
+                "type": table_data["type"],
+                "columns": table_data["columns"]
+            })
+        
+        return {
+            "database": compressed.get("database"),
+            "dialect": compressed.get("dialect"),
+            "schemas": list(schemas.values()),
+            "named_assets": []
+        }
     
     def _extract_json(self, response: str) -> Dict[str, Any]:
         """Extract JSON from response."""

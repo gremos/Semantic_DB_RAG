@@ -26,7 +26,7 @@ class SemanticPipeline:
             settings.semantic_cache_hours
         )
         self.connector = None
-        self.discovery_data = None
+        self.discovery_data = None  # This is now compressed with enhanced metadata
         self.semantic_model = None
     
     def initialize(self, bypass_cache: bool = False) -> Tuple[bool, str]:
@@ -56,8 +56,8 @@ class SemanticPipeline:
             else:
                 logger.info("Bypassing discovery cache (--bypass-cache flag)")
             
-            # Run discovery
-            logger.info("Running database discovery...")
+            # Run ENHANCED discovery
+            logger.info("Running enhanced database discovery...")
             discovery_service = DiscoveryService(self.connector)
             self.discovery_data = discovery_service.discover()
             
@@ -66,6 +66,8 @@ class SemanticPipeline:
             self.cache.set_discovery(fingerprint_key, self.discovery_data)
             
             logger.info(f"Discovery complete: {len(self.discovery_data.get('tables', {}))} tables")
+            logger.info(f"  - {len(self.discovery_data.get('column_classifications', {}))} columns classified")
+            logger.info(f"  - {len(self.discovery_data.get('nl_mappings', {}))} NL mappings")
             return (True, "")
         
         except Exception as e:
@@ -126,7 +128,7 @@ class SemanticPipeline:
     
     def answer_question(self, question: str) -> Tuple[bool, Dict[str, Any], str]:
         """
-        Phase 3: Question Answering
+        Phase 3: Question Answering with Enhanced NL Understanding
         
         Returns:
             (success, answer_json, error_message)
@@ -138,10 +140,11 @@ class SemanticPipeline:
             logger.info(f"Answering question: {question}")
             answerer = SQLAnswerer(self.llm, self.validator, self.normalizer)
             
+            # IMPORTANT: Pass compressed_discovery for NL mappings
             success, answer, error = answerer.answer_question(
                 question,
                 self.semantic_model,
-                None
+                self.discovery_data  # This now has enhanced metadata
             )
             
             if not success:
