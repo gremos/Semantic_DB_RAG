@@ -27,6 +27,53 @@ class SQLAnswerer:
         """Load Q&A system prompt."""
         with open("prompts/qa_prompt.txt", 'r') as f:
             self.system_prompt = f.read()
+
+
+    def _fix_group_by_issues(self, sql: str) -> str:
+        """
+        Auto-fix common GROUP BY issues where SELECT expressions don't match GROUP BY.
+        
+        This is a best-effort fix for the common case where COALESCE() is used in SELECT
+        but the GROUP BY references the underlying column.
+        """
+        import re
+        
+        # Pattern: Find SELECT with COALESCE and GROUP BY without it
+        # This is a simplified fix - for production, use proper SQL parsing
+        
+        select_match = re.search(r'SELECT\s+(.*?)\s+FROM', sql, re.IGNORECASE | re.DOTALL)
+        group_match = re.search(r'GROUP\s+BY\s+(.*?)(?:ORDER|HAVING|$)', sql, re.IGNORECASE | re.DOTALL)
+        
+        if not select_match or not group_match:
+            return sql  # Can't fix, return as-is
+        
+        select_clause = select_match.group(1)
+        group_clause = group_match.group(1).strip()
+        
+        # Look for COALESCE expressions in SELECT
+        coalesce_pattern = r'(COALESCE\([^)]+\))\s+AS\s+(\w+)'
+        coalesces = re.findall(coalesce_pattern, select_clause, re.IGNORECASE)
+        
+        if not coalesces:
+            return sql  # No COALESCE to fix
+        
+        # For each COALESCE with an alias, check if GROUP BY uses the base column
+        for coalesce_expr, alias in coalesces:
+            # If GROUP BY references the alias or a simple column, replace with full expression
+            if alias in group_clause or re.search(r'\b' + alias + r'\b', group_clause):
+                # Replace alias in GROUP BY with the full COALESCE expression
+                group_clause = re.sub(r'\b' + alias + r'\b', coalesce_expr, group_clause)
+                logger.info(f"Auto-fixed GROUP BY: replaced '{alias}' with '{coalesce_expr}'")
+        
+        # Rebuild SQL with fixed GROUP BY
+        fixed_sql = re.sub(
+            r'GROUP\s+BY\s+.*?(?=ORDER|HAVING|$)',
+            f'GROUP BY {group_clause}',
+            sql,
+            flags=re.IGNORECASE | re.DOTALL
+        )
+        
+        return fixed_sql
     
     def answer_question(
         self,
@@ -94,6 +141,13 @@ class SQLAnswerer:
                 if answer_json.get("status") == "refuse":
                     logger.info("LLM refused to answer - requesting clarification")
                     return (True, answer_json, "")
+                
+                if answer_json.get("status") == "ok":
+                    for sql_obj in answer_json.get("sql", []):
+                        sql_stmt = sql_obj.get("statement", "")
+                        # Auto-fix: Detect and repair GROUP BY mismatches
+                        sql_stmt = self._fix_group_by_issues(sql_stmt)
+                        sql_obj["statement"] = sql_stmt
                 
                 # Verify SQL if we have discovery data
                 if compressed_discovery:

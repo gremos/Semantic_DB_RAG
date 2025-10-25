@@ -1,243 +1,372 @@
-2025-10-25 10:30:23 - caching.cache_manager - INFO - Cache directory initialized: /mnt/c/code/Personal/Semantic_DB_RAG/.cache
-2025-10-25 10:30:23 - caching.cache_manager - INFO - Loading existing caches...
-2025-10-25 10:30:23 - caching.cache_manager - INFO - Loaded cache from .cache/discovery_cache.pkl: 1 entries
-2025-10-25 10:30:23 - caching.cache_manager - INFO - Loaded cache from .cache/semantic_cache.pkl: 1 entries
-2025-10-25 10:30:23 - caching.cache_manager - INFO - Discovery cache entries: 1
-2025-10-25 10:30:23 - caching.cache_manager - INFO - Semantic cache entries: 1
-2025-10-25 10:30:23 - caching.cache_manager - INFO - Clearing all caches
-2025-10-25 10:30:23 - caching.cache_manager - INFO - Deleted .cache/discovery_cache.pkl
-2025-10-25 10:30:23 - caching.cache_manager - INFO - Deleted .cache/semantic_cache.pkl
-2025-10-25 10:30:37 - caching.cache_manager - INFO - Cache directory initialized: /mnt/c/code/Personal/Semantic_DB_RAG/.cache
-2025-10-25 10:30:37 - caching.cache_manager - INFO - Loading existing caches...
-2025-10-25 10:30:37 - caching.cache_manager - INFO - No existing cache file: .cache/discovery_cache.pkl
-2025-10-25 10:30:37 - caching.cache_manager - INFO - No existing cache file: .cache/semantic_cache.pkl
-2025-10-25 10:30:37 - caching.cache_manager - INFO - Discovery cache entries: 0
-2025-10-25 10:30:37 - caching.cache_manager - INFO - Semantic cache entries: 0
-2025-10-25 10:30:37 - root - INFO - Loading discovery and model (will use cache if available)...
-2025-10-25 10:30:37 - orchestration.pipeline - INFO - Connecting to database...
-2025-10-25 10:30:37 - orchestration.pipeline - INFO - Database fingerprint: 00bcea3e08424449...
-2025-10-25 10:30:37 - orchestration.pipeline - INFO - Checking discovery cache...
-2025-10-25 10:30:37 - caching.cache_manager - INFO - Discovery cache miss
-2025-10-25 10:30:37 - orchestration.pipeline - INFO - Running enhanced database discovery...
-2025-10-25 10:30:37 - discovery.discovery_service - INFO - Phase 1: Reading database catalog...
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO - Found 22 schemas to process
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO - Processing schema 1/22: db_accessadmin
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO -   Completed schema db_accessadmin: 0 tables processed
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO - Processing schema 2/22: db_backupoperator
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO -   Completed schema db_backupoperator: 0 tables processed
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO - Processing schema 3/22: db_datareader
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO -   Completed schema db_datareader: 0 tables processed
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO - Processing schema 4/22: db_datawriter
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO -   Completed schema db_datawriter: 0 tables processed
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO - Processing schema 5/22: db_ddladmin
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO -   Completed schema db_ddladmin: 0 tables processed
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO - Processing schema 6/22: db_denydatareader
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO -   Completed schema db_denydatareader: 0 tables processed
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO - Processing schema 7/22: db_denydatawriter
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO -   Completed schema db_denydatawriter: 0 tables processed
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO - Processing schema 8/22: db_owner
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO -   Completed schema db_owner: 0 tables processed
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO - Processing schema 9/22: db_securityadmin
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO -   Completed schema db_securityadmin: 0 tables processed
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO - Processing schema 10/22: dbo
-2025-10-25 10:30:37 - discovery.catalog_reader - INFO -   Found 663 tables/views before deduplication
-2025-10-25 10:30:43 - discovery.catalog_reader - INFO -   Kept 492 tables/views after deduplication
-2025-10-25 10:30:50 - discovery.catalog_reader - INFO -   Limited to top 50 tables by row count
-2025-10-25 10:30:52 - discovery.catalog_reader - INFO -     Processing table 10/50
-2025-10-25 10:30:53 - discovery.catalog_reader - INFO -     Processing table 20/50
-2025-10-25 10:30:54 - discovery.catalog_reader - INFO -     Processing table 30/50
-2025-10-25 10:30:55 - discovery.catalog_reader - INFO -     Processing table 40/50
-2025-10-25 10:30:55 - discovery.catalog_reader - INFO -     Processing table 50/50
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Completed schema dbo: 50 tables processed
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO - Processing schema 11/22: DPS
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Completed schema DPS: 0 tables processed
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO - Processing schema 12/22: guest
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Completed schema guest: 0 tables processed
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO - Processing schema 13/22: HEADQUARTERS\atzifa
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Completed schema HEADQUARTERS\atzifa: 0 tables processed
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO - Processing schema 14/22: HEADQUARTERS\cstraitchof
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Found 2 tables/views before deduplication
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Kept 1 tables/views after deduplication
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Completed schema HEADQUARTERS\cstraitchof: 1 tables processed
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO - Processing schema 15/22: HEADQUARTERS\kskarmoutsos
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Completed schema HEADQUARTERS\kskarmoutsos: 0 tables processed
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO - Processing schema 16/22: HEADQUARTERS\spitsaris
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Found 3 tables/views before deduplication
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Kept 2 tables/views after deduplication
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Completed schema HEADQUARTERS\spitsaris: 2 tables processed
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO - Processing schema 17/22: HEADQUARTERS\svytinioti
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Found 2 tables/views before deduplication
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Kept 1 tables/views after deduplication
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Completed schema HEADQUARTERS\svytinioti: 1 tables processed
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO - Processing schema 18/22: HEADQUARTERS\vkapetanakis
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Completed schema HEADQUARTERS\vkapetanakis: 0 tables processed
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO - Processing schema 19/22: INFORMATION_SCHEMA
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Completed schema INFORMATION_SCHEMA: 0 tables processed
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO - Processing schema 20/22: MigrationSteps
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Found 8 tables/views before deduplication
-2025-10-25 10:30:56 - discovery.catalog_reader - INFO -   Kept 7 tables/views after deduplication
-2025-10-25 10:30:57 - discovery.catalog_reader - INFO -   Completed schema MigrationSteps: 7 tables processed
-2025-10-25 10:30:57 - discovery.catalog_reader - INFO - Processing schema 21/22: TMP
-2025-10-25 10:30:57 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
-2025-10-25 10:30:57 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
-2025-10-25 10:30:57 - discovery.catalog_reader - INFO -   Completed schema TMP: 0 tables processed
-2025-10-25 10:30:57 - discovery.catalog_reader - INFO - Processing schema 22/22: YPS
-2025-10-25 10:30:57 - discovery.catalog_reader - INFO -   Found 0 tables/views before deduplication
-2025-10-25 10:30:57 - discovery.catalog_reader - INFO -   Kept 0 tables/views after deduplication
-2025-10-25 10:30:57 - discovery.catalog_reader - INFO -   Completed schema YPS: 0 tables processed
-2025-10-25 10:30:57 - discovery.catalog_reader - INFO - Discovery complete: 5 schemas, 61 tables
-2025-10-25 10:30:57 - discovery.discovery_service - INFO - Phase 2: Classifying and sampling columns...
-2025-10-25 10:30:57 - discovery.column_sampler - INFO - Identified 734 columns to sample across all tables
-2025-10-25 10:30:57 - discovery.column_sampler - INFO - Classified 734 columns by semantic role
-2025-10-25 10:57:20 - discovery.column_sampler - INFO - Sampled 306 columns successfully
-2025-10-25 10:57:20 - discovery.discovery_service - INFO - Phase 2.5: Reading RDL reports for business context...
-2025-10-25 10:57:20 - discovery.discovery_service - INFO -   Parsing RDL: Absentees ( Monthly Report ).rdl
-2025-10-25 10:57:20 - discovery.discovery_service - INFO -   Parsing RDL: Approved Συμβόλαια (weekly report).rdl
-2025-10-25 10:57:20 - discovery.discovery_service - INFO -   Parsing RDL: CustomerConstraints-Συνοπτικά Επιχ Σημεία Ανά Καμπάνια.rdl
-2025-10-25 10:57:20 - discovery.discovery_service - INFO -   Parsing RDL: Email-Κινητά Πελατολογίου.rdl
-2025-10-25 10:57:20 - discovery.discovery_service - INFO -   Parsing RDL: Premise - Udacs Ανά Καμπάνια.rdl
-2025-10-25 10:57:20 - discovery.discovery_service - INFO -   Parsing RDL: Premise - Επισκεψιμότητα Ανά Κύρια Δραστηριότητα Ανά Καμπάνια.rdl
-2025-10-25 10:57:20 - discovery.discovery_service - INFO -   Parsing RDL: Premise - Επισκεψιμότητα Ανά Καμπάνια.rdl
-2025-10-25 10:57:20 - discovery.discovery_service - INFO -   Parsing RDL: Premise - Ημερήσια Δραστηριότητα Ανά Καμπάνια.rdl
-2025-10-25 10:57:20 - discovery.discovery_service - INFO -   Parsing RDL: Report Αναρτημένων Προβολών ανά Πελάτη - Κατηγορία.rdl
-2025-10-25 10:57:20 - discovery.discovery_service - INFO -   Parsing RDL: Report Παρασκευής - Contracts Campaigns.rdl
-2025-10-25 10:57:20 - discovery.discovery_service - INFO -   Parsing RDL: Report Παρασκευής - Online Contracts CreateDt.rdl
-2025-10-25 10:57:20 - discovery.discovery_service - INFO -   Parsing RDL: Report Παρασκευής - Ανά Καμπάνια - Προβολή.rdl
-2025-10-25 10:57:20 - discovery.discovery_service - INFO -   Parsing RDL: Report Πωλήσεων Bundle Προϊόντων.rdl
-2025-10-25 10:57:20 - discovery.discovery_service - INFO -   Parsing RDL: Report Συμβολαίων - Online Contracts SignDate.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Website Contracts With Addons.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: YPSOnline - Κρατήσεις Προϊόντων.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: YPSOnline - Ραντεβού.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Αιτήματα CRM (offline).rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Αιτήματα CRM (online).rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Αναζητήσεις ανα περιοχή - v2018.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Αναλυτική Κατάσταση Συμβολαίων Ανά Καμπάνια.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Αναφορά Αιτημάτων Διόρθωσης Προβολής xo.gr V2.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Αναφορά Αιτημάτων Δωρεάν Καταχώρησης XO.gr V2.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Αναφορά Βάσης Δεδομένων - Επικαιροποιήσεις.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Αναφορά Επικαιροποίησης ΕΣ Συνεργαζόμενων Εταιρειών.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Αναφορά Συνδρομητικών Συμβολαίων.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Αποτελέσματα Κλήσεων ανά Καμπάνια Dialer.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Δείκτες Αποπληρωμής.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Δεδομένα εφαρμογής [Διαχείριση ΕργατοΗμερών Πωλητών ανα Καμπάνια].rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Διαχείριση Αιτημάτων CRM από Παραγωγή.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Εισερχόμενα Εξερχόμενα Συμβόλαια από Back Office.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Εκκρεμότητες Παραγωγής.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Εκκρεμότητες Ρόλων Παραγωγής.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Εκκρεμείς Προβολές Ανά Μέσο-Κύκλο.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Ενημέρωση YPS βάση αποτελέσματος κλήσης Tele Sales.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Εξοδολόγια.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Επιχειρησιακά Σημεία ανά Δραστηριότητα.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Επιχειρησιακά Σημεία με Customer Constraints - Επιχειρησιακά Σημεία  ανά Προέλευση.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Ιστορικό Αναθέσης πελατών σε πωλήσεις.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Ιστορικό Συμβολαίου.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Καρτέλα Επικαιροποίησης Πελάτη.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Κατάσταση Προβολών Ανά Μέσο-Κύκλο.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Καταγραφή Εκκρεμοτήτων - Συμβόλαια ανα Status.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Κατανομή Κατασκευής Προβολών σε Χρονικά Διαστήματα.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Ολοκληρωμένα Website.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Ολοκληρωμένα Πακέτα Google Ads.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Ολοκληρωμένα Προιόντα WebServices.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Ολοκληρωμένες Προβολές ανά Κατηγορία.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Ολοκληρωμένες Προβολές ανα Μέσο.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Πανελλαδικές Αναζητήσεις - v2018.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Παραγωγικότητα ΔΒ.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Παραγωγικότητα Παραγωγής Ανά Ρόλο.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Παραγωγικότητα Παραγωγής.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Παρακολούθηση Leads - Dashboard.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Παρακολούθηση Leads.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Παρακολούθηση αποστολής στατιστικών ανα μήνα και τύπο μέσου.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Παρακολούθηση εκπτώσεων ανά καμπάνια.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Παρακολούθηση Κατάστασης Φυσικών Συμβολαίων.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Παρακολούθηση στόχων ανά segment.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Παρακολούθηση Συμβολαίων Παραγωγής Ανά Ημέρα   Εισαγωγές-Επιστροφές.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Πελάτες με Google Adwords.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Πλήθος Udac ανα Βιβλίο και Κύκλο Έκδοσης.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Πληρωμένες προβολές ανά μέσο-έκδοση.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Προβολές με Λάθος ή Κενό Video URL.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Προιόντα Συμβολαίων ανά Μέσο-Κύκλο-Section.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Σύνθετη αναφορά παρακολούθησης Εξοφλήσεων - Προκαταβολών.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Σύστημα Διαχείρισης Παράδοσης Συμβολαίων - Κατανομή Ραντεβού.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Σύστημα Διαχείρισης Παράδοσης Συμβολαίων - Παρακολούθηση Συμβολαίων.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Σύστημα Διαχείρισης Παράδοσης Συμβολαίων - Προμήθειες Εισπρακτόρων.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Στατιστικά Online.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Στατιστικά Επιχειρησιακών Σημείων.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Στατιστικά Πελατών - Συμβόλαια με Internet προιόντα.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Στατιστικά Στοιχεία Απόδοσης AdPremium Position.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Στοιχεία Πελατών για Διανομή.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Συγκεντρωτική Αντιπαραβολή Συμβάσεων YPS- ERP.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Συγκεντρωτική Κατάσταση Συμβολαίων Ανά Καμπάνια.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Συγκεντρωτικό Αρχείο με Google Ads.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Συμβόλαια - Ε.Σ. - Άνευ Email- Συνολικό.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Συμβόλαια - Ε.Σ. - Άνευ Κινητο - Email - Στατιστική Παρουσίαση.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Συμβόλαια - Ε.Σ. - Άνευ Κινητού - Συνολικό.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Συμβόλαια Franchise - Πελάτες προς τιμολόγηση.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Συμβόλαια ανά Τρόπο Πληρωμής.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Συμβόλαια Ανα Έτος.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Συμβόλαια για υποβολή ΔΟΥ.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Συμβόλαια με Web Προϊόντα - Τελευταίο Βήμα.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Συμβόλαια με Web Προϊόντα και Free Web Link.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Συμβόλαια με Παράκαμψη Εταιρικών Πολιτικών Ανά Καμπάνια.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Συμβόλαια με προιόντα Internet.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Συμβόλαια με Τρόπο Αποστολής - Ταχυδρομείο.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Συμβόλαια με Τρόπο Πληρωμής Πιστωτική Κάρτα.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Συνοπτική Παρουσίαση Βάσης - Λίστα Μητρώου 11.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Τζίρος ανά καμπάνια-κανάλι πληρωμής.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Τζίρος ανά μήνα-καμπάνια-κανάλι πληρωμής.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Φερεγγυότητα Πελατών.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsing RDL: Χρόνοι Διαχείρισης Lead.rdl
-2025-10-25 10:57:21 - discovery.discovery_service - INFO -   Parsed 95 RDL reports
-2025-10-25 10:57:21 - discovery.discovery_service - INFO - Phase 3: Compressing discovery data...
-2025-10-25 10:57:21 - discovery.discovery_compressor - INFO - Compressed 61 tables
-2025-10-25 10:57:21 - discovery.discovery_compressor - INFO - Created 740 natural language mappings
-2025-10-25 10:57:21 - discovery.discovery_compressor - INFO - Classified 734 columns
-2025-10-25 10:57:21 - orchestration.pipeline - INFO - Saving discovery to cache...
-2025-10-25 10:57:21 - caching.cache_manager - INFO - Caching discovery data: 00bcea3e08424449...
-2025-10-25 10:57:21 - caching.cache_manager - INFO - Saved cache to .cache/discovery_cache.pkl: 1 entries, 1,192,445 bytes
-2025-10-25 10:57:21 - orchestration.pipeline - INFO - Discovery complete: 61 tables
-2025-10-25 10:57:21 - orchestration.pipeline - INFO -   - 734 columns classified
-2025-10-25 10:57:21 - orchestration.pipeline - INFO -   - 740 NL mappings
-2025-10-25 10:57:21 - orchestration.pipeline - INFO - Semantic model fingerprint: 00bcea3e08424449...
-2025-10-25 10:57:21 - orchestration.pipeline - INFO - Checking semantic model cache...
-2025-10-25 10:57:21 - caching.cache_manager - INFO - Semantic model cache miss
-2025-10-25 10:57:21 - orchestration.pipeline - INFO - Creating semantic model via incremental approach...
-2025-10-25 10:57:21 - modeling.incremental_modeler - INFO - === PHASE 1: TABLE CLASSIFICATION ===
-2025-10-25 10:57:21 - modeling.incremental_modeler - INFO -   Classifying 61 tables...
-2025-10-25 10:58:41 - modeling.incremental_modeler - INFO -     Progress: 20/61 tables classified
-2025-10-25 10:59:49 - modeling.incremental_modeler - INFO -     Progress: 40/61 tables classified
-2025-10-25 11:01:06 - modeling.incremental_modeler - INFO -     Progress: 60/61 tables classified
-2025-10-25 11:01:13 - modeling.incremental_modeler - INFO -   Classified 61 tables
-2025-10-25 11:01:13 - modeling.incremental_modeler - INFO - === PHASE 2: MEASURE IDENTIFICATION ===
-2025-10-25 11:01:13 - modeling.incremental_modeler - INFO -   Identifying measures for 29 fact tables...
-2025-10-25 11:03:47 - modeling.incremental_modeler - INFO -     Progress: 10/29 facts processed
-2025-10-25 11:06:53 - modeling.phases.measure_identifier - WARNING - Failed to identify measures for dbo.ContractProduct, using defaults
+2025-10-25 19:56:11 - caching.cache_manager - INFO - Cache directory initialized: /mnt/c/code/Personal/Semantic_DB_RAG/.cache
+2025-10-25 19:56:11 - caching.cache_manager - INFO - Loading existing caches...
+2025-10-25 19:56:11 - caching.cache_manager - INFO - Loaded cache from .cache/discovery_cache.pkl: 1 entries
+2025-10-25 19:56:11 - caching.cache_manager - INFO - No existing cache file: .cache/semantic_cache.pkl
+2025-10-25 19:56:11 - caching.cache_manager - INFO - Discovery cache entries: 1
+2025-10-25 19:56:11 - caching.cache_manager - INFO - Semantic cache entries: 0
+2025-10-25 19:56:11 - root - INFO - Loading discovery and model (will use cache if available)...
+2025-10-25 19:56:11 - orchestration.pipeline - INFO - Connecting to database...
+2025-10-25 19:56:12 - orchestration.pipeline - INFO - Database fingerprint: 00bcea3e08424449...
+2025-10-25 19:56:12 - orchestration.pipeline - INFO - Checking discovery cache...
+2025-10-25 19:56:12 - caching.cache_manager - INFO - Discovery cache HIT (created: 2025-10-25 12:15:49.279485)
+2025-10-25 19:56:12 - orchestration.pipeline - INFO - ✅ Using cached discovery data
+2025-10-25 19:56:12 - orchestration.pipeline - INFO - Semantic model fingerprint: 00bcea3e08424449...
+2025-10-25 19:56:12 - orchestration.pipeline - INFO - Checking semantic model cache...
+2025-10-25 19:56:12 - caching.cache_manager - INFO - Semantic model cache miss
+2025-10-25 19:56:12 - orchestration.pipeline - INFO - Creating semantic model via incremental approach...
+2025-10-25 19:56:12 - modeling.incremental_modeler - INFO - === PHASE 1: TABLE CLASSIFICATION ===
+2025-10-25 19:56:12 - modeling.incremental_modeler - INFO -   Classifying 61 tables...
+2025-10-25 19:57:08 - modeling.incremental_modeler - INFO -     Progress: 20/61 tables classified
+2025-10-25 19:58:05 - modeling.incremental_modeler - INFO -     Progress: 40/61 tables classified
+2025-10-25 19:59:14 - modeling.incremental_modeler - INFO -     Progress: 60/61 tables classified
+2025-10-25 19:59:19 - modeling.incremental_modeler - INFO -   Classified 61 tables
+2025-10-25 19:59:19 - modeling.incremental_modeler - INFO - === PHASE 2: MEASURE IDENTIFICATION ===
+2025-10-25 19:59:19 - modeling.incremental_modeler - INFO -   Identifying measures for 29 fact tables...
+2025-10-25 20:01:04 - modeling.incremental_modeler - INFO -     Progress: 10/29 facts processed
+2025-10-25 20:02:31 - modeling.phases.measure_identifier - WARNING - Failed to identify measures for dbo.Advertisement, using defaults
+2025-10-25 20:03:43 - modeling.phases.measure_identifier - WARNING - Failed to identify measures for dbo.ContractProduct, using defaults
+2025-10-25 20:04:17 - modeling.incremental_modeler - INFO -     Progress: 20/29 facts processed
+2025-10-25 20:06:12 - modeling.phases.measure_identifier - WARNING - Failed to identify measures for dbo.FreeTemplateAdvertisement, using defaults
+2025-10-25 20:06:57 - modeling.incremental_modeler - INFO -   Identified measures for 29 fact tables
+2025-10-25 20:06:57 - modeling.incremental_modeler - INFO - === PHASE 3: STATUS COLUMN ANALYSIS ===
+2025-10-25 20:06:57 - modeling.incremental_modeler - INFO -   Analyzing 112 status columns...
+2025-10-25 20:08:43 - modeling.incremental_modeler - INFO -     Progress: 10/112 status columns analyzed
+2025-10-25 20:10:37 - modeling.incremental_modeler - INFO -     Progress: 20/112 status columns analyzed
+2025-10-25 20:12:26 - modeling.incremental_modeler - INFO -     Progress: 30/112 status columns analyzed
+2025-10-25 20:14:14 - modeling.incremental_modeler - INFO -     Progress: 40/112 status columns analyzed
+2025-10-25 20:16:00 - modeling.incremental_modeler - INFO -     Progress: 50/112 status columns analyzed
+2025-10-25 20:17:37 - modeling.incremental_modeler - INFO -     Progress: 60/112 status columns analyzed
+2025-10-25 20:19:26 - modeling.incremental_modeler - INFO -     Progress: 70/112 status columns analyzed
+2025-10-25 20:21:19 - modeling.incremental_modeler - INFO -     Progress: 80/112 status columns analyzed
+2025-10-25 20:22:49 - modeling.incremental_modeler - INFO -     Progress: 90/112 status columns analyzed
+2025-10-25 20:24:13 - modeling.incremental_modeler - INFO -     Progress: 100/112 status columns analyzed
+2025-10-25 20:25:44 - modeling.incremental_modeler - INFO -     Progress: 110/112 status columns analyzed
+2025-10-25 20:26:09 - modeling.incremental_modeler - INFO -   Analyzed 112 status columns
+2025-10-25 20:26:09 - modeling.incremental_modeler - INFO - === PHASE 4: RELATIONSHIP INFERENCE ===
+2025-10-25 20:26:09 - modeling.incremental_modeler - INFO -   Inferring 0 relationships...
+2025-10-25 20:26:09 - modeling.incremental_modeler - INFO -   Inferred 0 relationships
+2025-10-25 20:26:09 - modeling.incremental_modeler - INFO - === PHASE 5: MODEL ASSEMBLY ===
+2025-10-25 20:26:09 - modeling.phases.model_assembler - INFO - Starting hierarchical incremental assembly...
+2025-10-25 20:26:09 - modeling.phases.model_assembler - INFO -   19 entities, 13 dimensions, 29 facts
+2025-10-25 20:26:09 - modeling.phases.model_assembler - INFO - Phase 5a: Assembling entities...
+2025-10-25 20:26:09 - modeling.phases.model_assembler - INFO -   Processing entity batch 1 (10 tables)...
+2025-10-25 20:26:09 - modeling.phases.model_assembler - INFO -     Prompt size: 16,565 chars
+2025-10-25 20:26:09 - modeling.phases.model_assembler - WARNING -     ⚠ Large prompt (16,565 chars) - may cause issues
+2025-10-25 20:26:53 - modeling.phases.model_assembler - INFO -     LLM response length: 0 chars
+2025-10-25 20:26:53 - modeling.phases.model_assembler - ERROR -     ✗ LLM returned EMPTY response!
+2025-10-25 20:26:53 - modeling.phases.model_assembler - ERROR -     Prompt size was: 16,565 chars
+2025-10-25 20:26:53 - modeling.phases.model_assembler - ERROR -     Batch tables: ['dbo.Task', 'dbo.PricelistItem', 'dbo.ContractDocument', 'dbo.PointPhone', 'dbo.VersionGroupItem', 'dbo.Address', 'dbo.Phone', 'dbo.Listing', 'dbo.BusinessPoint', 'dbo.CaseAttachment']
+2025-10-25 20:26:53 - modeling.phases.model_assembler - ERROR -     Using fallback for this batch
+2025-10-25 20:26:53 - modeling.phases.model_assembler - INFO -   Processing entity batch 2 (9 tables)...
+2025-10-25 20:26:53 - modeling.phases.model_assembler - INFO -     Prompt size: 15,583 chars
+2025-10-25 20:26:53 - modeling.phases.model_assembler - WARNING -     ⚠ Large prompt (15,583 chars) - may cause issues
+2025-10-25 20:27:47 - modeling.phases.model_assembler - INFO -     LLM response length: 0 chars
+2025-10-25 20:27:47 - modeling.phases.model_assembler - ERROR -     ✗ LLM returned EMPTY response!
+2025-10-25 20:27:47 - modeling.phases.model_assembler - ERROR -     Prompt size was: 15,583 chars
+2025-10-25 20:27:47 - modeling.phases.model_assembler - ERROR -     Batch tables: ['dbo.Ticket', 'dbo.BusinessPointIdentification', 'dbo.DialerBusinessPoint', 'dbo.BusinessPointListing', 'dbo.FreeListingSearchItem', 'dbo.PointEmail', 'dbo.Contact', 'dbo.ContactRelationship', 'HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31672']
+2025-10-25 20:27:47 - modeling.phases.model_assembler - ERROR -     Using fallback for this batch
+2025-10-25 20:27:47 - modeling.phases.model_assembler - INFO -   ✓ Assembled 19 entities
+2025-10-25 20:27:47 - modeling.phases.model_assembler - INFO - Phase 5b: Assembling dimensions...
+2025-10-25 20:27:47 - modeling.phases.model_assembler - INFO -   Processing dimension batch 1 (10 tables)...
+2025-10-25 20:28:18 - modeling.phases.model_assembler - INFO -     LLM response length: 9075 chars
+2025-10-25 20:28:18 - modeling.phases.model_assembler - INFO -     ✓ Assembled 10 dimensions
+2025-10-25 20:28:18 - modeling.phases.model_assembler - INFO -   Processing dimension batch 2 (3 tables)...
+2025-10-25 20:28:27 - modeling.phases.model_assembler - INFO -     LLM response length: 1455 chars
+2025-10-25 20:28:27 - modeling.phases.model_assembler - INFO -     ✓ Assembled 3 dimensions
+2025-10-25 20:28:27 - modeling.phases.model_assembler - INFO -   ✓ Assembled 13 dimensions
+2025-10-25 20:28:27 - modeling.phases.model_assembler - INFO - Phase 5c: Assembling facts...
+2025-10-25 20:28:27 - modeling.phases.model_assembler - INFO -   Processing fact batch 1 (1 tables)...
+2025-10-25 20:28:27 - modeling.phases.model_assembler - INFO -     Prompt size: 3,730 chars
+2025-10-25 20:28:40 - modeling.phases.model_assembler - INFO -     LLM response length: 2951 chars
+2025-10-25 20:28:40 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 20:28:40 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 20:28:40 - modeling.phases.model_assembler - INFO -   Processing fact batch 2 (1 tables)...
+2025-10-25 20:28:40 - modeling.phases.model_assembler - INFO -     Prompt size: 3,741 chars
+2025-10-25 20:28:59 - modeling.phases.model_assembler - INFO -     LLM response length: 3651 chars
+2025-10-25 20:28:59 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 20:28:59 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 20:28:59 - modeling.phases.model_assembler - INFO -   Processing fact batch 3 (1 tables)...
+2025-10-25 20:28:59 - modeling.phases.model_assembler - INFO -     Prompt size: 2,735 chars
+2025-10-25 20:29:11 - modeling.phases.model_assembler - INFO -     LLM response length: 2656 chars
+2025-10-25 20:29:11 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 20:29:11 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 20:29:11 - modeling.phases.model_assembler - INFO -   Processing fact batch 4 (1 tables)...
+2025-10-25 20:29:11 - modeling.phases.model_assembler - INFO -     Prompt size: 2,611 chars
+2025-10-25 20:29:25 - modeling.phases.model_assembler - INFO -     LLM response length: 2529 chars
+2025-10-25 20:29:25 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 20:29:25 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 20:29:25 - modeling.phases.model_assembler - INFO -   Processing fact batch 5 (1 tables)...
+2025-10-25 20:29:25 - modeling.phases.model_assembler - INFO -     Prompt size: 4,429 chars
+2025-10-25 20:29:41 - modeling.phases.model_assembler - INFO -     LLM response length: 3088 chars
+2025-10-25 20:29:41 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 20:29:41 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 20:29:41 - modeling.phases.model_assembler - INFO -   Processing fact batch 6 (1 tables)...
+2025-10-25 20:29:41 - modeling.phases.model_assembler - INFO -     Prompt size: 2,356 chars
+2025-10-25 20:29:54 - modeling.phases.model_assembler - INFO -     LLM response length: 2284 chars
+2025-10-25 20:29:54 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 20:29:54 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 20:29:54 - modeling.phases.model_assembler - INFO -   Processing fact batch 7 (1 tables)...
+2025-10-25 20:29:54 - modeling.phases.model_assembler - INFO -     Prompt size: 4,565 chars
+2025-10-25 20:30:23 - caching.cache_manager - INFO - Cache directory initialized: /mnt/c/code/Personal/Semantic_DB_RAG/.cache
+2025-10-25 20:30:23 - caching.cache_manager - INFO - Loading existing caches...
+2025-10-25 20:30:23 - caching.cache_manager - INFO - Loaded cache from .cache/discovery_cache.pkl: 1 entries
+2025-10-25 20:30:23 - caching.cache_manager - INFO - No existing cache file: .cache/semantic_cache.pkl
+2025-10-25 20:30:23 - caching.cache_manager - INFO - Discovery cache entries: 1
+2025-10-25 20:30:23 - caching.cache_manager - INFO - Semantic cache entries: 0
+2025-10-25 20:30:23 - root - INFO - Loading discovery and model (will use cache if available)...
+2025-10-25 20:30:23 - orchestration.pipeline - INFO - Connecting to database...
+2025-10-25 20:30:23 - orchestration.pipeline - INFO - Database fingerprint: 00bcea3e08424449...
+2025-10-25 20:30:23 - orchestration.pipeline - INFO - Checking discovery cache...
+2025-10-25 20:30:23 - caching.cache_manager - INFO - Discovery cache HIT (created: 2025-10-25 12:15:49.279485)
+2025-10-25 20:30:23 - orchestration.pipeline - INFO - ✅ Using cached discovery data
+2025-10-25 20:30:23 - orchestration.pipeline - INFO - Semantic model fingerprint: 00bcea3e08424449...
+2025-10-25 20:30:23 - orchestration.pipeline - INFO - Checking semantic model cache...
+2025-10-25 20:30:23 - caching.cache_manager - INFO - Semantic model cache miss
+2025-10-25 20:30:23 - orchestration.pipeline - INFO - Creating semantic model via incremental approach...
+2025-10-25 20:30:23 - modeling.incremental_modeler - INFO - === PHASE 1: TABLE CLASSIFICATION ===
+2025-10-25 20:30:23 - modeling.incremental_modeler - INFO -   Classifying 61 tables...
+2025-10-25 20:31:33 - modeling.incremental_modeler - INFO -     Progress: 20/61 tables classified
+2025-10-25 20:32:39 - modeling.incremental_modeler - INFO -     Progress: 40/61 tables classified
+2025-10-25 20:33:53 - modeling.incremental_modeler - INFO -     Progress: 60/61 tables classified
+2025-10-25 20:34:00 - modeling.incremental_modeler - INFO -   Classified 61 tables
+2025-10-25 20:34:00 - modeling.incremental_modeler - INFO - === PHASE 2: MEASURE IDENTIFICATION ===
+2025-10-25 20:34:00 - modeling.incremental_modeler - INFO -   Identifying measures for 30 fact tables...
+2025-10-25 20:35:51 - modeling.incremental_modeler - INFO -     Progress: 10/30 facts processed
+2025-10-25 20:37:01 - modeling.phases.measure_identifier - WARNING - Failed to identify measures for dbo.Advertisement, using defaults
+2025-10-25 20:38:03 - modeling.phases.measure_identifier - WARNING - Failed to identify measures for dbo.ContractProduct, using defaults
+2025-10-25 20:38:46 - modeling.phases.measure_identifier - WARNING - Failed to identify measures for dbo.CampaignScoreHistoryDetail, using defaults
+2025-10-25 20:38:57 - modeling.incremental_modeler - INFO -     Progress: 20/30 facts processed
+2025-10-25 20:40:21 - modeling.phases.measure_identifier - WARNING - Failed to identify measures for dbo.FreeTemplate, using defaults
+2025-10-25 20:41:33 - modeling.incremental_modeler - INFO -     Progress: 30/30 facts processed
+2025-10-25 20:41:45 - modeling.incremental_modeler - INFO -   Identified measures for 30 fact tables
+2025-10-25 20:41:45 - modeling.incremental_modeler - INFO - === PHASE 3: STATUS COLUMN ANALYSIS ===
+2025-10-25 20:41:45 - modeling.incremental_modeler - INFO -   Analyzing 112 status columns...
+2025-10-25 20:43:42 - modeling.incremental_modeler - INFO -     Progress: 10/112 status columns analyzed
+2025-10-25 20:45:25 - modeling.incremental_modeler - INFO -     Progress: 20/112 status columns analyzed
+2025-10-25 20:47:30 - modeling.incremental_modeler - INFO -     Progress: 30/112 status columns analyzed
+2025-10-25 20:49:17 - modeling.incremental_modeler - INFO -     Progress: 40/112 status columns analyzed
+2025-10-25 20:50:41 - modeling.incremental_modeler - INFO -     Progress: 50/112 status columns analyzed
+2025-10-25 20:52:11 - modeling.incremental_modeler - INFO -     Progress: 60/112 status columns analyzed
+2025-10-25 20:53:56 - modeling.incremental_modeler - INFO -     Progress: 70/112 status columns analyzed
+2025-10-25 20:55:53 - modeling.incremental_modeler - INFO -     Progress: 80/112 status columns analyzed
+2025-10-25 20:57:32 - modeling.incremental_modeler - INFO -     Progress: 90/112 status columns analyzed
+2025-10-25 20:59:15 - modeling.incremental_modeler - INFO -     Progress: 100/112 status columns analyzed
+2025-10-25 21:00:56 - modeling.incremental_modeler - INFO -     Progress: 110/112 status columns analyzed
+2025-10-25 21:01:36 - modeling.incremental_modeler - INFO -   Analyzed 112 status columns
+2025-10-25 21:01:36 - modeling.incremental_modeler - INFO - === PHASE 4: RELATIONSHIP INFERENCE ===
+2025-10-25 21:01:36 - modeling.incremental_modeler - INFO -   Inferring 0 relationships...
+2025-10-25 21:01:36 - modeling.incremental_modeler - INFO -   Inferred 0 relationships
+2025-10-25 21:01:36 - modeling.incremental_modeler - INFO - === PHASE 5: MODEL ASSEMBLY ===
+2025-10-25 21:01:36 - modeling.phases.model_assembler - INFO - Starting hierarchical incremental assembly...
+2025-10-25 21:01:36 - modeling.phases.model_assembler - INFO -   21 entities, 10 dimensions, 30 facts
+2025-10-25 21:01:36 - modeling.phases.model_assembler - INFO - Phase 5a: Assembling entities...
+2025-10-25 21:01:36 - modeling.phases.model_assembler - INFO -   Processing entity batch 1 (4 tables)...
+2025-10-25 21:01:36 - modeling.phases.model_assembler - INFO -     Prompt size: 6,788 chars
+2025-10-25 21:02:05 - modeling.phases.model_assembler - INFO -     LLM response length: 8016 chars
+2025-10-25 21:02:05 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:02:05 - modeling.phases.model_assembler - INFO -     ✓ Assembled 4 entities
+2025-10-25 21:02:05 - modeling.phases.model_assembler - INFO -   Processing entity batch 2 (4 tables)...
+2025-10-25 21:02:05 - modeling.phases.model_assembler - INFO -     Prompt size: 7,592 chars
+2025-10-25 21:02:29 - modeling.phases.model_assembler - INFO -     LLM response length: 9000 chars
+2025-10-25 21:02:29 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:02:29 - modeling.phases.model_assembler - INFO -     ✓ Assembled 4 entities
+2025-10-25 21:02:29 - modeling.phases.model_assembler - INFO -   Processing entity batch 3 (4 tables)...
+2025-10-25 21:02:29 - modeling.phases.model_assembler - INFO -     Prompt size: 6,825 chars
+2025-10-25 21:02:52 - modeling.phases.model_assembler - INFO -     LLM response length: 8364 chars
+2025-10-25 21:02:52 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:02:52 - modeling.phases.model_assembler - INFO -     ✓ Assembled 4 entities
+2025-10-25 21:02:52 - modeling.phases.model_assembler - INFO -   Processing entity batch 4 (4 tables)...
+2025-10-25 21:02:52 - modeling.phases.model_assembler - INFO -     Prompt size: 8,200 chars
+2025-10-25 21:03:24 - modeling.phases.model_assembler - INFO -     LLM response length: 9916 chars
+2025-10-25 21:03:24 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:03:24 - modeling.phases.model_assembler - INFO -     ✓ Assembled 4 entities
+2025-10-25 21:03:24 - modeling.phases.model_assembler - INFO -   Processing entity batch 5 (4 tables)...
+2025-10-25 21:03:24 - modeling.phases.model_assembler - INFO -     Prompt size: 7,317 chars
+2025-10-25 21:03:52 - modeling.phases.model_assembler - INFO -     LLM response length: 8687 chars
+2025-10-25 21:03:52 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:03:52 - modeling.phases.model_assembler - INFO -     ✓ Assembled 4 entities
+2025-10-25 21:03:52 - modeling.phases.model_assembler - INFO -   Processing entity batch 6 (1 tables)...
+2025-10-25 21:03:52 - modeling.phases.model_assembler - INFO -     Prompt size: 3,171 chars
+2025-10-25 21:04:06 - modeling.phases.model_assembler - INFO -     LLM response length: 2419 chars
+2025-10-25 21:04:06 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:04:06 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 entities
+2025-10-25 21:04:06 - modeling.phases.model_assembler - INFO -   ✓ Assembled 21 entities
+2025-10-25 21:04:06 - modeling.phases.model_assembler - INFO - Phase 5b: Assembling dimensions...
+2025-10-25 21:04:06 - modeling.phases.model_assembler - INFO -   Processing dimension batch 1 (4 tables)...
+2025-10-25 21:04:26 - modeling.phases.model_assembler - INFO -     LLM response length: 4450 chars
+2025-10-25 21:04:26 - modeling.phases.model_assembler - INFO -     ✓ Assembled 4 dimensions
+2025-10-25 21:04:26 - modeling.phases.model_assembler - INFO -   Processing dimension batch 2 (4 tables)...
+2025-10-25 21:04:35 - modeling.phases.model_assembler - INFO -     LLM response length: 2090 chars
+2025-10-25 21:04:35 - modeling.phases.model_assembler - INFO -     ✓ Assembled 4 dimensions
+2025-10-25 21:04:35 - modeling.phases.model_assembler - INFO -   Processing dimension batch 3 (2 tables)...
+2025-10-25 21:04:41 - modeling.phases.model_assembler - INFO -     LLM response length: 874 chars
+2025-10-25 21:04:41 - modeling.phases.model_assembler - INFO -     ✓ Assembled 2 dimensions
+2025-10-25 21:04:41 - modeling.phases.model_assembler - INFO -   ✓ Assembled 10 dimensions
+2025-10-25 21:04:41 - modeling.phases.model_assembler - INFO - Phase 5c: Assembling facts...
+2025-10-25 21:04:41 - modeling.phases.model_assembler - INFO -   Processing fact batch 1 (1 tables)...
+2025-10-25 21:04:41 - modeling.phases.model_assembler - INFO -     Prompt size: 3,900 chars
+2025-10-25 21:05:00 - modeling.phases.model_assembler - INFO -     LLM response length: 2945 chars
+2025-10-25 21:05:00 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:05:00 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:05:00 - modeling.phases.model_assembler - INFO -   Processing fact batch 2 (1 tables)...
+2025-10-25 21:05:00 - modeling.phases.model_assembler - INFO -     Prompt size: 3,945 chars
+2025-10-25 21:05:16 - modeling.phases.model_assembler - INFO -     LLM response length: 3013 chars
+2025-10-25 21:05:16 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:05:16 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:05:16 - modeling.phases.model_assembler - INFO -   Processing fact batch 3 (1 tables)...
+2025-10-25 21:05:16 - modeling.phases.model_assembler - INFO -     Prompt size: 2,746 chars
+2025-10-25 21:05:29 - modeling.phases.model_assembler - INFO -     LLM response length: 2672 chars
+2025-10-25 21:05:29 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:05:29 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:05:29 - modeling.phases.model_assembler - INFO -   Processing fact batch 4 (1 tables)...
+2025-10-25 21:05:29 - modeling.phases.model_assembler - INFO -     Prompt size: 2,691 chars
+2025-10-25 21:05:41 - modeling.phases.model_assembler - INFO -     LLM response length: 2608 chars
+2025-10-25 21:05:41 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:05:41 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:05:41 - modeling.phases.model_assembler - INFO -   Processing fact batch 5 (1 tables)...
+2025-10-25 21:05:41 - modeling.phases.model_assembler - INFO -     Prompt size: 2,360 chars
+2025-10-25 21:05:51 - modeling.phases.model_assembler - INFO -     LLM response length: 2490 chars
+2025-10-25 21:05:51 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:05:51 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:05:51 - modeling.phases.model_assembler - INFO -   Processing fact batch 6 (1 tables)...
+2025-10-25 21:05:51 - modeling.phases.model_assembler - INFO -     Prompt size: 4,821 chars
+2025-10-25 21:06:04 - modeling.phases.model_assembler - INFO -     LLM response length: 3035 chars
+2025-10-25 21:06:04 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:06:04 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:06:04 - modeling.phases.model_assembler - INFO -   Processing fact batch 7 (1 tables)...
+2025-10-25 21:06:04 - modeling.phases.model_assembler - INFO -     Prompt size: 3,898 chars
+2025-10-25 21:06:16 - modeling.phases.model_assembler - INFO -     LLM response length: 3017 chars
+2025-10-25 21:06:16 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:06:16 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:06:16 - modeling.phases.model_assembler - INFO -   Processing fact batch 8 (1 tables)...
+2025-10-25 21:06:16 - modeling.phases.model_assembler - INFO -     Prompt size: 2,750 chars
+2025-10-25 21:06:29 - modeling.phases.model_assembler - INFO -     LLM response length: 2671 chars
+2025-10-25 21:06:29 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:06:29 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:06:29 - modeling.phases.model_assembler - INFO -   Processing fact batch 9 (1 tables)...
+2025-10-25 21:06:29 - modeling.phases.model_assembler - INFO -     Prompt size: 2,490 chars
+2025-10-25 21:06:44 - modeling.phases.model_assembler - INFO -     LLM response length: 2420 chars
+2025-10-25 21:06:44 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:06:44 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:06:44 - modeling.phases.model_assembler - INFO -   Processing fact batch 10 (1 tables)...
+2025-10-25 21:06:44 - modeling.phases.model_assembler - INFO -     Prompt size: 3,042 chars
+2025-10-25 21:06:58 - modeling.phases.model_assembler - INFO -     LLM response length: 2945 chars
+2025-10-25 21:06:58 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:06:58 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:06:58 - modeling.phases.model_assembler - INFO -   Processing fact batch 11 (1 tables)...
+2025-10-25 21:06:58 - modeling.phases.model_assembler - INFO -     Prompt size: 2,532 chars
+2025-10-25 21:07:11 - modeling.phases.model_assembler - INFO -     LLM response length: 2562 chars
+2025-10-25 21:07:11 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:07:11 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:07:11 - modeling.phases.model_assembler - INFO -   Processing fact batch 12 (1 tables)...
+2025-10-25 21:07:11 - modeling.phases.model_assembler - INFO -     Prompt size: 10,257 chars
+2025-10-25 21:07:26 - modeling.phases.model_assembler - INFO -     LLM response length: 2970 chars
+2025-10-25 21:07:26 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:07:26 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:07:26 - modeling.phases.model_assembler - INFO -   Processing fact batch 13 (1 tables)...
+2025-10-25 21:07:26 - modeling.phases.model_assembler - INFO -     Prompt size: 5,154 chars
+2025-10-25 21:07:44 - modeling.phases.model_assembler - INFO -     LLM response length: 3818 chars
+2025-10-25 21:07:44 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:07:44 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:07:44 - modeling.phases.model_assembler - INFO -   Processing fact batch 14 (1 tables)...
+2025-10-25 21:07:44 - modeling.phases.model_assembler - INFO -     Prompt size: 2,532 chars
+2025-10-25 21:07:54 - modeling.phases.model_assembler - INFO -     LLM response length: 2235 chars
+2025-10-25 21:07:54 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:07:54 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:07:54 - modeling.phases.model_assembler - INFO -   Processing fact batch 15 (1 tables)...
+2025-10-25 21:07:54 - modeling.phases.model_assembler - INFO -     Prompt size: 3,569 chars
+2025-10-25 21:08:15 - modeling.phases.model_assembler - INFO -     LLM response length: 3546 chars
+2025-10-25 21:08:15 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:08:15 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:08:15 - modeling.phases.model_assembler - INFO -   Processing fact batch 16 (1 tables)...
+2025-10-25 21:08:15 - modeling.phases.model_assembler - INFO -     Prompt size: 11,849 chars
+2025-10-25 21:08:34 - modeling.phases.model_assembler - INFO -     LLM response length: 3152 chars
+2025-10-25 21:08:34 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:08:34 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:08:34 - modeling.phases.model_assembler - INFO -   Processing fact batch 17 (1 tables)...
+2025-10-25 21:08:34 - modeling.phases.model_assembler - INFO -     Prompt size: 2,969 chars
+2025-10-25 21:08:51 - modeling.phases.model_assembler - INFO -     LLM response length: 2889 chars
+2025-10-25 21:08:51 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:08:51 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:08:51 - modeling.phases.model_assembler - INFO -   Processing fact batch 18 (1 tables)...
+2025-10-25 21:08:51 - modeling.phases.model_assembler - INFO -     Prompt size: 6,380 chars
+2025-10-25 21:09:10 - modeling.phases.model_assembler - INFO -     LLM response length: 3079 chars
+2025-10-25 21:09:10 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:09:10 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:09:10 - modeling.phases.model_assembler - INFO -   Processing fact batch 19 (1 tables)...
+2025-10-25 21:09:10 - modeling.phases.model_assembler - INFO -     Prompt size: 3,517 chars
+2025-10-25 21:09:29 - modeling.phases.model_assembler - INFO -     LLM response length: 2917 chars
+2025-10-25 21:09:29 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:09:29 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:09:29 - modeling.phases.model_assembler - INFO -   Processing fact batch 20 (1 tables)...
+2025-10-25 21:09:29 - modeling.phases.model_assembler - INFO -     Prompt size: 3,769 chars
+2025-10-25 21:09:50 - modeling.phases.model_assembler - INFO -     LLM response length: 3758 chars
+2025-10-25 21:09:50 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:09:50 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:09:50 - modeling.phases.model_assembler - INFO -   Processing fact batch 21 (1 tables)...
+2025-10-25 21:09:50 - modeling.phases.model_assembler - INFO -     Prompt size: 2,402 chars
+2025-10-25 21:10:01 - modeling.phases.model_assembler - INFO -     LLM response length: 2323 chars
+2025-10-25 21:10:01 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:10:01 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:10:01 - modeling.phases.model_assembler - INFO -   Processing fact batch 22 (1 tables)...
+2025-10-25 21:10:01 - modeling.phases.model_assembler - INFO -     Prompt size: 5,957 chars
+2025-10-25 21:10:12 - modeling.phases.model_assembler - INFO -     LLM response length: 2845 chars
+2025-10-25 21:10:12 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:10:12 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:10:12 - modeling.phases.model_assembler - INFO -   Processing fact batch 23 (1 tables)...
+2025-10-25 21:10:12 - modeling.phases.model_assembler - INFO -     Prompt size: 2,987 chars
+2025-10-25 21:10:22 - modeling.phases.model_assembler - INFO -     LLM response length: 2893 chars
+2025-10-25 21:10:22 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:10:22 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:10:22 - modeling.phases.model_assembler - INFO -   Processing fact batch 24 (1 tables)...
+2025-10-25 21:10:22 - modeling.phases.model_assembler - INFO -     Prompt size: 12,390 chars
+2025-10-25 21:10:43 - modeling.phases.model_assembler - INFO -     LLM response length: 3218 chars
+2025-10-25 21:10:43 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:10:43 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:10:43 - modeling.phases.model_assembler - INFO -   Processing fact batch 25 (1 tables)...
+2025-10-25 21:10:43 - modeling.phases.model_assembler - INFO -     Prompt size: 9,226 chars
+2025-10-25 21:11:02 - modeling.phases.model_assembler - INFO -     LLM response length: 3534 chars
+2025-10-25 21:11:02 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:11:02 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:11:02 - modeling.phases.model_assembler - INFO -   Processing fact batch 26 (1 tables)...
+2025-10-25 21:11:02 - modeling.phases.model_assembler - INFO -     Prompt size: 2,203 chars
+2025-10-25 21:11:16 - modeling.phases.model_assembler - INFO -     LLM response length: 2182 chars
+2025-10-25 21:11:16 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:11:16 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:11:16 - modeling.phases.model_assembler - INFO -   Processing fact batch 27 (1 tables)...
+2025-10-25 21:11:16 - modeling.phases.model_assembler - INFO -     Prompt size: 2,196 chars
+2025-10-25 21:11:26 - modeling.phases.model_assembler - INFO -     LLM response length: 2115 chars
+2025-10-25 21:11:26 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:11:26 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:11:26 - modeling.phases.model_assembler - INFO -   Processing fact batch 28 (1 tables)...
+2025-10-25 21:11:26 - modeling.phases.model_assembler - INFO -     Prompt size: 3,038 chars
+2025-10-25 21:11:39 - modeling.phases.model_assembler - INFO -     LLM response length: 2483 chars
+2025-10-25 21:11:39 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:11:39 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:11:39 - modeling.phases.model_assembler - INFO -   Processing fact batch 29 (1 tables)...
+2025-10-25 21:11:39 - modeling.phases.model_assembler - INFO -     Prompt size: 1,899 chars
+2025-10-25 21:11:48 - modeling.phases.model_assembler - INFO -     LLM response length: 1832 chars
+2025-10-25 21:11:48 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:11:48 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:11:48 - modeling.phases.model_assembler - INFO -   Processing fact batch 30 (1 tables)...
+2025-10-25 21:11:48 - modeling.phases.model_assembler - INFO -     Prompt size: 1,694 chars
+2025-10-25 21:11:58 - modeling.phases.model_assembler - INFO -     LLM response length: 1632 chars
+2025-10-25 21:11:58 - modeling.phases.model_assembler - INFO -     JSON extraction method: direct_parse
+2025-10-25 21:11:58 - modeling.phases.model_assembler - INFO -     ✓ Assembled 1 facts
+2025-10-25 21:11:58 - modeling.phases.model_assembler - INFO -   ✓ Assembled 30 facts
+2025-10-25 21:11:58 - modeling.phases.model_assembler - INFO - Phase 5d: Generating metrics...
+2025-10-25 21:12:22 - modeling.phases.model_assembler - INFO -   ✓ Generated 5 metrics
+2025-10-25 21:12:22 - modeling.phases.model_assembler - INFO - Phase 5e: Building final model...
+2025-10-25 21:12:22 - modeling.phases.model_assembler - INFO - ✓ Model assembly complete: 21 entities, 10 dimensions, 30 facts, 5 metrics
+2025-10-25 21:12:22 - modeling.incremental_modeler - INFO - Validating semantic model...
+2025-10-25 21:12:23 - modeling.incremental_modeler - WARNING - Schema validation failed: Validation error: 'TicketID→dbo.Ticket.ID' is not of type 'object'
+2025-10-25 21:12:23 - modeling.incremental_modeler - INFO - Semantic model created successfully via incremental approach
+2025-10-25 21:12:23 - orchestration.pipeline - INFO - Saving semantic model to cache...
+2025-10-25 21:12:23 - caching.cache_manager - INFO - Caching semantic model: 00bcea3e08424449...
+2025-10-25 21:12:23 - caching.cache_manager - INFO - Saved cache to .cache/semantic_cache.pkl: 1 entries, 78,849 bytes
+2025-10-25 21:12:23 - orchestration.pipeline - INFO - Semantic model created successfully
+2025-10-25 21:12:23 - orchestration.pipeline - INFO - Answering question: show me customer names and their total sales
+2025-10-25 21:12:23 - qa.sql_answerer - INFO - Mapped question terms to 44 columns: ['dbo.ContractDocument.Filename', 'dbo.CampaignScoreHistoryDetail.PreviousSalesmanName', 'dbo.CaseAttachment.FileName', 'dbo.TargetGroupItem.StreetName', 'dbo.TargetGroupItem.CustomerName']...
+2025-10-25 21:12:23 - qa.sql_answerer - INFO - Q&A attempt 1/2
+2025-10-25 21:12:34 - qa.sql_answerer - INFO - LLM refused to answer - requesting clarification
+2025-10-25 21:12:34 - orchestration.pipeline - INFO - Answer status: refuse

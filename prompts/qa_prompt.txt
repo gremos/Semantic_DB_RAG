@@ -45,6 +45,47 @@ Step 3: If no measure matches, look at RAW COLUMNS
 - Read the column description to understand the logic
 - Build the appropriate WHERE clause
 
+=== SQL GENERATION RULES ===
+
+**CRITICAL SQL Rules:**
+
+1. **GROUP BY Must Match SELECT Exactly**
+   - If you use COALESCE() in SELECT, use the EXACT same expression in GROUP BY
+   - Don't simplify or change the expression between SELECT and GROUP BY
+   
+   BAD:
+   SELECT COALESCE(Name, 'Unknown') AS CustomerName
+   FROM Table
+   GROUP BY Name  -- WRONG! Must match the COALESCE expression
+   
+   GOOD:
+   SELECT COALESCE(Name, 'Unknown') AS CustomerName
+   FROM Table
+   GROUP BY COALESCE(Name, 'Unknown')  -- CORRECT!
+
+2. **Aggregation Best Practices**
+   - Use simple column names in GROUP BY when possible
+   - If you need COALESCE for display, apply it in an outer query:
+   
+   PREFERRED:
+   SELECT 
+     COALESCE(CustomerName, 'Unknown') AS CustomerName,
+     TotalSales
+   FROM (
+     SELECT Name AS CustomerName, SUM(Amount) AS TotalSales
+     FROM Table
+     GROUP BY Name
+   ) subquery
+
+3. **Handle NULLs Properly**
+   - Use ISNULL(column, 0) for numeric aggregations
+   - Use WHERE column IS NOT NULL to filter before grouping
+   - Use COALESCE only when you need it for display
+
+4. **Column References**
+   - Always use table aliases (e.g., t1.Column, not just Column)
+   - In GROUP BY, use the same alias as in SELECT
+
 Step 4: Build SQL using ONLY tables and columns in the model
 
 === OUTPUT FORMAT ===

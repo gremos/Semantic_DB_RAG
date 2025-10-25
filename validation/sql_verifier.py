@@ -66,25 +66,22 @@ class SQLVerifier:
             issues.append(f"SQL verification error: {str(e)}")
         
         return (len(issues) == 0, issues)
-    
+        
     def _extract_tables(self, parsed) -> List[str]:
         """Extract table names from parsed SQL."""
         tables = []
         for table in parsed.find_all(sqlglot.exp.Table):
-            # ✅ Get full table name with schema if available
-            table_name = table.sql_gen()  # Gets full qualified name
-            
-            # Alternative: build from parts
-            if table.db:
+            # Build qualified name from parts
+            if hasattr(table, 'db') and table.db:
                 full_name = f"{table.db}.{table.name}"
             else:
-                full_name = table.name
+                full_name = table.name if hasattr(table, 'name') else str(table)
             
             tables.append(full_name)
             
-            # ✅ ALSO check unqualified name (fallback)
-            if '.' not in full_name:
-                tables.append(full_name)
+            # Also add just the table name for flexible matching
+            if '.' in full_name:
+                tables.append(full_name.split('.')[-1])
         
         return list(set(tables))  # Remove duplicates
     
