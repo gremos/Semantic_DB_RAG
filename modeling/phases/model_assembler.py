@@ -10,8 +10,8 @@ class ModelAssembler:
     """Phase 5: Hierarchical incremental assembly - small focused LLM calls."""
     
     # Batch sizes to stay under token limits
-    ENTITY_BATCH_SIZE = 10
-    DIMENSION_BATCH_SIZE = 10
+    ENTITY_BATCH_SIZE = 5
+    DIMENSION_BATCH_SIZE = 5
     FACT_BATCH_SIZE = 5  # Facts are most complex
     
     def __init__(self, llm_client: AzureLLMClient):
@@ -27,6 +27,9 @@ class ModelAssembler:
 Input: Table classifications and column info for ENTITY tables.
 Output: JSON array of entity objects.
 
+CRITICAL: Your response must start with [ and end with ]
+DO NOT include any explanations, markdown, or text outside the JSON array.
+
 Each entity MUST have:
 - name: Business name (e.g., "Customer")
 - source: Full table name (e.g., "dbo.Customers")
@@ -34,7 +37,18 @@ Each entity MUST have:
 - description: One sentence explaining this entity
 - columns: Array with name, type, semantic_role, description
 
-Return ONLY JSON array: [{"name": "...", "source": "...", ...}]"""
+Example response format:
+[
+  {
+    "name": "Customer",
+    "source": "dbo.Customers",
+    "primary_key": ["CustomerID"],
+    "description": "Customer master data",
+    "columns": [...]
+  }
+]
+
+START YOUR RESPONSE WITH: ["""
 
         # Dimension assembly prompt
         self.dimension_prompt = """You are assembling DIMENSION records for a semantic model.
@@ -90,10 +104,24 @@ Each metric MUST have:
 - purpose: What it measures
 - logic: How to calculate it
 - inputs: Which fact.measure combinations
-- constraints: Filters to apply
+- constraints: ARRAY of filter strings (e.g., ["Status = 'Active'", "Amount > 0"])
 - explain: Detailed explanation
 
-Return ONLY JSON array: [{"name": "...", "purpose": "...", ...}]"""
+CRITICAL: constraints MUST be an array, NOT a string!
+
+Example:
+[
+  {
+    "name": "Total Active Revenue",
+    "purpose": "Revenue from active contracts",
+    "logic": "Sum all active contract amounts",
+    "inputs": ["Sales.Revenue"],
+    "constraints": ["Status = 'Active'", "Amount > 0"],
+    "explain": "..."
+  }
+]
+
+Return ONLY JSON array starting with ["""
 
     def assemble_model(
         self,
@@ -189,7 +217,19 @@ Return ONLY JSON array: [{"name": "...", "purpose": "...", ...}]"""
 Return JSON array of entities."""
                 
                 response = self.llm.generate(self.entity_prompt, user_prompt)
-                result, method = self.json_extractor.extract(response, log_failures=False)
+                logger.info(f"    LLM response length: {len(response)} chars")
+                if len(response) == 0:
+                    logger.error("    LLM returned EMPTY response!")
+                    logger.error(f"    Prompt length: {len(user_prompt)} chars")
+                    logger.error(f"    System prompt length: {len(self.entity_prompt)} chars")
+                elif len(response) < 100:
+                    logger.warning(f"    LLM response suspiciously short: '{response}'")
+                else:
+                    logger.debug(f"    Response preview: {response[:200]}...")
+                
+                result, method = self.json_extractor.extract(response, log_failures=True)
+                if not result:
+                    logger.warning(f"    JSON extraction failed. Full response:\n{response}")
                 
                 if result and isinstance(result, list):
                     all_entities.extend(result)
@@ -328,16 +368,22 @@ Return JSON array of metrics."""
             result, method = self.json_extractor.extract(response, log_failures=False)
             
             if result and isinstance(result, list):
-                return result[:5]  # Max 5 metrics
-            elif result and isinstance(result, dict) and "metrics" in result:
-                return result["metrics"][:5]
-            else:
-                # Fallback: Generate basic metrics
-                return self._fallback_metrics(facts)
-        
+                # ✅ ADD: Fix constraints if they're strings
+                for metric in result[:5]:
+                    if isinstance(metric.get("constraints"), str):
+                        # Split string into array
+                        constraints_str = metric["constraints"]
+                        if ";" in constraints_str:
+                            metric["constraints"] = [c.strip() for c in constraints_str.split(";")]
+                        elif constraints_str:
+                            metric["constraints"] = [constraints_str]
+                        else:
+                            metric["constraints"] = []
+                        logger.warning(f"Auto-corrected constraints from string to array for metric: {metric['name']}")
+                
+                return result[:5]
         except Exception as e:
-            logger.error(f"Metrics generation failed: {e}")
-            return self._fallback_metrics(facts)
+            print(e)
     
     # ==================== CONTEXT BUILDERS ====================
     
@@ -352,6 +398,9 @@ Return JSON array of metrics."""
         for table_name in entity_names:
             table_data = compressed_discovery["tables"].get(table_name, {})
             
+            # ✅ LIMIT to 10 columns maximum
+            columns = table_data.get("columns", [])[:10]
+            
             # Only include essential info
             context = {
                 "table_name": table_name,
@@ -363,8 +412,9 @@ Return JSON array of metrics."""
                         "semantic_role": c.get("semantic_role"),
                         "is_pk": c.get("is_pk", False)
                     }
-                    for c in table_data.get("columns", [])[:15]  # Limit to 15 columns
-                ]
+                    for c in columns  # ✅ Already limited to 10
+                ],
+                "column_count": len(table_data.get("columns", []))  # ✅ Show total
             }
             
             batch_context.append(context)

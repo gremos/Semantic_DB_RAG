@@ -33,11 +33,26 @@ class SQLVerifier:
             parsed = sqlglot.parse_one(sql, dialect=dialect)
             tables = self._extract_tables(parsed)
             
-            # Step 3: Check tables exist in model
+            # Get model sources
             model_sources = self._get_model_sources()
+            
+            # ✅ IMPROVED: Check with and without schema
             for table in tables:
-                if table not in model_sources:
-                    issues.append(f"Table '{table}' not in semantic model")
+                # Try exact match first
+                if table in model_sources:
+                    continue
+                
+                # Try with common schema prefixes
+                found = False
+                for source in model_sources:
+                    # Check if table matches the end of source (e.g., "Table" matches "dbo.Table")
+                    if source.endswith('.' + table) or source == table:
+                        found = True
+                        break
+                
+                if not found:
+                    issues.append(f"Table '{table}' not in semantic model. Available tables: {list(model_sources)[:5]}")
+
             
             # Step 4: Check joins match relationships
             joins = self._extract_joins(parsed)
@@ -56,8 +71,22 @@ class SQLVerifier:
         """Extract table names from parsed SQL."""
         tables = []
         for table in parsed.find_all(sqlglot.exp.Table):
-            tables.append(table.name)
-        return tables
+            # ✅ Get full table name with schema if available
+            table_name = table.sql_gen()  # Gets full qualified name
+            
+            # Alternative: build from parts
+            if table.db:
+                full_name = f"{table.db}.{table.name}"
+            else:
+                full_name = table.name
+            
+            tables.append(full_name)
+            
+            # ✅ ALSO check unqualified name (fallback)
+            if '.' not in full_name:
+                tables.append(full_name)
+        
+        return list(set(tables))  # Remove duplicates
     
     def _extract_joins(self, parsed) -> List[Dict[str, str]]:
         """Extract join conditions from parsed SQL."""

@@ -71,5 +71,6 @@ Return JSON only."""
             "from": from_table,
             "to": to_table,
             "cardinality": "many-to-one",
+            "type": "foreign_key",
             "business_meaning": f"Each {from_table} record references one {to_table} record via {fk_column}"
         }
