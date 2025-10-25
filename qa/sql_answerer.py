@@ -303,12 +303,26 @@ class SQLAnswerer:
             "dialect": semantic_model.get("audit", {}).get("dialect", "tsql")
         }
         
+        potential_joins_guide = ""
+        if compressed_discovery:
+            potential_joins = self._infer_potential_joins(semantic_model, compressed_discovery)
+            if potential_joins:
+                potential_joins_guide = "\n## Potential Join Paths (Inferred from Naming):\n"
+                for join in potential_joins[:10]:  # Top 10
+                    potential_joins_guide += (
+                        f"- {join['from_table']}.{join['from_column']} → "
+                        f"{join['to_table']}.{join['to_column']} "
+                        f"(Confidence: {join['confidence']})\n"
+                    )
+    
         prompt_parts = [
             "# Semantic Model Summary",
             json.dumps(model_summary, indent=2),
             "",
             "# IMPORTANT: Focused Column Guide for This Question",
             focused_guide,
+            "",
+            potential_joins_guide,  # FIX: Add this section
             "",
             "# Natural Language Hints",
             f"Detected terms: {', '.join(column_hints.get('matched_terms', []))}",
@@ -323,14 +337,17 @@ class SQLAnswerer:
             "CRITICAL INSTRUCTIONS:",
             "1. Use the 'Focused Column Guide' above - it shows the EXACT columns you need",
             "2. Pay attention to 'Natural Language Hints' - these map question terms to columns",
-            "3. For 'product name' queries, use columns with semantic_role='name'",
-            "4. For status questions, use columns with semantic_role='status_indicator'",
-            "5. Build WHERE clauses using the column descriptions provided",
+            "3. **NEW**: Use 'Potential Join Paths' if relationships are missing from the model",
+            "4. For 'product name' queries, use columns with semantic_role='name'",
+            "5. For status questions, use columns with semantic_role='status_indicator'",
+            "6. Build WHERE clauses using the column descriptions provided",
             "",
             "Return ONLY valid JSON matching the Answer schema."
         ]
         
         return "\n".join(prompt_parts)
+    
+
     
     def _build_focused_column_guide(
         self,
@@ -443,3 +460,43 @@ class SQLAnswerer:
                 return json.loads(json_str)
         
         return None
+    
+    def _infer_potential_joins(
+            self,
+            semantic_model: Dict[str, Any],
+            compressed_discovery: Dict[str, Any]
+        ) -> List[Dict[str, str]]:
+            """
+            NEW: Infer potential joins from column name patterns.
+            This helps when the model lacks explicit relationships.
+            """
+            potential_joins = []
+            tables = compressed_discovery.get("tables", {})
+            
+            # Build index of potential FK columns by name
+            for from_table, from_data in tables.items():
+                for col in from_data.get("columns", []):
+                    col_name = col["name"]
+                    
+                    # Look for XxxID or XxxCode patterns
+                    if col_name.endswith("ID") or col_name.endswith("Code"):
+                        # Try to find matching table
+                        if col_name.endswith("ID"):
+                            target_name = col_name[:-2]
+                        else:
+                            target_name = col_name[:-4]
+                        
+                        # Search for matching table
+                        for to_table in tables.keys():
+                            table_name = to_table.split('.')[-1]
+                            if table_name.lower() == target_name.lower():
+                                potential_joins.append({
+                                    "from_table": from_table,
+                                    "from_column": col_name,
+                                    "to_table": to_table,
+                                    "to_column": "ID",  # Assume ID
+                                    "confidence": "medium",
+                                    "reason": f"Column name pattern: {col_name}"
+                                })
+            
+            return potential_joins

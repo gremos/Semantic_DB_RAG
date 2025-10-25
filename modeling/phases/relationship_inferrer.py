@@ -1,4 +1,4 @@
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, List, Optional
 from llm.azure_client import AzureLLMClient
 from utils.json_extractor import JSONExtractor
 import logging
@@ -74,3 +74,81 @@ Return JSON only."""
             "type": "foreign_key",
             "business_meaning": f"Each {from_table} record references one {to_table} record via {fk_column}"
         }
+    
+    def infer_relationships_heuristic(
+            self,
+            compressed_discovery: Dict[str, Any]
+        ) -> List[Dict[str, Any]]:
+            """
+            NEW: Infer relationships from column naming patterns when no FKs exist.
+            
+            Patterns:
+            - CustomerID in table A → Customer.ID
+            - ProductCode in table B → Product.Code
+            - BusinessPointID → BusinessPoint.ID
+            """
+            inferred = []
+            tables = compressed_discovery.get("tables", {})
+            
+            logger.info("  Using heuristic relationship inference (no FKs found)")
+            
+            for from_table, from_data in tables.items():
+                for col in from_data.get("columns", []):
+                    col_name = col["name"]
+                    col_lower = col_name.lower()
+                    
+                    # Skip if it's a PK
+                    if col_name in from_data.get("pk", []):
+                        continue
+                    
+                    # Pattern 1: ColumnName ends with "ID" → look for table "Column"
+                    if col_name.endswith("ID") and len(col_name) > 2:
+                        target_table_name = col_name[:-2]  # Remove "ID"
+                        target_full = self._find_table_by_name(tables, target_table_name)
+                        
+                        if target_full:
+                            inferred.append({
+                                "from": from_table,
+                                "to": target_full,
+                                "cardinality": "many-to-one",
+                                "type": "inferred_from_naming",
+                                "business_meaning": f"Each {from_table} references one {target_full} via {col_name}",
+                                "inferred_via": f"{col_name} → {target_full}.ID (naming pattern)"
+                            })
+                            logger.debug(f"    Inferred: {from_table}.{col_name} → {target_full}")
+                    
+                    # Pattern 2: ColumnName ends with "Code" → look for table "Column"  
+                    elif col_name.endswith("Code") and len(col_name) > 4:
+                        target_table_name = col_name[:-4]
+                        target_full = self._find_table_by_name(tables, target_table_name)
+                        
+                        if target_full:
+                            inferred.append({
+                                "from": from_table,
+                                "to": target_full,
+                                "cardinality": "many-to-one",
+                                "type": "inferred_from_naming",
+                                "business_meaning": f"Each {from_table} references one {target_full} via {col_name}",
+                                "inferred_via": f"{col_name} → {target_full}.Code (naming pattern)"
+                            })
+                            logger.debug(f"    Inferred: {from_table}.{col_name} → {target_full}")
+            
+            logger.info(f"  Heuristically inferred {len(inferred)} relationships")
+            return inferred
+        
+    def _find_table_by_name(
+            self, 
+            tables: Dict[str, Any], 
+            partial_name: str
+        ) -> Optional[str]:
+            """Find a table that matches the partial name (case-insensitive)."""
+            partial_lower = partial_name.lower()
+            
+            for full_table_name in tables.keys():
+                # Extract table name without schema
+                table_name = full_table_name.split('.')[-1]
+                
+                if table_name.lower() == partial_lower:
+                    return full_table_name
+            
+            return None

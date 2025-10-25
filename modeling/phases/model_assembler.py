@@ -17,6 +17,15 @@ class ModelAssembler:
     def __init__(self, llm_client: AzureLLMClient):
         self.llm = llm_client
         self.json_extractor = JSONExtractor()
+        from config.settings import settings
+        self.ENTITY_BATCH_SIZE = settings.entity_batch_size
+        self.DIMENSION_BATCH_SIZE = settings.dimension_batch_size
+        self.FACT_BATCH_SIZE = settings.fact_batch_size
+        
+        # Add logging
+        logger.info(f"Batch sizes: entities={self.ENTITY_BATCH_SIZE}, "
+                   f"dimensions={self.DIMENSION_BATCH_SIZE}, facts={self.FACT_BATCH_SIZE}")
+        
         self._load_prompts()
     
     def _load_prompts(self):
@@ -220,76 +229,81 @@ Return ONLY JSON array starting with ["""
         """Assemble entities in small batches."""
         all_entities = []
         entity_names = list(entities_cls.keys())
-
+        
         for i in range(0, len(entity_names), self.ENTITY_BATCH_SIZE):
             batch = entity_names[i:i + self.ENTITY_BATCH_SIZE]
             logger.info(f"  Processing entity batch {i//self.ENTITY_BATCH_SIZE + 1} ({len(batch)} tables)...")
-
+            
             # Build compact batch context
             batch_context = self._build_entity_batch_context(batch, compressed_discovery)
+            
+            # FIX: Monitor prompt size
+            user_prompt = f"""Process these {len(batch)} ENTITY tables:
 
-            # Wrap the whole batch processing in a try/catch INSIDE the loop
-            try:
-                # Build prompt with size check
-                batch_json = json.dumps(batch_context, indent=2)
-                user_prompt = f"""Process these {len(batch)} ENTITY tables:
-
-    {batch_json}
+    {json.dumps(batch_context, indent=2)}
 
     Return JSON array of entities."""
-                prompt_size = len(user_prompt) + len(self.entity_prompt)
-                logger.info(f"    Prompt size: {prompt_size:,} chars")
-
-                if prompt_size > 15000:
-                    logger.warning(f"    ⚠ Large prompt ({prompt_size:,} chars) - may cause issues")
-
-                response = self.llm.generate(self.entity_prompt, user_prompt)
-                logger.info(f"    LLM response length: {len(response)} chars")
-
-                # CRITICAL: Check for empty or invalid responses BEFORE extraction
-                if len(response) == 0:
-                    logger.error("    ✗ LLM returned EMPTY response!")
-                    logger.error(f"    Prompt size was: {prompt_size:,} chars")
-                    logger.error(f"    Batch tables: {batch}")
-                    logger.error("    Using fallback for this batch")
-                    all_entities.extend(self._fallback_entities(batch, compressed_discovery))
-                    continue  # now valid
-
-                if len(response) < 50:
-                    logger.warning(f"    ⚠ LLM response suspiciously short: '{response}'")
-                    logger.warning("    Using fallback for this batch")
-                    all_entities.extend(self._fallback_entities(batch, compressed_discovery))
-                    continue  # now valid
-
-                logger.debug(f"    Response preview: {response[:200]}...")
-
-                # Try to extract JSON
-                result, method = self.json_extractor.extract(response, log_failures=True)
-                logger.info(f"    JSON extraction method: {method}")
-
-                if not result:
-                    logger.error(f"    ✗ JSON extraction failed using method: {method}")
-                    logger.error(f"    Full response (first 500 chars):\n{response[:500]}")
-                    logger.error("    Using fallback for this batch")
-                    all_entities.extend(self._fallback_entities(batch, compressed_discovery))
-                    continue  # now valid
-
-                # Handle successful extraction
-                if isinstance(result, list):
-                    all_entities.extend(result)
-                    logger.info(f"    ✓ Assembled {len(result)} entities")
-                elif isinstance(result, dict) and "entities" in result:
-                    all_entities.extend(result["entities"])
-                    logger.info(f"    ✓ Assembled {len(result['entities'])} entities")
-                else:
-                    logger.warning(f"    ⚠ Unexpected result type: {type(result)}")
-                    logger.warning("    Using fallback for this batch")
-                    all_entities.extend(self._fallback_entities(batch, compressed_discovery))
-
-            except Exception as e:
-                logger.error(f"    ✗ Batch failed with exception: {e}", exc_info=True)
+            
+            prompt_size = len(self.entity_prompt) + len(user_prompt)
+            logger.info(f"    Prompt size: {prompt_size:,} chars")
+            
+            # FIX: Warn and skip if too large
+            if prompt_size > 20000:
+                logger.error(f"    ✗ Prompt too large ({prompt_size:,} chars > 20,000 limit)")
+                logger.error(f"    Using fallback for this batch")
                 all_entities.extend(self._fallback_entities(batch, compressed_discovery))
-
+                continue
+            
+            # Call LLM with retry logic
+            success = False
+            for attempt in range(2):
+                try:
+                    response = self.llm.generate(self.entity_prompt, user_prompt)
+                    logger.info(f"    LLM response length: {len(response)} chars")
+                    
+                    # FIX: Check for empty response immediately
+                    if len(response) == 0:
+                        logger.error(f"    ✗ LLM returned EMPTY response (attempt {attempt + 1}/2)")
+                        if attempt == 0:
+                            logger.info(f"    Retrying with simplified prompt...")
+                            # Reduce batch size in half and retry
+                            half_batch = batch[:len(batch)//2] if len(batch) > 1 else batch
+                            batch_context = self._build_entity_batch_context(half_batch, compressed_discovery)
+                            user_prompt = f"Process these {len(half_batch)} ENTITY tables:\n{json.dumps(batch_context, indent=2)}\nReturn JSON array."
+                            continue
+                        else:
+                            logger.error(f"    Using fallback after 2 empty responses")
+                            all_entities.extend(self._fallback_entities(batch, compressed_discovery))
+                            success = True
+                            break
+                    
+                    # Try to extract JSON
+                    result, method = self.json_extractor.extract(response, log_failures=True)
+                    
+                    if result and isinstance(result, list):
+                        all_entities.extend(result)
+                        logger.info(f"    ✓ Assembled {len(result)} entities")
+                        success = True
+                        break
+                    elif result and isinstance(result, dict) and "entities" in result:
+                        all_entities.extend(result["entities"])
+                        logger.info(f"    ✓ Assembled {len(result['entities'])} entities")
+                        success = True
+                        break
+                    else:
+                        logger.warning(f"    ⚠ JSON extraction failed (attempt {attempt + 1}/2)")
+                        if attempt == 0:
+                            continue
+                
+                except Exception as e:
+                    logger.error(f"    ✗ Batch failed (attempt {attempt + 1}/2): {e}")
+                    if attempt == 0:
+                        continue
+            
+            if not success:
+                logger.warning(f"    Using fallback for batch after all attempts")
+                all_entities.extend(self._fallback_entities(batch, compressed_discovery))
+        
         return all_entities
 
     
@@ -499,8 +513,8 @@ Return JSON array of metrics."""
         for table_name in entity_names:
             table_data = compressed_discovery["tables"].get(table_name, {})
             
-            # ✅ LIMIT to 10 columns maximum
-            columns = table_data.get("columns", [])[:10]
+            # FIX: Reduce from 10 to 5 columns max per table
+            columns = table_data.get("columns", [])[:5]  # Was [:10]
             
             # Only include essential info
             context = {
@@ -513,9 +527,10 @@ Return JSON array of metrics."""
                         "semantic_role": c.get("semantic_role"),
                         "is_pk": c.get("is_pk", False)
                     }
-                    for c in columns  # ✅ Already limited to 10
+                    for c in columns
                 ],
-                "column_count": len(table_data.get("columns", []))  # ✅ Show total
+                "column_count": len(table_data.get("columns", [])),
+                "total_columns_note": f"Showing first 5 of {len(table_data.get('columns', []))} columns"
             }
             
             batch_context.append(context)
@@ -693,24 +708,23 @@ Return JSON array of metrics."""
                             filters.append(filter_cond)
                 measure["filters_applied"] = filters
             
-            # FIXED: Properly parse foreign keys
+            # FIX: Parse FK format properly
             foreign_keys = []
-            for fk in table_data.get("fks", []):
+            for fk_str in table_data.get("fks", []):
                 try:
-                    # Parse: "column→ref_table.ref_column"
-                    parts = fk.split('→')
+                    # Parse "column→ref_table.ref_column"
+                    parts = fk_str.split('→')
                     if len(parts) == 2:
-                        column = parts[0]
+                        fk_column = parts[0]
                         ref_parts = parts[1].split('.')
-                        if len(ref_parts) >= 2:
-                            # Get last 2 parts: schema.table or just table
-                            ref_table = '.'.join(ref_parts[:-1])
+                        if len(ref_parts) >= 1:
+                            ref_table = ref_parts[0]
                             foreign_keys.append({
-                                "column": column,
+                                "column": fk_column,
                                 "references": ref_table
                             })
                 except Exception as e:
-                    logger.warning(f"Failed to parse FK: {fk}")
+                    logger.warning(f"Failed to parse FK '{fk_str}': {e}")
                     continue
             
             facts.append({
@@ -728,7 +742,7 @@ Return JSON array of metrics."""
                     for c in table_data.get("columns", [])
                 ],
                 "measures": fact_measures,
-                "foreign_keys": foreign_keys  # FIXED: Now always objects
+                "foreign_keys": foreign_keys  # FIX: Use properly parsed FKs
             })
         
         return facts

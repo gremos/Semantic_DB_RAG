@@ -194,7 +194,7 @@ class IncrementalModeler:
         self,
         compressed: Dict[str, Any]
     ) -> List[Dict[str, Any]]:
-        """Phase 4: Infer relationships from foreign keys."""
+        """Phase 4: Infer relationships from foreign keys OR heuristics."""
         relationships = []
         
         # Collect all FKs
@@ -212,7 +212,13 @@ class IncrementalModeler:
                         ref_col = ref_parts[1]
                         all_fks.append((table_name, fk_col, ref_table, ref_col))
         
-        logger.info(f"  Inferring {len(all_fks)} relationships...")
+        # FIX: If no FKs found, use heuristic inference
+        if len(all_fks) == 0:
+            logger.info(f"  No foreign keys found - using heuristic relationship inference")
+            return self.relationship_inferrer.infer_relationships_heuristic(compressed)
+        
+        # Otherwise, process FKs normally
+        logger.info(f"  Inferring {len(all_fks)} relationships from foreign keys...")
         
         for idx, (from_table, fk_col, to_table, to_col) in enumerate(all_fks, 1):
             if idx % 20 == 0:
