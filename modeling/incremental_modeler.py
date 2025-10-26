@@ -54,6 +54,10 @@ class IncrementalModeler:
             logger.info("=== PHASE 4: RELATIONSHIP INFERENCE ===")
             relationships = self._phase4_infer_relationships(compressed_discovery)
             logger.info(f"  Inferred {len(relationships)} relationships")
+
+            logger.info(f"Sample relationship: {relationships[0] if relationships else 'None'}")
+            logger.info(f"Relationship types: {[type(r) for r in relationships[:3]]}")
+
             
             logger.info("=== PHASE 5: MODEL ASSEMBLY ===")
             success, model, error = self.assembler.assemble_model(
@@ -66,6 +70,9 @@ class IncrementalModeler:
             
             if not success:
                 return (False, {}, error)
+            
+            logger.info("Post-processing model...")
+            model = self._cleanup_model_structure(model)
             
             # Validate
             logger.info("Validating semantic model...")
@@ -221,20 +228,73 @@ class IncrementalModeler:
         logger.info(f"  Inferring {len(all_fks)} relationships from foreign keys...")
         
         for idx, (from_table, fk_col, to_table, to_col) in enumerate(all_fks, 1):
-            if idx % 20 == 0:
-                logger.info(f"    Progress: {idx}/{len(all_fks)} relationships inferred")
-            
             success, result, error = self.relationship_inferrer.infer_relationship(
-                from_table,
-                fk_col,
-                to_table,
-                to_col
+                from_table, fk_col, to_table, to_col
             )
             
             if success:
+                # ✅ ADD THIS VALIDATION
+                if isinstance(result, str):
+                    logger.error(f"BUG: Relationship returned as string: {result}")
+                    # Fix it on the fly
+                    result = {
+                        "from": from_table,
+                        "to": to_table,
+                        "cardinality": "many-to-one",
+                        "type": "foreign_key"
+                    }
+                
+                # ✅ VALIDATE STRUCTURE
+                required_keys = {"from", "to", "cardinality", "type"}
+                if not all(k in result for k in required_keys):
+                    logger.error(f"Invalid relationship structure: {result}")
+                    continue
+                    
                 relationships.append(result)
-            
-            if idx % 10 == 0:
-                time.sleep(0.5)
         
         return relationships
+    
+
+    def _cleanup_model_structure(self, model: Dict[str, Any]) -> Dict[str, Any]:
+        """Clean up any malformed structures from LLM output."""
+        
+        # Fix foreign keys in facts
+        for fact in model.get("facts", []):
+            cleaned_fks = []
+            for fk in fact.get("foreign_keys", []):
+                if isinstance(fk, dict):
+                    # Ensure column and references are strings
+                    col = fk.get("column")
+                    ref = fk.get("references")
+                    
+                    # If column is a dict, extract name
+                    if isinstance(col, dict):
+                        col = col.get("name", str(col))
+                        logger.warning(f"Fixed nested column object in FK: {fk}")
+                    
+                    # If references is a dict, extract name
+                    if isinstance(ref, dict):
+                        ref = ref.get("name", str(ref))
+                        logger.warning(f"Fixed nested references object in FK: {fk}")
+                    
+                    cleaned_fks.append({
+                        "column": str(col) if col else "UnknownColumn",
+                        "references": str(ref) if ref else "UnknownTable"
+                    })
+            
+            fact["foreign_keys"] = cleaned_fks
+        
+        # Fix filters_applied in measures
+        for fact in model.get("facts", []):
+            for measure in fact.get("measures", []):
+                filters = measure.get("filters_applied", [])
+                safe_filters = []
+                for f in filters:
+                    if isinstance(f, str):
+                        safe_filters.append(f)
+                    elif isinstance(f, dict):
+                        safe_filters.append(str(f))
+                        logger.warning(f"Fixed dict filter in measure: {f}")
+                measure["filters_applied"] = safe_filters
+        
+        return model

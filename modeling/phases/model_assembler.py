@@ -10,8 +10,8 @@ class ModelAssembler:
     """Phase 5: Hierarchical incremental assembly - small focused LLM calls."""
     
     # Batch sizes to stay under token limits
-    ENTITY_BATCH_SIZE = 4
-    DIMENSION_BATCH_SIZE = 4
+    ENTITY_BATCH_SIZE = 2
+    DIMENSION_BATCH_SIZE = 2
     FACT_BATCH_SIZE = 1  # Facts are most complex
     
     def __init__(self, llm_client: AzureLLMClient):
@@ -95,7 +95,7 @@ Each dimension MUST have:
 Return ONLY JSON array: [{"name": "...", "source": "...", ...}]"""
 
         # Fact assembly prompt (most complex)
-        self.fact_prompt = """You are assembling FACT records for a semantic model.
+        self.fact_prompt = """"You are assembling FACT records for a semantic model.
 
 Input: 
 - Table classification (fact)
@@ -113,10 +113,17 @@ Each fact MUST have:
 - measures: Array from pre-identified measures
 - foreign_keys: Array of FK references
 
-CRITICAL: For measures, ADD filters_applied from status columns:
-- If measure depends on columns with status_indicator role
-- Look up the active_filter from status column metadata
-- Add to filters_applied array
+CRITICAL FOREIGN KEY FORMAT:
+foreign_keys MUST be: [{"column": "string", "references": "string"}]
+Do NOT use nested objects for column or references!
+
+Example:
+{
+  "foreign_keys": [
+    {"column": "CustomerID", "references": "dbo.Customer"},
+    {"column": "ProductID", "references": "dbo.Product"}
+  ]
+}
 
 Return ONLY JSON array: [{"name": "...", "source": "...", ...}]"""
 
@@ -609,7 +616,7 @@ Return JSON array of metrics."""
                         "semantic_role": c.get("semantic_role"),
                         "is_fk": c.get("is_fk", False)
                     }
-                    for c in table_data.get("columns", [])[:10]  # REDUCED from 20
+                    for c in table_data.get("columns", [])[:5]  
                 ],
                 "measures": fact_measures,  # Already limited to 5
                 "status_columns": fact_status,
@@ -719,10 +726,13 @@ Return JSON array of metrics."""
                         ref_parts = parts[1].split('.')
                         if len(ref_parts) >= 1:
                             ref_table = ref_parts[0]
-                            foreign_keys.append({
-                                "column": fk_column,
-                                "references": ref_table
-                            })
+                            
+                            # ✅ CRITICAL: Ensure both are strings
+                            fk_obj = {
+                                "column": str(fk_column),  # Force string
+                                "references": str(ref_table)  # Force string
+                            }
+                            foreign_keys.append(fk_obj)
                 except Exception as e:
                     logger.warning(f"Failed to parse FK '{fk_str}': {e}")
                     continue

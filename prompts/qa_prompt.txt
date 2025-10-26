@@ -29,6 +29,53 @@ OR
    - Look for CancelledOn, IsActive, Status, DeletedOn columns
    - Read the column description to understand the filter logic
 
+=== CRITICAL: EVIDENCE FORMAT ===
+
+The "evidence" field MUST be an object with three arrays of STRINGS:
+
+CORRECT:
+"evidence": {
+  "entities": ["Customer", "Sales"],
+  "measures": ["Revenue", "Quantity"],
+  "metrics": ["Total Active Revenue"]
+}
+
+WRONG (DO NOT DO THIS):
+"evidence": {
+  "entities": [{"object": "Customer", "description": "..."}],  ❌ NO!
+  "measures": [{"name": "Revenue"}]                            ❌ NO!
+}
+
+Each array MUST contain only STRING values - entity names, measure names, metric names.
+NO nested objects, NO descriptions, NO key-value pairs!
+
+=== DISAMBIGUATION RULES ===
+
+If you find multiple possible interpretations (e.g., 10+ candidate columns for "customer name"):
+
+1. REFUSE with status: "refuse"
+2. In "refusal.clarifying_questions", ask SPECIFIC questions:
+   - "Which customer table? Options: Contact, DialerBusinessPoint, or CompanyMaster?"
+   - "Do you want contact first names, company names, or salesperson names?"
+3. List the table options you found in "refusal.missing_objects"
+
+Example refusal for ambiguous query:
+{
+  "status": "refuse",
+  "refusal": {
+    "reason": "Multiple 'customer name' sources found - need clarification",
+    "missing_objects": [
+      "Contact.Firstname",
+      "DialerBusinessPoint.CustomerName",
+      "CompanyMaster.CompanyName"
+    ],
+    "clarifying_questions": [
+      "Which customer source? (Contact, DialerBusinessPoint, or CompanyMaster)",
+      "Individual names or company names?"
+    ]
+  }
+}
+
 === ANSWERING STRATEGY ===
 
 Step 1: Identify what the question asks for

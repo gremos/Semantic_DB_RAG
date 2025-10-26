@@ -1,41 +1,10 @@
+...
 
-2025-10-25 19:56:11 - root - INFO - Loading discovery and model (will use cache if available)...
-2025-10-25 19:56:11 - orchestration.pipeline - INFO - Connecting to database...
-2025-10-25 19:56:12 - orchestration.pipeline - INFO - Database fingerprint: 00bcea3e08424449...
-2025-10-25 19:56:12 - orchestration.pipeline - INFO - Checking discovery cache...
-2025-10-25 19:56:12 - caching.cache_manager - INFO - Discovery cache HIT (created: 2025-10-25 12:15:49.279485)
-2025-10-25 19:56:12 - orchestration.pipeline - INFO - ✅ Using cached discovery data
-2025-10-25 19:56:12 - orchestration.pipeline - INFO - Semantic model fingerprint: 00bcea3e08424449...
-2025-10-25 19:56:12 - orchestration.pipeline - INFO - Checking semantic model cache...
-2025-10-25 19:56:12 - caching.cache_manager - INFO - Semantic model cache miss
-2025-10-25 19:56:12 - orchestration.pipeline - INFO - Creating semantic model via incremental approach...
-2025-10-25 19:56:12 - modeling.incremental_modeler - INFO - === PHASE 1: TABLE CLASSIFICATION ===
-2025-10-25 19:56:12 - modeling.incremental_modeler - INFO -   Classifying 61 tables...
-
-2025-10-25 19:59:14 - modeling.incremental_modeler - INFO -     Progress: 60/61 tables classified
-2025-10-25 19:59:19 - modeling.incremental_modeler - INFO -   Classified 61 tables
-2025-10-25 19:59:19 - modeling.incremental_modeler - INFO - === PHASE 2: MEASURE IDENTIFICATION ===
-2025-10-25 19:59:19 - modeling.incremental_modeler - INFO -   Identifying measures for 29 fact tables...
-2025-10-25 20:01:04 - modeling.incremental_modeler - INFO -     Progress: 10/29 facts processed
 2025-10-25 20:02:31 - modeling.phases.measure_identifier - WARNING - Failed to identify measures for dbo.Advertisement, using defaults
 2025-10-25 20:03:43 - modeling.phases.measure_identifier - WARNING - Failed to identify measures for dbo.ContractProduct, using defaults
-2025-10-25 20:04:17 - modeling.incremental_modeler - INFO -     Progress: 20/29 facts processed
-2025-10-25 20:06:12 - modeling.phases.measure_identifier - WARNING - Failed to identify measures for dbo.FreeTemplateAdvertisement, using defaults
-2025-10-25 20:06:57 - modeling.incremental_modeler - INFO -   Identified measures for 29 fact tables
-2025-10-25 20:06:57 - modeling.incremental_modeler - INFO - === PHASE 3: STATUS COLUMN ANALYSIS ===
-2025-10-25 20:06:57 - modeling.incremental_modeler - INFO -   Analyzing 112 status columns...
 
-2025-10-25 20:25:44 - modeling.incremental_modeler - INFO -     Progress: 110/112 status columns analyzed
-2025-10-25 20:26:09 - modeling.incremental_modeler - INFO -   Analyzed 112 status columns
-2025-10-25 20:26:09 - modeling.incremental_modeler - INFO - === PHASE 4: RELATIONSHIP INFERENCE ===
-2025-10-25 20:26:09 - modeling.incremental_modeler - INFO -   Inferring 0 relationships...
-2025-10-25 20:26:09 - modeling.incremental_modeler - INFO -   Inferred 0 relationships
-2025-10-25 20:26:09 - modeling.incremental_modeler - INFO - === PHASE 5: MODEL ASSEMBLY ===
-2025-10-25 20:26:09 - modeling.phases.model_assembler - INFO - Starting hierarchical incremental assembly...
-2025-10-25 20:26:09 - modeling.phases.model_assembler - INFO -   19 entities, 13 dimensions, 29 facts
-2025-10-25 20:26:09 - modeling.phases.model_assembler - INFO - Phase 5a: Assembling entities...
-2025-10-25 20:26:09 - modeling.phases.model_assembler - INFO -   Processing entity batch 1 (10 tables)...
-2025-10-25 20:26:09 - modeling.phases.model_assembler - INFO -     Prompt size: 16,565 chars
+2025-10-25 20:06:12 - modeling.phases.measure_identifier - WARNING - Failed to identify measures for dbo.FreeTemplateAdvertisement, using defaults
+
 2025-10-25 20:26:09 - modeling.phases.model_assembler - WARNING -     ⚠ Large prompt (16,565 chars) - may cause issues
 2025-10-25 20:26:53 - modeling.phases.model_assembler - INFO -     LLM response length: 0 chars
 2025-10-25 20:26:53 - modeling.phases.model_assembler - ERROR -     ✗ LLM returned EMPTY response!
@@ -50,60 +19,32 @@
 2025-10-25 20:27:47 - modeling.phases.model_assembler - ERROR -     Prompt size was: 15,583 chars
 2025-10-25 20:27:47 - modeling.phases.model_assembler - ERROR -     Batch tables: ['dbo.Ticket', 'dbo.BusinessPointIdentification', 'dbo.DialerBusinessPoint', 'dbo.BusinessPointListing', 'dbo.FreeListingSearchItem', 'dbo.PointEmail', 'dbo.Contact', 'dbo.ContactRelationship', 'HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31672']
 2025-10-25 20:27:47 - modeling.phases.model_assembler - ERROR -     Using fallback for this batch
-2025-10-25 20:27:47 - modeling.phases.model_assembler - INFO -   ✓ Assembled 19 entities
-2025-10-25 20:27:47 - modeling.phases.model_assembler - INFO - Phase 5b: Assembling dimensions...
-2025-10-25 20:27:47 - modeling.phases.model_assembler - INFO -   Processing dimension batch 1 (10 tables)...
-2025-10-25 20:28:18 - modeling.phases.model_assembler - INFO -     LLM response length: 9075 chars
-2025-10-25 20:28:18 - modeling.phases.model_assembler - INFO -     ✓ Assembled 10 dimensions
 
-2025-10-25 20:30:23 - caching.cache_manager - INFO - Cache directory initialized: /mnt/c/code/Personal/Semantic_DB_RAG/.cache
-2025-10-25 20:30:23 - caching.cache_manager - INFO - Loading existing caches...
-2025-10-25 20:30:23 - caching.cache_manager - INFO - Loaded cache from .cache/discovery_cache.pkl: 1 entries
-2025-10-25 20:30:23 - caching.cache_manager - INFO - No existing cache file: .cache/semantic_cache.pkl
-2025-10-25 20:30:23 - caching.cache_manager - INFO - Discovery cache entries: 1
-2025-10-25 20:30:23 - caching.cache_manager - INFO - Semantic cache entries: 0
-2025-10-25 20:30:23 - root - INFO - Loading discovery and model (will use cache if available)...
-2025-10-25 20:30:23 - orchestration.pipeline - INFO - Connecting to database...
-2025-10-25 20:30:23 - orchestration.pipeline - INFO - Database fingerprint: 00bcea3e08424449...
-2025-10-25 20:30:23 - orchestration.pipeline - INFO - Checking discovery cache...
-2025-10-25 20:30:23 - caching.cache_manager - INFO - Discovery cache HIT (created: 2025-10-25 12:15:49.279485)
-2025-10-25 20:30:23 - orchestration.pipeline - INFO - ✅ Using cached discovery data
-2025-10-25 20:30:23 - orchestration.pipeline - INFO - Semantic model fingerprint: 00bcea3e08424449...
-2025-10-25 20:30:23 - orchestration.pipeline - INFO - Checking semantic model cache...
-2025-10-25 20:30:23 - caching.cache_manager - INFO - Semantic model cache miss
-2025-10-25 20:30:23 - orchestration.pipeline - INFO - Creating semantic model via incremental approach...
-2025-10-25 20:30:23 - modeling.incremental_modeler - INFO - === PHASE 1: TABLE CLASSIFICATION ===
-2025-10-25 20:30:23 - modeling.incremental_modeler - INFO -   Classifying 61 tables...
-
-2025-10-25 20:33:53 - modeling.incremental_model    Progress: 10/30 facts processed
 2025-10-25 20:37:01 - modeling.phases.measure_identifier - WARNING - Failed to identify measures for dbo.Advertisement, using defaults
 2025-10-25 20:38:03 - modeling.phases.measure_identifier - WARNING - Failed to identify measures for dbo.ContractProduct, using defaults
 2025-10-25 20:38:46 - modeling.phases.measure_identifier - WARNING - Failed to identify measures for dbo.CampaignScoreHistoryDetail, using defaults
 2025-10-25 20:38:57 - modeling.incremental_modeler - INFO -     Progress: 20/30 facts processed
 2025-10-25 20:40:21 - modeling.phases.measure_identifier - WARNING - Failed to identify measures for dbo.FreeTemplate, using defaults
-2025-10-25 20:41:33 - modeling.incremental_modeler - INFO -     Progress: 30/30 facts processed
-2025-10-25 20:41:45 - modeling.incremental_modeler - INFO  - ✓ Model assembly complete: 21 entities, 10 dimensions, 30 facts, 5 metrics
-2025-10-25 21:12:22 - modeling.incremental_modeler - INFO - Validating semantic model...
+
 2025-10-25 21:12:23 - modeling.incremental_modeler - WARNING - Schema validation failed: Validation error: 'TicketID→dbo.Ticket.ID' is not of type 'object'
-2025-10-25 21:12:23 - modeling.incremental_modeler - INFO - Semantic model created successfully via incremental approach
-2025-10-25 21:odel created successfully
-2025-10-25 21:12:23 - orchestration.pipeline - INFO - Answering question: show me customer names and their total sales
-2025-10-25 21:12:23 - qa.sql_answerer - INFO - Mapped question terms to 44 columns: ['dbo.ContractDocument.Filename', 'dbo.CampaignScoreHistoryDetail.PreviousSalesmanName', 'dbo.CaseAttachment.FileName', 'dbo.TargetGroupItem.StreetName', 'dbo.TargetGroupItem.CustomerName']...
-2025-10-25 21:12:23 - qa.sql_answerer - INFO - Q&A attempt 1/2
-2025-10-25 21:12:34 - qa.sql_answerer - INFO - LLM refused to answer - requesting clarification
-2025-10-25 21:1.
-2025-10-25 23:06:05 - modeling.phases.model_assembler - INFO - ✓ Model assembly complete: 20 entities, 12 dimensions, 29 facts, 5 metrics
-2025-10-25 23:06:05 - modeling.incremental_modeler - INFO - Validating semantic model...
+
 2025-10-25 23:06:05 - modeling.incremental_modeler - WARNING - Schema validation failed: Validation error: 'TicketID→dbo.Ticket.ID' is not of type 'object'
-2025-10-25 23:06:05 - modeling.incremental_modeler - INFO - Semantic model created successfully via incremental approach
-2025-10-25 23:06:05 - orchestration.pipeline - INFO - Saving semantic model to cache...
-2025-10-25 23:06:05 - caching.cache_manager - INFO - Caching semantic model: 00bcea3e08424449...
-2025-10-25 23:06:05 - caching.cache_manager - INFO - Saved cache to .cache/semantic_cache.pkl: 1 entries, 75,856 bytes
-2025-10-25 23:06:05 - orchestration.pipeline - INFO - Semantic model created successfully
-2025-10-25 23:06:05 - orchestration.pipeline - INFO - Answering question: show me customer names and their total sales
-2025-10-25 23:06:05 - qa.sql_answerer - INFO - Mapped question terms to 44 columns: ['dbo.DialerBusinessPoint.Y01PSalesrepFullName', 'dbo.Contact.Firstname', 'dbo.CampaignScoreHistoryDetail.NewSalesmanName', 'dbo.DialerBusinessPoint.MainHeadingName', 'HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31672.Brandname']...
-2025-10-25 23:06:05 - qa.sql_answerer - INFO - Q&A attempt 1/2
+
 2025-10-25 23:06:20 - qa.sql_answerer - WARNING - Schema validation failed: Validation error: {'object': 'Join path between customer name and sales', 'description': 'A documented relationship (foreign key) that links the customer-name source (e.g., DialerBusinessPoint_20240704_31672.CustomerName or Contact.Firstname/Lastname) to the sales/invoice table.'} is not of type 'string'
-2025-10-25 23:06:20 - qa.sql_answerer - INFO - Q&A attempt 2/2
-2025-10-25 23:06:32 - qa.sql_answerer - INFO - LLM refused to answer - requesting clarification
-2025-10-25 23:06:32 - orchestration.pipeline - INFO - Answer status: refuse
+
+2025-10-25 23:41:48 - modeling.phases.measure_identifier - WARNING - Failed to identify measures for dbo.ContractProduct, using defaults
+2025-10-25 23:42:44 - modeling.incremental_modeler - INFO -     Progress: 20/30 facts processed
+2025-10-25 23:44:56 - modeling.phases.measure_identifier - WARNING - Failed to identify measures for dbo.FreeTemplateAdvertisement, using defaults
+
+2025-10-26 00:04:18 - modeling.incremental_modeler - INFO -   Inferred 47 relationships
+2025-10-26 00:04:18 - modeling.incremental_modeler - INFO - Sample relationship: {'from': 'dbo.ContentAttributeValue', 'to': 'dbo.ContractProduct', 'cardinality': 'many-to-one', 'type': 'inferred_from_naming', 'business_meaning': 'Each dbo.ContentAttributeValue references one dbo.ContractProduct via ContractProductID', 'inferred_via': 'ContractProductID → dbo.ContractProduct.ID (naming pattern)'}
+2025-10-26 00:04:18 - modeling.incremental_modeler - INFO - Relationship types: [<class 'dict'>, <class 'dict'>, <class 'dict'>]
+2025-10-26 00:04:18 - modeling.incremental_modeler - INFO - === PHASE 5: MODEL ASSEMBLY ===
+
+2025-10-26 00:13:53 - modeling.incremental_modeler - INFO - Validating semantic model...
+2025-10-26 00:13:53 - modeling.incremental_modeler - WARNING - Schema validation failed: Validation error: {'name': 'ID', 'description': 'Row-level unique identifier for the invoice payment method record'} is not of type 'string'
+
+2025-10-26 00:13:53 - orchestration.pipeline - INFO - Answering question: show me customer names and their total sales
+2025-10-26 00:13:53 - qa.sql_answerer - INFO - Mapped question terms to 44 columns: ['dbo.BusinessPointIdentification.Name', 'dbo.TargetGroupItem.StreetName', 'dbo.CampaignScoreHistoryDetail.NewSalesmanName', 'dbo.DialerBusinessPoint.Brandname', 'dbo.FreeListingSearchItem.MainActivityName']...
+2025-10-26 00:13:53 - orchestration.pipeline - ERROR - Q&A failed: sequence item 0: expected str instance, dict found
+2025-10-26 00:13:53 - root - ERROR - Q&A failed: sequence item 0: expected str instance, dict found

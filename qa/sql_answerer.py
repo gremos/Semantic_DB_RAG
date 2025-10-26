@@ -121,6 +121,9 @@ class SQLAnswerer:
                 if not answer_json:
                     logger.warning("Failed to extract JSON from response")
                     continue
+
+                logger.info(f"Evidence structure: {answer_json.get('sql', [{}])[0].get('evidence')}")
+
                 
                 # Auto-correct status field if needed (documented issue)
                 if answer_json.get("status") == "success":
@@ -227,6 +230,10 @@ class SQLAnswerer:
         """
         NEW: Extract key terms from question and map to columns using NL mappings.
         
+        Args:
+            question: Natural language question
+            compressed_discovery: Compressed discovery with NL mappings
+        
         Returns:
             {
                 "matched_terms": ["product name", "total sales", ...],
@@ -314,6 +321,19 @@ class SQLAnswerer:
                         f"{join['to_table']}.{join['to_column']} "
                         f"(Confidence: {join['confidence']})\n"
                     )
+
+        column_suggestions = column_hints.get('column_suggestions', [])
+        safe_column_suggestions = []
+        for item in column_suggestions[:10]:
+            if isinstance(item, str):
+                safe_column_suggestions.append(item)
+            elif isinstance(item, dict):
+                # If it's a dict, try to extract a string representation
+                safe_column_suggestions.append(str(item.get('name', item)))
+                logger.warning(f"Found dict in column_suggestions: {item}")
+        matched_terms = column_hints.get('matched_terms', [])
+        safe_matched_terms = [str(t) for t in matched_terms if t]
+
     
         prompt_parts = [
             "# Semantic Model Summary",
@@ -322,11 +342,11 @@ class SQLAnswerer:
             "# IMPORTANT: Focused Column Guide for This Question",
             focused_guide,
             "",
-            potential_joins_guide,  # FIX: Add this section
+            potential_joins_guide,
             "",
             "# Natural Language Hints",
-            f"Detected terms: {', '.join(column_hints.get('matched_terms', []))}",
-            f"Suggested columns: {', '.join(column_hints.get('column_suggestions', [])[:10])}",
+            f"Detected terms: {', '.join(safe_matched_terms)}",
+            f"Suggested columns: {', '.join(safe_column_suggestions)}",  # Use safe version
             "",
             "# Question",
             question,
@@ -411,9 +431,19 @@ class SQLAnswerer:
             fact_name = fact.get("name")
             for measure in fact.get("measures", []):
                 filters = measure.get("filters_applied", [])
-                if filters:
+                
+                # ✅ ADD SAFETY: Ensure filters are strings
+                safe_filters = []
+                for f in filters:
+                    if isinstance(f, str):
+                        safe_filters.append(f)
+                    elif isinstance(f, dict):
+                        safe_filters.append(str(f))
+                        logger.warning(f"Found dict in filters_applied: {f}")
+                
+                if safe_filters:  # Use safe version
                     guide_lines.append(
-                        f"- {fact_name}.{measure['name']}: {measure['expression']} (Filters: {', '.join(filters)})"
+                        f"- {fact_name}.{measure['name']}: {measure['expression']} (Filters: {', '.join(safe_filters)})"
                     )
                 else:
                     guide_lines.append(

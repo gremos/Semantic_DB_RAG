@@ -30,6 +30,28 @@ RULES:
 5. Create 3 simple metrics from fact measures
 6. Set audit: dialect, source_assets_used, assumptions
 
+
+=== CRITICAL: FOREIGN KEY FORMAT ===
+
+Foreign keys MUST be simple strings, NOT objects!
+
+CORRECT:
+"foreign_keys": [
+  {"column": "CustomerID", "references": "Customer"},
+  {"column": "ProductID", "references": "Product"}
+]
+
+WRONG (DO NOT DO THIS):
+"foreign_keys": [
+  {
+    "column": {"name": "CustomerID", "description": "..."},  ❌ NO!
+    "references": "Customer"
+  }
+]
+
+The "column" field MUST be a STRING - just the column name!
+The "references" field MUST be a STRING - just the table name!
+
 CRITICAL: Keep it SIMPLE. Don't try to be perfect. Just create valid JSON structure.
 
 If uncertain about details, use defaults:
