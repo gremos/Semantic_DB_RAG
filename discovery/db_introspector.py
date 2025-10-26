@@ -10,7 +10,6 @@ from typing import List, Dict, Optional
 import sqlglot
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine
-
 from sqlalchemy import types, create_engine
 from sqlalchemy.dialects import mssql
 from sqlalchemy.exc import SAWarning
@@ -18,8 +17,32 @@ import warnings
 import logging
 import datetime
 import decimal
+from functools import wraps
+import signal
+from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
+
+
+class TimeoutException(Exception):
+    """Raised when operation exceeds timeout"""
+    pass
+
+
+@contextmanager
+def timeout(seconds: int):
+    """Context manager for operation timeout"""
+    def timeout_handler(signum, frame):
+        raise TimeoutException(f"Operation timed out after {seconds} seconds")
+    
+    # Set the signal handler and alarm
+    original_handler = signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(seconds)
+    try:
+        yield
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, original_handler)
 
 
 class TableID(types.TypeDecorator):
@@ -27,19 +50,23 @@ class TableID(types.TypeDecorator):
     impl = types.Integer
     cache_ok = True
 
+
 class MoneyValue(types.TypeDecorator):
     """SQL Server MoneyValue UDT - wraps DECIMAL for currency"""
     impl = types.DECIMAL(19, 4)
     cache_ok = True
+
 
 class PercentageValue(types.TypeDecorator):
     """SQL Server PercentageValue UDT - wraps DECIMAL for percentages"""
     impl = types.DECIMAL(5, 2)
     cache_ok = True
 
+
 mssql.base.ischema_names['TableID'] = TableID
 mssql.base.ischema_names['MoneyValue'] = MoneyValue
 mssql.base.ischema_names['PercentageValue'] = PercentageValue
+
 
 class DatabaseIntrospector:
     """
@@ -55,21 +82,36 @@ class DatabaseIntrospector:
         connection_string: str,
         schema_exclusions: List[str] = None,
         table_exclusions: List[str] = None,
-        rdl_directory: str = "data_upload/Reports"
+        rdl_directory: str = "data_upload/Reports",
+        query_timeout: int = 60  # NEW: 60 second timeout per query
     ):
         self.connection_string = connection_string
         self.schema_exclusions = schema_exclusions or ["sys", "information_schema", "INFORMATION_SCHEMA"]
         self.table_exclusions = table_exclusions or ["temp_", "test_", "backup_", "old_"]
         self.rdl_directory = rdl_directory
+        self.query_timeout = query_timeout
         
-        # Create SQLAlchemy engine
-        self.engine = create_engine(connection_string)
+        # Create SQLAlchemy engine with timeout
+        # Add connection timeout and pool settings
+        engine_options = {
+            "connect_args": {
+                "timeout": 30,  # Connection timeout in seconds
+            },
+            "pool_pre_ping": True,  # Verify connections before using
+            "pool_recycle": 3600,  # Recycle connections after 1 hour
+        }
+        
+        # MSSQL-specific timeout settings
+        if "mssql" in connection_string.lower() or "sqlserver" in connection_string.lower():
+            engine_options["connect_args"]["timeout"] = 30
+        
+        self.engine = create_engine(connection_string, **engine_options)
         
         # Detect database vendor
         self.vendor = self._detect_vendor()
         self.dialect = self._map_vendor_to_sqlglot_dialect(self.vendor)
         
-        logger.info(f"Initialized introspector for {self.vendor} database")
+        logger.info(f"Initialized introspector for {self.vendor} database with {query_timeout}s query timeout")
     
     def introspect(self) -> dict:
         """
@@ -162,38 +204,79 @@ class DatabaseIntrospector:
             return "unknown"
     
     def _introspect_schemas(self) -> List[dict]:
-        """Introspect all schemas and their tables."""
+        """Introspect all schemas and their tables with timeout protection."""
         inspector = inspect(self.engine)
         schemas = []
         
-        for schema_name in inspector.get_schema_names():
+        try:
+            with timeout(self.query_timeout):
+                schema_names = inspector.get_schema_names()
+        except TimeoutException as e:
+            logger.error(f"Timeout getting schema names: {e}")
+            return []
+        
+        for schema_name in schema_names:
             # Skip excluded schemas
             if schema_name in self.schema_exclusions:
+                logger.debug(f"Skipping excluded schema: {schema_name}")
                 continue
             
+            logger.info(f"Introspecting schema: {schema_name}")
             schema_data = {
                 "name": schema_name,
                 "tables": []
             }
             
-            # Get tables in schema
-            for table_name in inspector.get_table_names(schema=schema_name):
-                # Skip excluded tables
-                if any(table_name.startswith(prefix) for prefix in self.table_exclusions):
-                    continue
+            try:
+                # Get tables in schema with timeout
+                with timeout(self.query_timeout):
+                    table_names = inspector.get_table_names(schema=schema_name)
                 
-                table_data = self._introspect_table(schema_name, table_name, "table")
-                if table_data:
-                    schema_data["tables"].append(table_data)
+                for table_name in table_names:
+                    # Skip excluded tables
+                    if any(table_name.startswith(prefix) for prefix in self.table_exclusions):
+                        logger.debug(f"Skipping excluded table: {schema_name}.{table_name}")
+                        continue
+                    
+                    logger.info(f"  Introspecting table: {schema_name}.{table_name}")
+                    try:
+                        table_data = self._introspect_table(schema_name, table_name, "table")
+                        if table_data:
+                            schema_data["tables"].append(table_data)
+                    except TimeoutException as e:
+                        logger.warning(f"Timeout introspecting {schema_name}.{table_name}: {e}")
+                        continue
+                    except Exception as e:
+                        logger.warning(f"Failed to introspect {schema_name}.{table_name}: {e}")
+                        continue
+                
+                # Get views in schema with timeout
+                with timeout(self.query_timeout):
+                    view_names = inspector.get_view_names(schema=schema_name)
+                
+                for view_name in view_names:
+                    if any(view_name.startswith(prefix) for prefix in self.table_exclusions):
+                        logger.debug(f"Skipping excluded view: {schema_name}.{view_name}")
+                        continue
+                    
+                    logger.info(f"  Introspecting view: {schema_name}.{view_name}")
+                    try:
+                        view_data = self._introspect_table(schema_name, view_name, "view")
+                        if view_data:
+                            schema_data["tables"].append(view_data)
+                    except TimeoutException as e:
+                        logger.warning(f"Timeout introspecting view {schema_name}.{view_name}: {e}")
+                        continue
+                    except Exception as e:
+                        logger.warning(f"Failed to introspect view {schema_name}.{view_name}: {e}")
+                        continue
             
-            # Get views in schema
-            for view_name in inspector.get_view_names(schema=schema_name):
-                if any(view_name.startswith(prefix) for prefix in self.table_exclusions):
-                    continue
-                
-                view_data = self._introspect_table(schema_name, view_name, "view")
-                if view_data:
-                    schema_data["tables"].append(view_data)
+            except TimeoutException as e:
+                logger.error(f"Timeout getting tables/views for schema {schema_name}: {e}")
+                continue
+            except Exception as e:
+                logger.error(f"Failed to introspect schema {schema_name}: {e}")
+                continue
             
             if schema_data["tables"]:
                 schemas.append(schema_data)
@@ -201,62 +284,73 @@ class DatabaseIntrospector:
         return schemas
     
     def _introspect_table(self, schema: str, table_name: str, table_type: str) -> Optional[dict]:
-        """Introspect a single table or view."""
+        """Introspect a single table or view with timeout protection."""
         try:
-            inspector = inspect(self.engine)
-            
-            # Get columns
-            columns = []
-            for col in inspector.get_columns(table_name, schema=schema):
-                col_type = col.get('type')
+            with timeout(self.query_timeout):
+                inspector = inspect(self.engine)
                 
-                # Handle unrecognized types
-                if col_type is None or isinstance(col_type, types.NullType):
-                    # Query actual type from DB for custom types
-                    actual_type = self._resolve_custom_type(
-                        schema, table_name, col['name']
-                    )
-                    col['type'] = actual_type
-                else:
-                    col['type'] = str(col_type)
-                
-                columns.append({
-                    "name": col['name'],
-                    "type": col['type'],
-                    "nullable": col.get('nullable', True)
-                })
-            
-            # Get primary key
-            pk_constraint = inspector.get_pk_constraint(table_name, schema=schema)
-            primary_key = pk_constraint.get("constrained_columns", []) if pk_constraint else []
-            
-            # Get foreign keys
-            foreign_keys = []
-            for fk in inspector.get_foreign_keys(table_name, schema=schema):
-                for col, ref_col in zip(fk["constrained_columns"], fk["referred_columns"]):
-                    foreign_keys.append({
-                        "column": col,
-                        "ref_table": f"{fk.get('referred_schema', schema)}.{fk['referred_table']}",
-                        "ref_column": ref_col
+                # Get columns
+                columns = []
+                for col in inspector.get_columns(table_name, schema=schema):
+                    col_type = col.get('type')
+                    
+                    # Handle unrecognized types
+                    if col_type is None or isinstance(col_type, types.NullType):
+                        # Query actual type from DB for custom types
+                        actual_type = self._resolve_custom_type(
+                            schema, table_name, col['name']
+                        )
+                        col['type'] = actual_type
+                    else:
+                        col['type'] = str(col_type)
+                    
+                    columns.append({
+                        "name": col['name'],
+                        "type": col['type'],
+                        "nullable": col.get('nullable', True)
                     })
-            
-            # Get row count sample (limit to avoid performance issues)
-            sample_data = self._get_sample_data(schema, table_name)
-            
-            return {
-                "name": table_name,
-                "type": table_type,
-                "columns": columns,
-                "primary_key": primary_key,
-                "foreign_keys": foreign_keys,
-                "sample_data": sample_data,
-                "source_assets": []  # Will be populated later
-            }
+                
+                # Get primary key
+                pk_constraint = inspector.get_pk_constraint(table_name, schema=schema)
+                primary_key = pk_constraint.get("constrained_columns", []) if pk_constraint else []
+                
+                # Get foreign keys
+                foreign_keys = []
+                for fk in inspector.get_foreign_keys(table_name, schema=schema):
+                    for col, ref_col in zip(fk["constrained_columns"], fk["referred_columns"]):
+                        foreign_keys.append({
+                            "column": col,
+                            "ref_table": f"{fk.get('referred_schema', schema)}.{fk['referred_table']}",
+                            "ref_column": ref_col
+                        })
+                
+                # Get sample data with timeout protection
+                try:
+                    sample_data = self._get_sample_data(schema, table_name)
+                except TimeoutException:
+                    logger.warning(f"Timeout getting sample data for {schema}.{table_name}, skipping samples")
+                    sample_data = []
+                except Exception as e:
+                    logger.warning(f"Could not get sample data for {schema}.{table_name}: {e}")
+                    sample_data = []
+                
+                return {
+                    "name": table_name,
+                    "type": table_type,
+                    "columns": columns,
+                    "primary_key": primary_key,
+                    "foreign_keys": foreign_keys,
+                    "sample_data": sample_data,
+                    "source_assets": []  # Will be populated later
+                }
         
+        except TimeoutException as e:
+            logger.warning(f"Timeout introspecting {schema}.{table_name}: {e}")
+            return None
         except Exception as e:
             logger.warning(f"Failed to introspect {schema}.{table_name}: {e}")
             return None
-        
+    
     def _resolve_custom_type(self, schema: str, table: str, column: str) -> str:
         """Query SQL Server for actual user-defined type"""
         query = f"""
@@ -285,39 +379,50 @@ class DatabaseIntrospector:
         
         # Fallback to generic type
         return "VARCHAR(MAX)"
+    
     def _get_sample_data(self, schema: str, table_name: str) -> List[dict]:
-        """Get 5 sample rows from table."""
+        """Get 5 sample rows from table with timeout."""
         try:
-            with self.engine.connect() as conn:
-                # Dialect-specific LIMIT syntax
-                if self.vendor == "mssql":
-                    query = f"SELECT TOP 5 * FROM [{schema}].[{table_name}]"
-                elif self.vendor in ["postgres", "mysql"]:
-                    query = f'SELECT * FROM "{schema}"."{table_name}" LIMIT 5'
-                else:
-                    query = f'SELECT * FROM "{schema}"."{table_name}" FETCH FIRST 5 ROWS ONLY'
-                
-                result = conn.execute(text(query))
-                
-                # Convert rows to dicts
-                sample_rows = []
-                for row in result:
-                    row_dict = {}
-                    for col_name, col_value in row._mapping.items():
-                        # Handle non-JSON types
-                        if isinstance(col_value, (datetime.datetime, datetime.date)):
-                            row_dict[col_name] = col_value.isoformat()
-                        elif isinstance(col_value, decimal.Decimal):
-                            row_dict[col_name] = float(col_value)
-                        elif isinstance(col_value, bytes):
-                            row_dict[col_name] = "<binary>"
-                        elif col_value is None:
-                            row_dict[col_name] = None
-                        else:
-                            row_dict[col_name] = str(col_value) if not isinstance(col_value, (int, float, bool)) else col_value
-                    sample_rows.append(row_dict)
-                
-                return sample_rows
+            with timeout(10):  # 10 second timeout for sample data
+                with self.engine.connect() as conn:
+                    # Set statement timeout for this query
+                    if self.vendor == "mssql":
+                        # Set query timeout to 10 seconds
+                        conn.execute(text("SET LOCK_TIMEOUT 10000"))  # 10 seconds in milliseconds
+                        query = f"SELECT TOP 5 * FROM [{schema}].[{table_name}]"
+                    elif self.vendor == "postgres":
+                        conn.execute(text("SET statement_timeout = '10s'"))
+                        query = f'SELECT * FROM "{schema}"."{table_name}" LIMIT 5'
+                    elif self.vendor == "mysql":
+                        query = f'SELECT * FROM `{schema}`.`{table_name}` LIMIT 5'
+                    else:
+                        query = f'SELECT * FROM "{schema}"."{table_name}" FETCH FIRST 5 ROWS ONLY'
+                    
+                    result = conn.execute(text(query))
+                    
+                    # Convert rows to dicts
+                    sample_rows = []
+                    for row in result:
+                        row_dict = {}
+                        for col_name, col_value in row._mapping.items():
+                            # Handle non-JSON types
+                            if isinstance(col_value, (datetime.datetime, datetime.date)):
+                                row_dict[col_name] = col_value.isoformat()
+                            elif isinstance(col_value, decimal.Decimal):
+                                row_dict[col_name] = float(col_value)
+                            elif isinstance(col_value, bytes):
+                                row_dict[col_name] = "<binary>"
+                            elif col_value is None:
+                                row_dict[col_name] = None
+                            else:
+                                row_dict[col_name] = str(col_value) if not isinstance(col_value, (int, float, bool)) else col_value
+                        sample_rows.append(row_dict)
+                    
+                    return sample_rows
+        
+        except TimeoutException:
+            logger.warning(f"Timeout (10s) getting sample data for {schema}.{table_name}")
+            return []
         except Exception as e:
             logger.warning(f"Could not get sample data for {schema}.{table_name}: {e}")
             return []
