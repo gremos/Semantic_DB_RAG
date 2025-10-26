@@ -96,7 +96,22 @@ Step 3: If no measure matches, look at RAW COLUMNS
 
 **CRITICAL SQL Rules:**
 
-1. **GROUP BY Must Match SELECT Exactly**
+1. **ONLY USE COLUMNS THAT EXIST**: Check the "Focused Column Guide" section above
+   - If you see "TotalAmount" in the guide, you can use it
+   - If you DON'T see "TotalAmount", you CANNOT use it
+   - Do NOT invent column names based on assumptions
+   - If you're unsure, REFUSE with status="refuse" and ask for clarification
+
+2. **Use EXACT column names from the guide**:
+   - Copy column names exactly as shown (case-sensitive for some databases)
+   - Include table qualifiers when joining: TableName.ColumnName
+
+3. **When in doubt about a column name**:
+   - Search the "Focused Column Guide" for similar columns
+   - If you find multiple options, REFUSE and ask which one to use
+   - Example: If you need "amount" but see "NetAmount", "GrossAmount", "ExtendedAmount", REFUSE and ask
+
+4. **GROUP BY Must Match SELECT Exactly**
    - If you use COALESCE() in SELECT, use the EXACT same expression in GROUP BY
    - Don't simplify or change the expression between SELECT and GROUP BY
    
@@ -110,7 +125,7 @@ Step 3: If no measure matches, look at RAW COLUMNS
    FROM Table
    GROUP BY COALESCE(Name, 'Unknown')  -- CORRECT!
 
-2. **Aggregation Best Practices**
+5. **Aggregation Best Practices**
    - Use simple column names in GROUP BY when possible
    - If you need COALESCE for display, apply it in an outer query:
    
@@ -124,12 +139,12 @@ Step 3: If no measure matches, look at RAW COLUMNS
      GROUP BY Name
    ) subquery
 
-3. **Handle NULLs Properly**
+6. **Handle NULLs Properly**
    - Use ISNULL(column, 0) for numeric aggregations
    - Use WHERE column IS NOT NULL to filter before grouping
    - Use COALESCE only when you need it for display
 
-4. **Column References**
+7. **Column References**
    - Always use table aliases (e.g., t1.Column, not just Column)
    - In GROUP BY, use the same alias as in SELECT
 
