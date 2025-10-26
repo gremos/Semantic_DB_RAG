@@ -3,7 +3,7 @@ Use LLM to select the best table/column when multiple candidates exist.
 This prevents refusals due to ambiguity.
 """
 
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 import json
 
 
@@ -82,65 +82,53 @@ Output valid JSON only.
     
     def disambiguate_measure(
         self, 
-        candidates: List[str], 
+        candidates: List[Dict[str, Any]],  # ✅ Now structured objects
         question: str,
         semantic_model: dict,
         view_usage: dict
-    ) -> Dict:
+    ) -> Dict[str, Any]:
         """
-        Given multiple possible 'sales' measures, pick the best one.
+        Given multiple possible sales measures, pick the best one.
+        Returns structured measure object, not just a string.
         """
         
         evidence = []
         for candidate in candidates:
-            # Parse table.column
-            parts = candidate.split(".")
-            table_name = parts[0] if len(parts) > 1 else candidate
+            fact_source = candidate["fact_source"]
             
             evidence.append({
-                "measure": candidate,
-                "table": table_name,
-                "view_usage_count": view_usage.get(table_name, {}).get("total_references", 0),
-                "is_in_facts": self._is_in_facts(table_name, semantic_model),
-                "typical_aggregation": self._guess_aggregation(candidate)
+                "measure_name": candidate["measure_name"],
+                "fact": candidate["fact_name"],
+                "column": candidate["measure_column"],        # ✅ Actual column
+                "expression": candidate["measure_expression"],
+                "aggregation": candidate["aggregation"],
+                "view_usage_count": view_usage.get(fact_source, {}).get("total_references", 0),
+                "has_filters": len(candidate.get("filters_applied", [])) > 0
             })
         
         prompt = f"""
-You are a semantic model expert. The user asked: "{question}"
+    You are a semantic model expert. The user asked: "{question}"
 
-Multiple possible sales measures found:
-{json.dumps(evidence, indent=2)}
+    Multiple possible sales measures found:
+    {json.dumps(evidence, indent=2)}
 
-Select the BEST measure based on:
-1. Present in facts (validated measure)
-2. Highest view_usage_count (most authoritative)
-3. Appropriate for "total sales" (likely SUM of a Price/Amount field)
-
-Output JSON:
-{{
-  "selected": "dbo.ContractProduct.TotalPrice",
-  "aggregation": "SUM",
-  "confidence": 0.88,
-  "reasoning": "Explanation here"
-}}
-
-Output valid JSON only.
-"""
+    Select the BEST measure. Output JSON:
+    {{
+    "selected_measure": "TotalFinalPrice",
+    "fact": "Contract",
+    "column": "FinalPrice",
+    "expression": "SUM(FinalPrice)",
+    "aggregation": "SUM",
+    "confidence": 0.88,
+    "reasoning": "..."
+    }}
+    """
         
         response = self.llm.invoke(prompt)
+        result = json.loads(response.content)
         
-        try:
-            result = json.loads(response.content)
-            return result
-        except json.JSONDecodeError:
-            # Fallback: pick highest usage
-            best = max(evidence, key=lambda e: e["view_usage_count"])
-            return {
-                "selected": best["measure"],
-                "aggregation": "SUM",
-                "confidence": 0.5,
-                "reasoning": "Selected based on highest view usage (fallback)"
-            }
+        # ✅ Return full measure metadata, not just a string
+        return result
     
     def _is_in_semantic_model(self, table_col: str, semantic_model: dict) -> bool:
         """Check if table.column is in entities or dimensions."""

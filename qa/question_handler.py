@@ -5,7 +5,7 @@ Handles ambiguity resolution using LLM + evidence-based ranking.
 
 import json
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 from qa.table_disambiguator import TableDisambiguator
 
 logger = logging.getLogger(__name__)
@@ -206,30 +206,22 @@ Output valid JSON only.
         
         return candidates
     
-    def _find_sales_measure_candidates(self) -> List[str]:
-        """Find all possible sales/revenue measures."""
+    def _find_sales_measure_candidates(self) -> List[Dict[str, Any]]:
+        """Find all possible sales/revenue measures with full metadata."""
         candidates = []
         
-        # Search facts for monetary measures
         for fact_name, fact in self.fact_map.items():
-            # Check measures defined in semantic model
             for measure in fact.get("measures", []):
-                measure_name = measure.get("name", "").lower()
-                if any(keyword in measure_name for keyword in ["revenue", "sales", "total", "amount", "price"]):
-                    candidates.append(f"{fact['source']}.{measure['name']}")
-            
-            # Also check raw columns
-            source = fact.get("source", "")
-            table = self._get_table_from_discovery(source)
-            if table:
-                for col in table.get("columns", []):
-                    col_name = col["name"].lower()
-                    col_type = col["type"].lower()
-                    
-                    # Numeric columns with revenue-like names
-                    if any(keyword in col_name for keyword in ["price", "amount", "revenue", "total", "sales"]):
-                        if any(t in col_type for t in ["decimal", "money", "numeric", "float", "int"]):
-                            candidates.append(f"{source}.{col['name']}")
+                if self._is_sales_related(measure["name"]):
+                    candidates.append({
+                        "fact_name": fact_name,
+                        "fact_source": fact["source"],
+                        "measure_name": measure["name"],          # Business name
+                        "measure_column": measure["column"],      # Actual DB column
+                        "measure_expression": measure["expression"],  # Full expression
+                        "aggregation": measure["aggregation"],
+                        "filters_applied": measure.get("filters_applied", [])
+                    })
         
         return candidates
     
@@ -316,79 +308,52 @@ Output valid JSON only.
         return resolved
     
     def _generate_sql(self, question: str, resolved: dict) -> dict:
-        """
-        Generate final SQL using resolved entities.
-        """
+        """Generate SQL using resolved measure metadata."""
         
-        # Build context for LLM
+        sales_measure = resolved.get("sales", {})
+        
+        # Extract structured measure info
+        measure_name = sales_measure.get("selected_measure")       # Business name
+        measure_column = sales_measure.get("column")              # Actual column
+        measure_expression = sales_measure.get("expression")      # e.g., "SUM(FinalPrice)"
+        fact_source = sales_measure.get("fact_source")           # e.g., "dbo.Contract"
+        
         context = {
             "semantic_model": self.semantic_model,
-            "resolved_entities": resolved,
+            "resolved": {
+                "customer": resolved.get("customer"),
+                "sales": {
+                    "measure_name": measure_name,
+                    "fact_table": fact_source,
+                    "column": measure_column,               # ✅ Actual column!
+                    "expression": measure_expression,       # ✅ Pre-built expression
+                    "aggregation": sales_measure.get("aggregation")
+                }
+            },
             "relationships": self.discovery_json.get("semantic_relationships", []),
             "dialect": self.discovery_json.get("dialect", "mssql")
         }
         
         prompt = f"""
-You are an expert SQL generator. Convert this question to SQL using the resolved entities.
+    Generate SQL for: "{question}"
 
-Question: "{question}"
+    Context:
+    {json.dumps(context, indent=2)}
 
-Context:
-{json.dumps(context, indent=2)}
+    CRITICAL RULES:
+    1. Use resolved.sales.expression directly: {measure_expression}
+    2. Or build aggregation: {sales_measure.get("aggregation")}({measure_column})
+    3. DO NOT use measure_name ({measure_name}) as a column - it's just a label!
 
-Rules:
-1. Use ONLY the resolved entities (don't search for alternatives)
-2. Use semantic_relationships to determine JOINs
-3. Apply appropriate aggregations (SUM for sales/revenue)
-4. Include GROUP BY for dimension columns
-5. Output dialect-specific SQL ({context['dialect']})
-
-Output JSON Schema:
-{{
-  "status": "ok",
-  "sql": [
-    {{
-      "dialect": "mssql",
-      "statement": "SELECT ... FROM ... JOIN ... WHERE ... GROUP BY ...",
-      "explanation": "Using BusinessPoint.BrandName as customer (confidence 0.92) and ContractProduct.TotalPrice as sales measure",
-      "evidence": {{
-        "customer_source": {{
-          "selected": "dbo.BusinessPoint.BrandName",
-          "confidence": 0.92,
-          "reasoning": "Most authoritative source"
-        }},
-        "sales_measure": {{
-          "selected": "dbo.ContractProduct.TotalPrice",
-          "aggregation": "SUM",
-          "confidence": 0.88,
-          "reasoning": "Primary sales measure"
-        }}
-      }},
-      "limits": {{
-        "row_limit": 1000,
-        "timeout_sec": 60
-      }}
-    }}
-  ]
-}}
-
-Output valid JSON only.
-"""
+    Example:
+    SELECT SUM(c.{measure_column}) AS TotalSales  -- ✅ Use column
+    FROM {fact_source} c
+    ...
+    """
         
         response = self.llm.invoke(prompt)
-        
-        try:
-            result = json.loads(response.content)
-            return result
-        except json.JSONDecodeError:
-            logger.error("LLM returned invalid JSON for SQL generation")
-            return {
-                "status": "refuse",
-                "refusal": {
-                    "reason": "Failed to generate valid SQL",
-                    "clarifying_questions": ["Please rephrase your question."]
-                }
-            }
+        return json.loads(response.content)
+
     
     def _build_refusal_response(self, resolved: dict) -> dict:
         """Build a refusal response when clarification is needed."""
