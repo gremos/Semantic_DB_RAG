@@ -15,6 +15,7 @@ from modeling.semantic_relationships import enhance_discovery_with_semantic_rela
 from modeling.incremental_modeler import IncrementalModeler
 from qa.question_handler import QuestionHandler
 
+
 # LangChain Azure OpenAI
 from langchain_openai import AzureChatOpenAI
 

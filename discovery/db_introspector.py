@@ -11,8 +11,33 @@ import sqlglot
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine
 
+from sqlalchemy import types, create_engine
+from sqlalchemy.dialects import mssql
+from sqlalchemy.exc import SAWarning
+import warnings
+import logging
+
 logger = logging.getLogger(__name__)
 
+
+class TableID(types.TypeDecorator):
+    """SQL Server TableID user-defined type (typically wraps INT)"""
+    impl = types.Integer
+    cache_ok = True
+
+class MoneyValue(types.TypeDecorator):
+    """SQL Server MoneyValue UDT - wraps DECIMAL for currency"""
+    impl = types.DECIMAL(19, 4)
+    cache_ok = True
+
+class PercentageValue(types.TypeDecorator):
+    """SQL Server PercentageValue UDT - wraps DECIMAL for percentages"""
+    impl = types.DECIMAL(5, 2)
+    cache_ok = True
+
+mssql.base.ischema_names['TableID'] = TableID
+mssql.base.ischema_names['MoneyValue'] = MoneyValue
+mssql.base.ischema_names['PercentageValue'] = PercentageValue
 
 class DatabaseIntrospector:
     """
@@ -181,10 +206,22 @@ class DatabaseIntrospector:
             # Get columns
             columns = []
             for col in inspector.get_columns(table_name, schema=schema):
+                col_type = col.get('type')
+                
+                # Handle unrecognized types
+                if col_type is None or isinstance(col_type, types.NullType):
+                    # Query actual type from DB for custom types
+                    actual_type = self._resolve_custom_type(
+                        schema, table_name, col['name']
+                    )
+                    col['type'] = actual_type
+                else:
+                    col['type'] = str(col_type)
+                
                 columns.append({
-                    "name": col["name"],
-                    "type": str(col["type"]),
-                    "nullable": col.get("nullable", True)
+                    "name": col['name'],
+                    "type": col['type'],
+                    "nullable": col.get('nullable', True)
                 })
             
             # Get primary key
@@ -217,6 +254,35 @@ class DatabaseIntrospector:
         except Exception as e:
             logger.warning(f"Failed to introspect {schema}.{table_name}: {e}")
             return None
+        
+    def _resolve_custom_type(self, schema: str, table: str, column: str) -> str:
+        """Query SQL Server for actual user-defined type"""
+        query = f"""
+        SELECT 
+            TYPE_NAME(c.user_type_id) as base_type,
+            TYPE_NAME(c.system_type_id) as system_type
+        FROM sys.columns c
+        JOIN sys.tables t ON c.object_id = t.object_id
+        JOIN sys.schemas s ON t.schema_id = s.schema_id
+        WHERE s.name = :schema 
+        AND t.name = :table 
+        AND c.name = :column
+        """
+        
+        try:
+            result = self.engine.execute(
+                query, 
+                {"schema": schema, "table": table, "column": column}
+            ).fetchone()
+            
+            if result:
+                # Return the system type (e.g., 'int' for TableID)
+                return result['system_type'] or result['base_type']
+        except:
+            pass
+        
+        # Fallback to generic type
+        return "VARCHAR(MAX)"
     
     def _get_row_count(self, schema: str, table_name: str) -> int:
         """Get approximate row count."""
