@@ -490,3 +490,12 @@
 2025-10-26 09:55:07 - qa.sql_answerer - INFO - Evidence structure: None
 2025-10-26 09:55:07 - qa.sql_answerer - INFO - LLM refused to answer - requesting clarification
 2025-10-26 09:55:07 - orchestration.pipeline - INFO - Answer status: refuse
+2025-10-26 10:53:03 - caching.cache_manager - INFO - Cache directory initialized: /mnt/c/code/Personal/Semantic_DB_RAG/.cache
+2025-10-26 10:53:03 - caching.cache_manager - INFO - Loading existing caches...
+2025-10-26 10:53:03 - caching.cache_manager - INFO - Loaded cache from .cache/discovery_cache.pkl: 1 entries
+2025-10-26 10:53:03 - caching.cache_manager - INFO - Loaded cache from .cache/semantic_cache.pkl: 1 entries
+2025-10-26 10:53:03 - caching.cache_manager - INFO - Discovery cache entries: 1
+2025-10-26 10:53:03 - caching.cache_manager - INFO - Semantic cache entries: 1
+2025-10-26 10:53:03 - caching.cache_manager - INFO - Clearing all caches
+2025-10-26 10:53:03 - caching.cache_manager - INFO - Deleted .cache/discovery_cache.pkl
+2025-10-26 10:53:03 - caching.cache_manager - INFO - Deleted .cache/semantic_cache.pkl

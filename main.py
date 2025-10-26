@@ -1,253 +1,157 @@
-#!/usr/bin/env python3
 """
-Semantic Engine - Main Entry Point
-
-Usage:
-    python main.py discover [--bypass-cache]               # Run discovery only
-    python main.py model [--hints "..."] [--bypass-cache]  # Create semantic model
-    python main.py query "question" [--bypass-cache]       # Answer question (uses cache)
-    python main.py full "question" [--hints "..."]         # Full pipeline
-    python main.py cache-info                              # Show cache status
-    python main.py cache-clear                             # Clear all caches
+Main entry point for GPT-5 Semantic Modeling & SQL Q&A System
 """
 
-import argparse
-import json
 import sys
 import os
+import logging
+import json
+from dotenv import load_dotenv
+
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+# Import pipeline
 from orchestration.pipeline import SemanticPipeline
-from utils.logging_config import logger
-from caching.cache_manager import CacheManager
-from config.settings import settings
-from export.powerbi_exporter import PowerBIExporter
-from export.sql_exporter import SQLExporter
-from export.json_exporter import JSONExporter
-from export.markdown_exporter import MarkdownExporter
 
-def show_cache_info():
-    """Display cache status information."""
-    cache_dir = ".cache"
-    
-    if not os.path.exists(cache_dir):
-        print("❌ No cache directory found")
-        return
-    
-    print("=" * 60)
-    print("CACHE STATUS")
-    print("=" * 60)
-    
-    # Check discovery cache
-    discovery_cache_file = os.path.join(cache_dir, "discovery_cache.pkl")
-    if os.path.exists(discovery_cache_file):
-        size = os.path.getsize(discovery_cache_file)
-        print(f"✅ Discovery Cache: {size:,} bytes")
-        print(f"   TTL: {settings.discovery_cache_hours} hours")
-    else:
-        print("❌ Discovery Cache: Not found")
-    
-    # Check semantic model cache
-    semantic_cache_file = os.path.join(cache_dir, "semantic_cache.pkl")
-    if os.path.exists(semantic_cache_file):
-        size = os.path.getsize(semantic_cache_file)
-        print(f"✅ Semantic Model Cache: {size:,} bytes")
-        print(f"   TTL: {settings.semantic_cache_hours} hours")
-    else:
-        print("❌ Semantic Model Cache: Not found")
-    
-    print("=" * 60)
-    print("\nTo clear cache: python main.py cache-clear")
-    print("To force regeneration: python main.py query '...' --bypass-cache")
-    print("=" * 60)
 
-def clear_cache():
-    """Clear all caches."""
-    cache = CacheManager(
-        settings.discovery_cache_hours,
-        settings.semantic_cache_hours
-    )
-    cache.clear_all()
-    print("✅ All caches cleared")
+def load_config() -> dict:
+    """Load configuration from .env file."""
+    load_dotenv()
+    
+    config = {
+        "DEPLOYMENT_NAME": os.getenv("DEPLOYMENT_NAME"),
+        "API_VERSION": os.getenv("API_VERSION"),
+        "AZURE_ENDPOINT": os.getenv("AZURE_ENDPOINT"),
+        "AZURE_OPENAI_API_KEY": os.getenv("AZURE_OPENAI_API_KEY"),
+        "DATABASE_CONNECTION_STRING": os.getenv("DATABASE_CONNECTION_STRING"),
+        "UTF8_ENCODING": os.getenv("UTF8_ENCODING", "true"),
+        "SCHEMA_EXCLUSIONS": os.getenv("SCHEMA_EXCLUSIONS", "sys,information_schema"),
+        "TABLE_EXCLUSIONS": os.getenv("TABLE_EXCLUSIONS", "temp_,test_,backup_,old_"),
+        "DISCOVERY_CACHE_HOURS": os.getenv("DISCOVERY_CACHE_HOURS", "168"),
+        "SEMANTIC_CACHE_HOURS": os.getenv("SEMANTIC_CACHE_HOURS", "168"),
+    }
+    
+    # Validate required config
+    required = [
+        "DEPLOYMENT_NAME",
+        "API_VERSION",
+        "AZURE_ENDPOINT",
+        "AZURE_OPENAI_API_KEY",
+        "DATABASE_CONNECTION_STRING"
+    ]
+    
+    missing = [key for key in required if not config.get(key)]
+    if missing:
+        logger.error(f"Missing required configuration: {', '.join(missing)}")
+        logger.error("Please check your .env file")
+        sys.exit(1)
+    
+    return config
+
+
+def print_usage():
+    """Print usage information."""
+    print("""
+Usage: python main.py <command> [arguments]
+
+Commands:
+    cache-clear              Clear all cached discovery and models
+    discover                 Run database discovery only
+    model                    Run semantic modeling only (requires discovery)
+    question <text>          Ask a question (runs full pipeline)
+    full <text>              Run full pipeline with question
+    
+Examples:
+    python main.py cache-clear
+    python main.py discover
+    python main.py model
+    python main.py question "What are the total sales by customer?"
+    python main.py full "Show me revenue trends by month"
+""")
+
 
 def main():
-    parser = argparse.ArgumentParser(description="Semantic Engine CLI")
-    subparsers = parser.add_subparsers(dest='command', help='Commands')
+    """Main CLI entry point."""
     
-    # Discovery command
-    parser_discover = subparsers.add_parser('discover', help='Run discovery phase')
-    parser_discover.add_argument('--bypass-cache', action='store_true', help='Bypass cache')
+    if len(sys.argv) < 2:
+        print_usage()
+        sys.exit(1)
     
-    # Model command
-    parser_model = subparsers.add_parser('model', help='Create semantic model')
-    parser_model.add_argument('--hints', type=str, default='', help='Domain hints')
-    parser_model.add_argument('--bypass-cache', action='store_true', help='Bypass cache')
+    command = sys.argv[1].lower()
     
-    # Query command
-    parser_query = subparsers.add_parser('query', help='Answer question')
-    parser_query.add_argument('question', type=str, help='Natural language question')
-    parser_query.add_argument('--bypass-cache', action='store_true', help='Force regenerate model')
+    # Load configuration
+    config = load_config()
     
-    # Full pipeline command
-    parser_full = subparsers.add_parser('full', help='Run full pipeline')
-    parser_full.add_argument('question', type=str, help='Natural language question')
-    parser_full.add_argument('--hints', type=str, default='', help='Domain hints')
-    parser_full.add_argument('--bypass-cache', action='store_true', help='Bypass cache')
-
-    parser_export = subparsers.add_parser('export', help='Export semantic model')
-    parser_export.add_argument('format', choices=['powerbi', 'sql', 'json', 'markdown', 'all'], 
-                            help='Export format')
-    parser_export.add_argument('--output', type=str, help='Output filename')
+    # Initialize pipeline
+    pipeline = SemanticPipeline(config)
     
-    # Cache info command
-    parser_cache_info = subparsers.add_parser('cache-info', help='Show cache status')
+    # Execute command
+    if command == "cache-clear":
+        logger.info("Clearing cache...")
+        pipeline.invalidate_cache()
+        logger.info("Cache cleared successfully")
     
-    # Cache clear command
-    parser_cache_clear = subparsers.add_parser('cache-clear', help='Clear all caches')
-    
-    args = parser.parse_args()
-    
-    if not args.command:
-        parser.print_help()
-        return 1
-    
-    # Handle cache commands
-    if args.command == 'cache-info':
-        show_cache_info()
-        return 0
-    
-    if args.command == 'cache-clear':
-        clear_cache()
-        return 0
-    
-    # Regular pipeline commands
-    pipeline = SemanticPipeline()
-    
-    try:
-        if args.command == 'discover':
-            success, error = pipeline.initialize(args.bypass_cache)
-            if not success:
-                logger.error(f"Discovery failed: {error}")
-                return 1
-            
-            print(json.dumps(pipeline.get_discovery_data(), indent=2))
-            return 0
+    elif command == "discover":
+        logger.info("Running discovery...")
+        discovery = pipeline.run_discovery(force_refresh=True)
         
-        elif args.command == 'model':
-            # Run discovery first
-            success, error = pipeline.initialize()
-            if not success:
-                logger.error(f"Discovery failed: {error}")
-                return 1
-            
-            # Create model
-            success, error = pipeline.create_semantic_model(args.hints, args.bypass_cache)
-            if not success:
-                logger.error(f"Modeling failed: {error}")
-                return 1
-            
-            print(json.dumps(pipeline.get_semantic_model(), indent=2))
-            return 0
-        
-        elif args.command == 'query':
-            # Use cached model if available
-            bypass = args.bypass_cache if hasattr(args, 'bypass_cache') else False
-            
-            logger.info("Loading discovery and model (will use cache if available)...")
-            success, error = pipeline.initialize(bypass_cache=False)  # Use cache
-            if not success:
-                logger.error(f"Discovery failed: {error}")
-                return 1
-            
-            success, error = pipeline.create_semantic_model(bypass_cache=bypass)
-            if not success:
-                logger.error(f"Modeling failed: {error}")
-                return 1
-            
-            success, answer, error = pipeline.answer_question(args.question)
-            if not success:
-                logger.error(f"Q&A failed: {error}")
-                return 1
-            
-            print(json.dumps(answer, indent=2))
-            return 0
-        
-        elif args.command == 'full':
-            # Full pipeline
-            logger.info("=== Phase 1: Discovery ===")
-            success, error = pipeline.initialize(args.bypass_cache)
-            if not success:
-                logger.error(f"Discovery failed: {error}")
-                return 1
-            
-            logger.info("=== Phase 2: Semantic Modeling ===")
-            success, error = pipeline.create_semantic_model(args.hints, args.bypass_cache)
-            if not success:
-                logger.error(f"Modeling failed: {error}")
-                return 1
-            
-            logger.info("=== Phase 3: Question Answering ===")
-            success, answer, error = pipeline.answer_question(args.question)
-            if not success:
-                logger.error(f"Q&A failed: {error}")
-                return 1
-            
-            # Pretty output
-            print("\n" + "="*80)
-            print("ANSWER")
-            print("="*80)
-            print(json.dumps(answer, indent=2))
-            
-            if answer.get("status") == "ok":
-                print("\n" + "="*80)
-                print("EXECUTABLE SQL")
-                print("="*80)
-                for i, sql_obj in enumerate(answer.get("sql", []), 1):
-                    print(f"\n-- Query {i}: {sql_obj.get('explanation', '')}")
-                    print(sql_obj.get("statement"))
-
-                    
-            return 0
-            
-        elif args.command == 'export':
-                # Load cached model
-                success, error = pipeline.initialize(bypass_cache=False)
-                if not success:
-                    logger.error(f"Discovery failed: {error}")
-                    return 1
-                
-                success, error = pipeline.create_semantic_model(bypass_cache=False)
-                if not success:
-                    logger.error(f"Modeling failed: {error}")
-                    return 1
-                
-                model = pipeline.get_semantic_model()
-                
-                # Export in requested format(s)
-                if args.format == 'powerbi' or args.format == 'all':
-                    output = args.output or 'semantic_model.bim'
-                    PowerBIExporter.export(model, output)
-                    print(f"✅ Power BI model: {output}")
-                
-                if args.format == 'sql' or args.format == 'all':
-                    output = args.output or 'semantic_views.sql'
-                    SQLExporter.export(model, output)
-                    print(f"✅ SQL views: {output}")
-                
-                if args.format == 'json' or args.format == 'all':
-                    output = args.output or 'semantic_model_export.json'
-                    JSONExporter.export(model, output)
-                    print(f"✅ JSON export: {output}")
-                
-                if args.format == 'markdown' or args.format == 'all':
-                    output = args.output or 'SEMANTIC_MODEL.md'
-                    MarkdownExporter.export(model, output)
-                    print(f"✅ Markdown docs: {output}")
-                
-                return 0
-
-
+        # Pretty print summary
+        print("\n=== DISCOVERY SUMMARY ===")
+        print(f"Database: {discovery['database']['vendor']} ({discovery['database']['version']})")
+        print(f"Schemas: {len(discovery['schemas'])}")
+        print(f"Tables: {sum(len(s['tables']) for s in discovery['schemas'])}")
+        print(f"Views: {len([a for a in discovery['named_assets'] if a['kind'] == 'view'])}")
+        print(f"Stored Procedures: {len([a for a in discovery['named_assets'] if a['kind'] == 'stored_procedure'])}")
+        print(f"RDL Files: {len([a for a in discovery['named_assets'] if a['kind'] == 'rdl'])}")
+        print("\nDiscovery saved to cache/discovery.json")
     
-    finally:
-        pipeline.cleanup()
+    elif command == "model":
+        logger.info("Running semantic modeling...")
+        
+        # Ensure discovery exists
+        if not os.path.exists("cache/discovery.json"):
+            logger.error("Discovery cache not found. Run 'python main.py discover' first.")
+            sys.exit(1)
+        
+        pipeline.run_discovery(force_refresh=False)
+        pipeline.run_semantic_relationship_extraction()
+        model = pipeline.run_semantic_modeling(force_refresh=True)
+        
+        # Pretty print summary
+        print("\n=== SEMANTIC MODEL SUMMARY ===")
+        print(f"Entities: {len(model['entities'])}")
+        print(f"Dimensions: {len(model['dimensions'])}")
+        print(f"Facts: {len(model['facts'])}")
+        print(f"Relationships: {len(model['relationships'])}")
+        print(f"Metrics: {len(model['metrics'])}")
+        print("\nModel saved to cache/semantic_model.json")
+    
+    elif command in ["question", "full"]:
+        if len(sys.argv) < 3:
+            logger.error("Please provide a question")
+            print_usage()
+            sys.exit(1)
+        
+        question = " ".join(sys.argv[2:])
+        logger.info(f"Processing question: {question}")
+        
+        # Run full pipeline
+        answer = pipeline.run_full_pipeline(question, force_refresh=(command == "full"))
+        
+        # Pretty print answer
+        print("\n=== ANSWER ===")
+        print(json.dumps(answer, indent=2))
+    
+    else:
+        logger.error(f"Unknown command: {command}")
+        print_usage()
+        sys.exit(1)
+
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
