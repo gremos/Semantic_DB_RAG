@@ -16,6 +16,8 @@ from sqlalchemy.dialects import mssql
 from sqlalchemy.exc import SAWarning
 import warnings
 import logging
+import datetime
+import decimal
 
 logger = logging.getLogger(__name__)
 
@@ -239,7 +241,7 @@ class DatabaseIntrospector:
                     })
             
             # Get row count sample (limit to avoid performance issues)
-            rowcount_sample = self._get_row_count(schema, table_name)
+            sample_data = self._get_sample_data(schema, table_name)
             
             return {
                 "name": table_name,
@@ -247,7 +249,7 @@ class DatabaseIntrospector:
                 "columns": columns,
                 "primary_key": primary_key,
                 "foreign_keys": foreign_keys,
-                "rowcount_sample": rowcount_sample,
+                "sample_data": sample_data,
                 "source_assets": []  # Will be populated later
             }
         
@@ -283,22 +285,42 @@ class DatabaseIntrospector:
         
         # Fallback to generic type
         return "VARCHAR(MAX)"
-    
-    def _get_row_count(self, schema: str, table_name: str) -> int:
-        """Get approximate row count."""
+    def _get_sample_data(self, schema: str, table_name: str) -> List[dict]:
+        """Get 5 sample rows from table."""
         try:
             with self.engine.connect() as conn:
-                # Use COUNT(*) with LIMIT for safety
-                query = f'SELECT COUNT(*) FROM "{schema}"."{table_name}"'
+                # Dialect-specific LIMIT syntax
                 if self.vendor == "mssql":
-                    query = f"SELECT COUNT(*) FROM [{schema}].[{table_name}]"
+                    query = f"SELECT TOP 5 * FROM [{schema}].[{table_name}]"
+                elif self.vendor in ["postgres", "mysql"]:
+                    query = f'SELECT * FROM "{schema}"."{table_name}" LIMIT 5'
+                else:
+                    query = f'SELECT * FROM "{schema}"."{table_name}" FETCH FIRST 5 ROWS ONLY'
                 
                 result = conn.execute(text(query))
-                count = result.fetchone()[0]
-                return count
+                
+                # Convert rows to dicts
+                sample_rows = []
+                for row in result:
+                    row_dict = {}
+                    for col_name, col_value in row._mapping.items():
+                        # Handle non-JSON types
+                        if isinstance(col_value, (datetime.datetime, datetime.date)):
+                            row_dict[col_name] = col_value.isoformat()
+                        elif isinstance(col_value, decimal.Decimal):
+                            row_dict[col_name] = float(col_value)
+                        elif isinstance(col_value, bytes):
+                            row_dict[col_name] = "<binary>"
+                        elif col_value is None:
+                            row_dict[col_name] = None
+                        else:
+                            row_dict[col_name] = str(col_value) if not isinstance(col_value, (int, float, bool)) else col_value
+                    sample_rows.append(row_dict)
+                
+                return sample_rows
         except Exception as e:
-            logger.warning(f"Could not get row count for {schema}.{table_name}: {e}")
-            return 0
+            logger.warning(f"Could not get sample data for {schema}.{table_name}: {e}")
+            return []
     
     def _extract_views(self) -> List[dict]:
         """Extract view definitions and normalize SQL."""

@@ -52,7 +52,14 @@
                     }
                   }
                 },
-                "rowcount_sample": {"type": ["integer", "null"]},
+                "sample_data": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": true
+                  },
+                  "maxItems": 5
+                },
                 "source_assets": {
                   "type": "array",
                   "items": {
