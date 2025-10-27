@@ -7,6 +7,7 @@ import sys
 import os
 import logging
 import json
+from pathlib import Path
 from dotenv import load_dotenv
 
 # Setup logging
@@ -16,9 +17,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Import pipeline and executor
+# Import pipeline components
 from orchestration.pipeline import SemanticPipeline
-from qa.sql_executor import SQLExecutor
 
 
 def load_config() -> dict:
@@ -27,21 +27,21 @@ def load_config() -> dict:
     
     config = {
         "DEPLOYMENT_NAME": os.getenv("DEPLOYMENT_NAME"),
-        "API_VERSION": os.getenv("API_VERSION"),
+        "API_VERSION": os.getenv("API_VERSION", "2025-01-01-preview"),
         "AZURE_ENDPOINT": os.getenv("AZURE_ENDPOINT"),
         "AZURE_OPENAI_API_KEY": os.getenv("AZURE_OPENAI_API_KEY"),
         "DATABASE_CONNECTION_STRING": os.getenv("DATABASE_CONNECTION_STRING"),
-        "UTF8_ENCODING": os.getenv("UTF8_ENCODING", "true"),
-        "SCHEMA_EXCLUSIONS": os.getenv("SCHEMA_EXCLUSIONS", "sys,information_schema"),
-        "TABLE_EXCLUSIONS": os.getenv("TABLE_EXCLUSIONS", "temp_,test_,backup_,old_"),
-        "DISCOVERY_CACHE_HOURS": os.getenv("DISCOVERY_CACHE_HOURS", "168"),
-        "SEMANTIC_CACHE_HOURS": os.getenv("SEMANTIC_CACHE_HOURS", "168"),
+        "UTF8_ENCODING": os.getenv("UTF8_ENCODING", "true").lower() == "true",
+        "SCHEMA_EXCLUSIONS": os.getenv("SCHEMA_EXCLUSIONS", "sys,information_schema").split(','),
+        "TABLE_EXCLUSIONS": os.getenv("TABLE_EXCLUSIONS", "temp_,test_,backup_,old_").split(','),
+        "DISCOVERY_CACHE_HOURS": int(os.getenv("DISCOVERY_CACHE_HOURS", "168")),
+        "SEMANTIC_CACHE_HOURS": int(os.getenv("SEMANTIC_CACHE_HOURS", "168")),
+        "CACHE_DIR": os.getenv("CACHE_DIR", "./cache"),
     }
     
     # Validate required config
     required = [
         "DEPLOYMENT_NAME",
-        "API_VERSION",
         "AZURE_ENDPOINT",
         "AZURE_OPENAI_API_KEY",
         "DATABASE_CONNECTION_STRING"
@@ -62,108 +62,112 @@ def print_usage():
 Usage: python main.py <command> [arguments]
 
 Commands:
-    cache-clear              Clear all cached discovery and models
-    discover                 Run database discovery only
-    model                    Run semantic modeling only (requires discovery)
-    question <text>          Ask a question (generates SQL only)
-    full <text>              Run full pipeline with question (generates SQL only)
-    execute <text>           Ask question AND execute SQL with results (NEW)
+    cache-clear              Clear all cached discovery and semantic models
+    discover                 Run database discovery phase only
+    model                    Build semantic model (requires discovery)
+    query <text>             Ask a question and generate SQL
+    explain-model            Show semantic model summary
+    validate                 Validate semantic model completeness
     
 Examples:
-    python main.py cache-clear
     python main.py discover
     python main.py model
-    python main.py question "What are the total sales by customer?"
-    python main.py full "Show me revenue trends by month"
-    python main.py execute "Show me top 10 customers by revenue"
+    python main.py query "rank products by total sales"
+    python main.py explain-model
+    python main.py cache-clear
 """)
 
 
-def execute_and_display_results(
-    answer: dict,
-    executor: SQLExecutor,
-    row_limit: int = 10
-):
+def display_answer(answer: dict, verbose: bool = False):
     """
-    Execute SQL from answer and display results in terminal.
+    Display answer in a readable format.
     
     Args:
         answer: Answer JSON from pipeline
-        executor: SQL executor instance
-        row_limit: Number of rows to display
+        verbose: Show full evidence and metadata
     """
-    if answer.get("status") != "ok":
-        print("\n❌ Cannot execute: Query was refused")
-        print(f"Reason: {answer.get('refusal', {}).get('reason', 'Unknown')}")
-        return
+    print(f"\n{'='*80}")
+    print(f"STATUS: {answer.get('status', 'unknown').upper()}")
+    print(f"{'='*80}\n")
     
-    sql_statements = answer.get("sql", [])
+    if answer.get("status") == "refuse":
+        # Show refusal reason and guidance
+        refusal = answer.get("refusal", {})
+        print(f"❌ REFUSAL REASON:")
+        print(f"   {refusal.get('reason', 'Unknown reason')}\n")
+        
+        if refusal.get("missing"):
+            print(f"🔍 MISSING FROM SEMANTIC MODEL:")
+            for item in refusal["missing"]:
+                print(f"   • {item}")
+            print()
+        
+        if refusal.get("clarifying_questions"):
+            print(f"💡 CLARIFYING QUESTIONS:")
+            for i, q in enumerate(refusal["clarifying_questions"], 1):
+                print(f"   {i}. {q}")
+            print()
+        
+        if refusal.get("suggestions"):
+            print(f"💭 SUGGESTIONS:")
+            for suggestion in refusal["suggestions"]:
+                print(f"   • {suggestion}")
+            print()
     
-    if not sql_statements:
-        print("\n❌ No SQL statements to execute")
-        return
-    
-    # Execute each SQL statement
-    for idx, sql_obj in enumerate(sql_statements, 1):
-        sql = sql_obj.get("statement", "")
-        dialect = sql_obj.get("dialect", "unknown")
-        explanation = sql_obj.get("explanation", "")
-        limits = sql_obj.get("limits", {})
+    elif answer.get("status") == "ok":
+        # Show SQL and evidence
+        sql_statements = answer.get("sql", [])
         
-        print(f"\n{'='*80}")
-        print(f"QUERY {idx} of {len(sql_statements)}")
-        print(f"{'='*80}")
-        
-        # Show SQL
-        print(f"\n📝 SQL ({dialect}):")
-        print("-" * 80)
-        print(sql)
-        print("-" * 80)
-        
-        # Show explanation
-        if explanation:
-            print(f"\n💡 Explanation:")
-            print(f"   {explanation}")
-        
-        # Show evidence
-        evidence = sql_obj.get("evidence", {})
-        if evidence:
-            print(f"\n🔍 Evidence:")
-            if evidence.get("entities"):
-                print(f"   Entities: {', '.join(evidence['entities'])}")
-            if evidence.get("measures"):
-                print(f"   Measures: {', '.join(evidence['measures'])}")
-        
-        # Execute query
-        print(f"\n⚡ Executing query (limit: {row_limit} rows)...")
-        
-        timeout_sec = limits.get("timeout_sec", 60)
-        success, results, error_msg, exec_time = executor.execute_query(
-            sql=sql,
-            row_limit=row_limit,
-            timeout_sec=timeout_sec
-        )
-        
-        if not success:
-            print(f"\n❌ Query failed: {error_msg}")
-            continue
-        
-        # Display results
-        print(f"\n✅ Query successful! ({len(results)} rows in {exec_time:.2f}s)")
-        print(f"\n📊 Results:\n")
-        
-        if results:
-            # Format as table
-            table = executor.format_results_table(results)
-            print(table)
+        for idx, sql_obj in enumerate(sql_statements, 1):
+            sql = sql_obj.get("statement", "")
+            dialect = sql_obj.get("dialect", "unknown")
+            explanation = sql_obj.get("explanation", "")
+            evidence = sql_obj.get("evidence", {})
+            limits = sql_obj.get("limits", {})
             
-            # Show row count info
-            if len(results) == row_limit:
-                print(f"\n⚠️  Showing first {row_limit} rows. More results may exist.")
-        else:
-            print("   No rows returned.")
+            print(f"📝 SQL QUERY {idx} ({dialect}):")
+            print("-" * 80)
+            print(sql)
+            print("-" * 80)
+            print()
+            
+            if explanation:
+                print(f"💡 EXPLANATION:")
+                print(f"   {explanation}\n")
+            
+            if evidence and verbose:
+                print(f"🔍 EVIDENCE:")
+                if evidence.get("entities"):
+                    print(f"   Entities: {', '.join(evidence['entities'])}")
+                if evidence.get("dimensions"):
+                    print(f"   Dimensions: {', '.join(evidence['dimensions'])}")
+                if evidence.get("facts"):
+                    print(f"   Facts: {', '.join(evidence['facts'])}")
+                if evidence.get("measures"):
+                    print(f"   Measures: {', '.join(evidence['measures'])}")
+                if evidence.get("filters"):
+                    print(f"   Filters: {', '.join(evidence['filters'])}")
+                print()
+            
+            if limits:
+                print(f"⚙️  LIMITS:")
+                if limits.get("row_limit"):
+                    print(f"   Row Limit: {limits['row_limit']}")
+                if limits.get("timeout_sec"):
+                    print(f"   Timeout: {limits['timeout_sec']}s")
+                print()
+        
+        if answer.get("next_steps"):
+            print(f"➡️  NEXT STEPS:")
+            for step in answer["next_steps"]:
+                print(f"   • {step}")
+            print()
     
-    print(f"\n{'='*80}\n")
+    else:
+        print(f"⚠️  Unknown status: {answer.get('status')}")
+        print(json.dumps(answer, indent=2))
+    
+    print(f"{'='*80}\n")
 
 
 def main():
@@ -178,95 +182,163 @@ def main():
     # Load configuration
     config = load_config()
     
-    # Initialize pipeline
-    pipeline = SemanticPipeline(config)
+    # Initialize LLM client
+    from langchain_openai import AzureChatOpenAI
+    
+    logger.info("Initializing Azure OpenAI client...")
+    llm_client = AzureChatOpenAI(
+        azure_endpoint=config["AZURE_ENDPOINT"],
+        api_key=config["AZURE_OPENAI_API_KEY"],
+        deployment_name=config["DEPLOYMENT_NAME"],
+        api_version=config["API_VERSION"],
+        # temperature=0.1,  # Low temperature for deterministic outputs
+        max_tokens=4000
+    )
+    
+    # Initialize pipeline with proper parameters
+    logger.info("Initializing semantic pipeline...")
+    pipeline = SemanticPipeline(
+        db_connection_string=config["DATABASE_CONNECTION_STRING"],
+        llm_client=llm_client,
+        cache_dir=Path(config["CACHE_DIR"]),
+        discovery_cache_hours=config["DISCOVERY_CACHE_HOURS"],
+        semantic_cache_hours=config["SEMANTIC_CACHE_HOURS"]
+    )
     
     # Execute command
-    if command == "cache-clear":
-        logger.info("Clearing cache...")
-        pipeline.invalidate_cache()
-        logger.info("Cache cleared successfully")
-    
-    elif command == "discover":
-        logger.info("Running discovery...")
-        discovery = pipeline.run_discovery(force_refresh=True)
+    try:
+        if command == "cache-clear":
+            logger.info("Clearing all caches...")
+            pipeline.invalidate_caches()
+            logger.info("✅ Cache cleared successfully")
         
-        # Pretty print summary
-        print("\n=== DISCOVERY SUMMARY ===")
-        print(f"Database: {discovery['database']['vendor']} ({discovery['database']['version']})")
-        print(f"Schemas: {len(discovery['schemas'])}")
-        print(f"Tables: {sum(len(s['tables']) for s in discovery['schemas'])}")
-        print(f"Views: {len([a for a in discovery['named_assets'] if a['kind'] == 'view'])}")
-        print(f"Stored Procedures: {len([a for a in discovery['named_assets'] if a['kind'] == 'stored_procedure'])}")
-        print(f"RDL Files: {len([a for a in discovery['named_assets'] if a['kind'] == 'rdl'])}")
-        print("\nDiscovery saved to cache/discovery.json")
-    
-    elif command == "model":
-        logger.info("Running semantic modeling...")
+        elif command == "discover":
+            logger.info("Running discovery phase...")
+            discovery = pipeline._get_or_create_discovery()
+            
+            # Pretty print summary
+            print("\n=== DISCOVERY SUMMARY ===")
+            print(f"Database: {discovery.get('database', {}).get('vendor', 'unknown')} "
+                  f"({discovery.get('database', {}).get('version', 'unknown')})")
+            print(f"Dialect: {discovery.get('dialect', 'unknown')}")
+            print(f"Schemas: {len(discovery.get('schemas', []))}")
+            
+            total_tables = sum(len(s.get('tables', [])) for s in discovery.get('schemas', []))
+            print(f"Tables: {total_tables}")
+            
+            views = len([a for a in discovery.get('named_assets', []) if a.get('kind') == 'view'])
+            sps = len([a for a in discovery.get('named_assets', []) if a.get('kind') == 'stored_procedure'])
+            rdls = len([a for a in discovery.get('named_assets', []) if a.get('kind') == 'rdl'])
+            
+            print(f"Views: {views}")
+            print(f"Stored Procedures: {sps}")
+            print(f"RDL Files: {rdls}")
+            print(f"\n✅ Discovery saved to cache")
         
-        # Ensure discovery exists
-        if not os.path.exists("cache/discovery.json"):
-            logger.error("Discovery cache not found. Run 'python main.py discover' first.")
-            sys.exit(1)
+        elif command == "model":
+            logger.info("Building semantic model...")
+            
+            # Get discovery first
+            discovery = pipeline._get_or_create_discovery()
+            
+            # Build semantic model
+            model = pipeline._get_or_create_semantic_model(discovery)
+            
+            # Validate completeness
+            validation = pipeline._validate_model_completeness(model)
+            
+            # Pretty print summary
+            print("\n=== SEMANTIC MODEL SUMMARY ===")
+            print(f"Entities: {len(model.get('entities', []))}")
+            print(f"Dimensions: {len(model.get('dimensions', []))}")
+            print(f"Facts: {len(model.get('facts', []))}")
+            print(f"Relationships: {len(model.get('relationships', []))}")
+            print(f"Metrics: {len(model.get('metrics', []))}")
+            
+            if not validation["is_complete"]:
+                print(f"\n⚠️  WARNINGS:")
+                for warning in validation["missing"]:
+                    print(f"   • {warning}")
+            
+            print(f"\n✅ Semantic model saved to cache")
         
-        pipeline.run_discovery(force_refresh=False)
-        pipeline.run_semantic_relationship_extraction()
-        model = pipeline.run_semantic_modeling(force_refresh=True)
+        elif command == "query":
+            if len(sys.argv) < 3:
+                logger.error("Please provide a question")
+                print_usage()
+                sys.exit(1)
+            
+            question = " ".join(sys.argv[2:])
+            logger.info(f"Processing question: {question}")
+            
+            # Run full pipeline
+            answer = pipeline.process_question(question)
+            
+            # Display answer
+            verbose = "--verbose" in sys.argv or "-v" in sys.argv
+            display_answer(answer, verbose=verbose)
         
-        # Pretty print summary
-        print("\n=== SEMANTIC MODEL SUMMARY ===")
-        print(f"Entities: {len(model['entities'])}")
-        print(f"Dimensions: {len(model['dimensions'])}")
-        print(f"Facts: {len(model['facts'])}")
-        print(f"Relationships: {len(model['relationships'])}")
-        print(f"Metrics: {len(model['metrics'])}")
-        print("\nModel saved to cache/semantic_model.json")
-    
-    elif command in ["question", "full"]:
-        if len(sys.argv) < 3:
-            logger.error("Please provide a question")
+        elif command == "explain-model":
+            logger.info("Getting semantic model summary...")
+            summary = pipeline.get_model_summary()
+            
+            if "error" in summary:
+                print(f"\n❌ {summary['error']}")
+                print("Run 'python main.py model' first")
+            else:
+                print("\n=== SEMANTIC MODEL DETAILS ===")
+                print(f"Cache File: {summary['cache_file']}")
+                print(f"Cache Age: {summary['cache_age_hours']:.1f} hours")
+                print(f"\nCounts:")
+                print(f"  Entities: {summary['entity_count']}")
+                print(f"  Dimensions: {summary['dimension_count']}")
+                print(f"  Facts: {summary['fact_count']}")
+                print(f"  Relationships: {summary['relationship_count']}")
+                print(f"  Metrics: {summary['metric_count']}")
+                
+                if summary.get("facts"):
+                    print(f"\nFacts:")
+                    for fact in summary["facts"]:
+                        print(f"  • {fact['name']} (source: {fact['source']})")
+                        print(f"    - Measures: {fact['measure_count']}")
+                        print(f"    - Filter Columns: {fact['filter_column_count']}")
+                        if fact.get("measures"):
+                            for measure in fact["measures"]:
+                                print(f"      → {measure}")
+        
+        elif command == "validate":
+            logger.info("Validating semantic model...")
+            
+            # Load cached model
+            import glob
+            cache_files = glob.glob(f"{config['CACHE_DIR']}/semantic_model_*.json")
+            
+            if not cache_files:
+                print("\n❌ No semantic model found in cache")
+                print("Run 'python main.py model' first")
+                sys.exit(1)
+            
+            latest_cache = max(cache_files, key=os.path.getmtime)
+            with open(latest_cache, 'r') as f:
+                model = json.load(f)
+            
+            validation = pipeline._validate_model_completeness(model)
+            
+            print("\n=== MODEL VALIDATION ===")
+            if validation["is_complete"]:
+                print("✅ Model is complete and ready for Q&A")
+            else:
+                print("⚠️  Model has issues:")
+                for issue in validation["missing"]:
+                    print(f"   • {issue}")
+        
+        else:
+            logger.error(f"Unknown command: {command}")
             print_usage()
             sys.exit(1)
-        
-        question = " ".join(sys.argv[2:])
-        logger.info(f"Processing question: {question}")
-        
-        # Run full pipeline
-        answer = pipeline.run_full_pipeline(question, force_refresh=(command == "full"))
-        
-        # Pretty print answer (SQL only, no execution)
-        print("\n=== ANSWER ===")
-        print(json.dumps(answer, indent=2))
     
-    elif command == "execute":
-        # NEW COMMAND: Execute SQL and show results
-        if len(sys.argv) < 3:
-            logger.error("Please provide a question")
-            print_usage()
-            sys.exit(1)
-        
-        question = " ".join(sys.argv[2:])
-        logger.info(f"Processing question: {question}")
-        
-        # Run full pipeline
-        answer = pipeline.run_full_pipeline(question, force_refresh=False)
-        
-        # Initialize SQL executor
-        executor = SQLExecutor(
-            connection_string=config["DATABASE_CONNECTION_STRING"],
-            default_row_limit=10,  # Show 10 rows by default
-            default_timeout=60
-        )
-        
-        try:
-            # Execute and display results
-            execute_and_display_results(answer, executor, row_limit=10)
-        finally:
-            executor.close()
-    
-    else:
-        logger.error(f"Unknown command: {command}")
-        print_usage()
+    except Exception as e:
+        logger.error(f"Error executing command '{command}': {e}", exc_info=True)
         sys.exit(1)
 
 
