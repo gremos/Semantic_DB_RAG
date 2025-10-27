@@ -182,172 +182,157 @@ DISCOVERY TIMEOUT env DISCOVERY_TIMEOUT
 - Measures: with unit, currency, format_hint.
 - Duplicate ranking: prefer curated assets (views/SPs/RDL) > raw tables.
 - Compression + batching for posting discovery → LLM:
-  - 
+  - Chunk assets by type with ENTITY_BATCH_SIZE / DIMENSION_BATCH_SIZE / FACT_BATCH_SIZE.
+  - COMPRESSION_STRATEGY
+    - tldr: extract compact column lists, types, PK/FK, top 5 values
+    - map_reduce: summarize per-table then combine
+    - recap: dedupe synonyms/aliases across chunks
+  - Abort if schema validation fails (1 retry max)
 
 
-
-
-
-
-## 1. Environment & Config (Contract Only)
-Load from `.env` (fail fast if missing):
 ```
-DEPLOYMENT_NAME=gpt-5-mini  
-MODEL_VERSION=2025-01-01-preview  
-AZURE_ENDPOINT  
-AZURE_OPENAI_API_KEY  
-DATABASE_CONNECTION_STRING  
-UTF8_ENCODING=true  
-SCHEMA_EXCLUSIONS=sys,information_schema  
-TABLE_EXCLUSIONS=temp_,test_,backup_,old_  
-DISCOVERY_CACHE_HOURS=168  
-SEMANTIC_CACHE_HOURS=168  
-```
-- Use `langchain_openai.AzureChatOpenAI` (endpoint + key).  
-- Keep secrets in **Azure Key Vault** in production.  
-- Read-only connections.
----
-## 2. Roles & Flow
-### Roles
-- **Modeling:** derive neutral semantic model (JSON only).  
-- **Q&A:** propose grounded SQL answers (JSON only).  
-- Strict JSON Schema validation; 1 retry max.
-### Flow
-`Discovery → Semantic Model Creation → Q&A → Verification & Evidence`
----
-## 3. Phase 1 — Discovery
-**Inputs**
-- Introspect DB metadata, views, SPs, RDLs (`/data_upload`).
-- Normalize SQL via `sqlglot`.  
-- Drop schemas/tables via exclusions.  
-**Caching**
-- TTL = DISCOVERY_CACHE_HOURS keyed by DB fingerprint.
-
-**Output (Discovery JSON)**
-```json
 {
-  "database": {"vendor": "mssql", "version": "string"},
-  "dialect": "mssql",
-  "schemas": [
+  "entities": [
     {
-      "name": "string",
-      "tables": [
-        {
-          "name": "string",
-          "type": "table|view",
-          "columns": [{"name": "string","type": "string","nullable": true}],
-          "primary_key": ["col"],
-          "foreign_keys": [{"column": "col","ref_table": "schema.table","ref_column": "col"}],
-          "rowcount_sample": 0,
-          "source_assets": [{"kind": "view|stored_procedure|rdl","path": "string"}]
-        }
+      "name": "Customer",
+      "source": "dbo.Customer",
+      "primary_key": ["CustomerID"],
+      "display": {
+        "display_name": "Customer",
+        "default_label_column": "CustomerName",
+        "default_search_columns": ["CustomerName","Email","CustomerID"],
+        "default_sort": {"column": "CustomerName","direction": "asc"}
+      },
+      "columns": [
+        {"name": "CustomerID","role": "primary_key","semantic_type": "id","description": "Internal ID"},
+        {"name": "CustomerName","role": "label","semantic_type": "person_or_org_name","aliases": ["Name"]},
+        {"name": "Email","role": "attribute","semantic_type": "email"}
       ]
     }
   ],
-  "named_assets": [
-    {"kind": "view","name": "dbo.vSales","sql_normalized": "string"},
-    {"kind": "stored_procedure","name": "dbo.usp_GetRevenue","sql_normalized": "string"},
-    {"kind": "rdl","path": "/data_upload/Reports/Revenue.rdl","datasets": ["name1"]}
-  ]
+  "dimensions": [
+    {
+      "name": "Date",
+      "source": "dbo.DimDate",
+      "keys": ["DateKey"],
+      "attributes": [
+        {"name": "Date","semantic_type":"date"},
+        {"name": "Year","semantic_type":"year"},
+        {"name": "Month","semantic_type":"month_name"}
+      ],
+      "display": {"attribute_order": ["Year","Month","Date"]}
+    }
+  ],
+  "facts": [
+    {
+      "name": "Sales",
+      "source": "dbo.FactSales",
+      "grain": ["OrderID","LineID"],
+      "measures": [
+        {"name": "Revenue","expression": "SUM(ExtendedAmount)","unit": "currency","currency":"USD","format_hint":"currency(2)"},
+        {"name": "Units","expression":"SUM(Quantity)","unit":"count"}
+      ],
+      "foreign_keys": [
+        {"column": "CustomerID","references":"Customer.CustomerID"},
+        {"column": "DateKey","references":"Date.DateKey"}
+      ],
+      "display": {
+        "default_breakdowns": ["Customer","Date"],
+        "default_filters": [{"column":"Date.Year","op":">=","value":"2024"}]
+      }
+    }
+  ],
+  "relationships": [
+    {"from":"Sales.CustomerID","to":"Customer.CustomerID","cardinality":"many_to_one","confidence":"high","verification":{"overlap_rate":0.997}}
+  ],
+  "table_rankings": [
+    {"table":"dbo.vRevenue","duplicate_of":null,"rank":1,"reason":"curated view"},
+    {"table":"dbo.FactSales","duplicate_of":"dbo.vRevenue","rank":2}
+  ],
+  "audit": {"dialect":"mssql"}
 }
+
 ```
----
-## 4. Phase 2 — Semantic Model Creation
-**Inputs:** Discovery JSON (+ optional domain hints).  
-**Rules:**  
-- Star-schema bias (facts + dimensions).  
-- Friendly names, typical analytical measures.  
-- Each semantic object → concrete sources.  
-- Cache TTL = SEMANTIC_CACHE_HOURS.
-**Output (Semantic Model JSON)**
-```json
-{
-  "entities": [{"name": "Customer","source": "dbo.Customer","primary_key": ["CustomerID"]}],
-  "dimensions": [{"name": "Date","source": "dbo.DimDate","keys": ["DateKey"],"attributes": ["Year","Month"]}],
-  "facts": [{
-    "name": "Sales",
-    "source": "dbo.FactSales",
-    "grain": ["OrderID","LineID"],
-    "measures": [{"name": "Revenue","expression": "SUM(ExtendedAmount)"}],
-    "foreign_keys": [{"column": "CustomerID","references": "Customer.CustomerID"}]
-  }],
-  "relationships": [{"from": "Sales.CustomerID","to": "Customer.CustomerID","cardinality": "many_to_one"}],
-  "metrics": [{
-    "name": "Upsell Opportunities",
-    "logic": "Customers with recent purchase but missing cross-sell product family"
-  }],
-  "audit": {"dialect": "mssql"}
-}
+
+## 7. Q&A (Upgrades)
+
+Rules
+- Use only objects in Semantic Model JSON
+- Prefer views > SPs > RDL datasets > tables
+- Validate via sqlglot (syntax + existence + join keys)
+- Enforce limits: TOP(10) default, timeout=60s.
+- return results on terminal
+
+Response
 ```
----
-## 5. Phase 3 — Question Answering
-**Inputs:** Semantic Model JSON + natural language question.  
-**Rules:**  
-- Only use objects in the model.  
-- Prefer curated views/SPs/RDLs.  
-- Validate SQL via `sqlglot`.  
-**Output (Answer JSON)**
-```json
 {
   "status": "ok|refuse",
   "sql": [{
     "dialect": "mssql",
-    "statement": "SELECT ...",
-    "explanation": "maps to Revenue measure",
-    "evidence": {"entities": ["Customer","Sales"],"measures": ["Revenue"]},
-    "limits": {"row_limit": 1000,"timeout_sec": 60}
+    "statement": "SELECT TOP (10) ...",
+    "explanation": "Grounding to measures/entities",
+    "evidence": {"entities": ["..."], "measures": ["..."], "relationships": ["..."]},
+    "limits": {"row_limit": 1000, "timeout_sec": 60}
   }],
-  "next_steps": ["optional tips"],
+  "result_preview": {
+    "first_row": {"ColA": "v1", "ColB": 123},
+    "first_row_meaning": "Plain-English interpretation of the first row post-order.",
+    "rows_sampled": 10,
+    "top_10_rows": [
+      {"...": "..."}  // Stored into Q&A history log (see §6.2)
+    ]
+  },
+  "suggested_questions": [
+    "Follow-up #1",
+    "Follow-up #2",
+    "Follow-up #3"
+  ],
+  "next_steps": ["Optional tips"],
   "refusal": {"reason": "only when status=refuse"}
 }
+
 ```
----
-## 6. QuadRails (Hallucination Prevention)
-1. **Grounding:** only discovered objects; parse w/ sqlglot.  
-2. **Constraint:** strict schema validation (1 retry).  
-3. **Verification:** dry-run lint for existence + joins.  
-4. **Escalation:** if ambiguous → Refusal JSON + clarifying Qs.  
----
-## 7. Engineering Principles
-- **DRY:** Discovery JSON = single truth.  
-- **SOLID:** separate modules; open for dialects via sqlglot.  
-- **YAGNI:** no unnecessary BI server logic.  
-- **Readable:** small, composable, explicit fail paths.
----
-## 8. SQL Source Priority
-1. Curated views.  
-2. Stored procedures.  
-3. RDL datasets.  
-4. Raw tables.  
-All normalized via `sqlglot`.
----
-## 9. Prompt Contracts
-**SYSTEM — Modeling**
-> Input: Discovery JSON  
-> Output: Semantic Model JSON  
-> Rules: No invention; abstain if uncertain; JSON-only.
-**SYSTEM — Q&A**
-> Input: Semantic Model JSON + NL question  
-> Output: Answer JSON  
-> Rules: Model-only objects; up to 3 clarifying Qs; JSON-only.
----
-## 10. Execution Steps
-1. Load env & init AzureChatOpenAI.  
-2. **Discovery:** read catalogs, views, SPs, RDLs; normalize SQL.  
-3. **Modeling:** validate JSON → cache.  
-4. **Q&A:** generate SQL → lint → return evidence + explanation.  
-5. Read-only enforcement (timeouts, limits).  
----
-## 11. Example Metric — Upsell Opportunities
-- Fact: Sales  
-- Dims: Customer, Product, Date  
-- Measure: Revenue = SUM(ExtendedAmount)  
-- Metric: Customers purchased in last 90 days AND not ProductFamily = 'X'.  
-- Result: CustomerID + LastPurchaseDate + Eligible Families.  
-- Fallback: Refusal JSON if taxonomy missing.
----
-## 12. Observability & QA
-- Log prompts, cache hits/misses, lint failures, refusals.  
-- Nightly snapshot = deterministic model regen.  
-- Invalidate cache on RDL drift.
----
+Always include:
+- sql query
+- first_row + first_row_meaning
+- top_10_rows for history log (also persisted to disk, §6.2)
+- 2–6 suggested_questions
+
+## 8. Logs
+- Discovery & Semantic Run Logs
+  - File: ${LOG_DIR}/discovery_semantic.log
+  - a row logging for exeptions and debug especially for return of llm post
+- Q&A History Log (for later LLM mining)
+  - File: ${LOG_DIR}/qa_history.log.jsonl
+  - Purpose: keep question, generated SQL, evidence, and the top 10 rows.
+  - This becomes uploadable context to help the LLM learn the org’s business patterns and suggest opportunities.
+
+## 9. Guardrails (QuadRails)
+- Grounding: Every SQL token must map to Discovery JSON; cross-check against Semantic Model.
+- Constraint: Strict JSON schema validation (1 retry max).
+- Verification: sqlglot dry-run (parse + lint + object existence + join keys).
+- Escalation: Ambiguous intent (<70% confidence) → Refusal JSON + 2–3 clarifiers.
+
+## 10. Source Priority (unchanged)
+- Curated Views
+- Stored Procedures
+- RDL Datasets
+- Raw Tables
+
+## 11. Processing for LLM Posts (Compression + Batching)
+- Batching
+  - Split by asset type; cap at ENTITY_BATCH_SIZE, DIMENSION_BATCH_SIZE, FACT_BATCH_SIZE.
+- Compression
+  - tldr: column list, types, PK/FK, 5 sample values, null rates, measures.
+  - map_reduce: summarize per object → combine with de-dup of aliases.
+  - recap: unify synonyms/aliases across schemas (e.g., CustID, CustomerID).
+- De-dup ranking
+  - Prefer named assets (views/SPs/RDL datasets) over raw tables for the model when data overlaps.
+
+## 12. Execution Defaults
+- Row limit: default TOP(10); hard cap 1000.
+- Timeout: 60s per query.
+- Read-only: permission + lints block INSERT/UPDATE/DELETE/TRUNCATE/DROP/ALTER.
+- Cache TTLs: DISCOVERY_CACHE_HOURS, SEMANTIC_CACHE_HOURS.
+- Nightly: optional regeneration job + diff.
+
