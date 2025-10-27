@@ -24,6 +24,91 @@ class ColumnSampler:
         self.connector = connector
         self.max_samples_per_table = max_samples_per_table
     
+    def enrich_discovery_with_samples(
+        self, 
+        discovery_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """
+        MAIN ENTRY POINT: Enrich discovery JSON with column samples and classifications.
+        This ensures column metadata flows through to semantic model.
+        
+        Returns:
+            Enhanced discovery_data with column_samples added to each table
+        """
+        targets, classifications = self.identify_and_classify_columns(discovery_data)
+        samples = self.sample_columns(targets, classifications)
+        
+        # CRITICAL: Inject samples back into discovery JSON
+        for schema in discovery_data.get("schemas", []):
+            for table in schema.get("tables", []):
+                full_table = f"{schema['name']}.{table['name']}"
+                
+                # Add enriched column metadata
+                for column in table.get("columns", []):
+                    full_col = f"{full_table}.{column['name']}"
+                    
+                    # Add classification
+                    if full_col in classifications:
+                        column["classification"] = classifications[full_col]
+                    
+                    # Add sample values and stats
+                    if full_col in samples and samples[full_col]["values"]:
+                        column["sample_values"] = samples[full_col]["values"]
+                        column["distinct_count"] = samples[full_col].get("distinct_count", 0)
+                        
+                        # Calculate distribution for categorical columns
+                        if samples[full_col]["values"]:
+                            value_counts = {}
+                            total = len(samples[full_col]["values"])
+                            for val in samples[full_col]["values"]:
+                                value_counts[str(val)] = value_counts.get(str(val), 0) + 1
+                            
+                            column["value_distribution"] = {
+                                k: round(v / total, 3) 
+                                for k, v in value_counts.items()
+                            }
+        
+        # Add negative findings
+        discovery_data["negative_findings"] = self._identify_negative_findings(discovery_data)
+        
+        logger.info(f"Enriched discovery with column samples and classifications")
+        return discovery_data
+    
+    def _identify_negative_findings(self, discovery_data: Dict[str, Any]) -> Dict[str, str]:
+        """
+        Identify what was NOT found (critical for Q&A validation).
+        """
+        findings = {}
+        
+        # Check for common tables that don't exist
+        all_tables = set()
+        for schema in discovery_data.get("schemas", []):
+            for table in schema.get("tables", []):
+                all_tables.add(table["name"].lower())
+        
+        # Common business tables
+        missing_tables = []
+        for expected in ['refunds', 'returns', 'credits', 'adjustments']:
+            if not any(expected in t for t in all_tables):
+                missing_tables.append(expected)
+        
+        if missing_tables:
+            findings["missing_tables"] = f"No tables found matching: {', '.join(missing_tables)}"
+        
+        # Check for multi-currency indicators
+        has_currency_col = False
+        for schema in discovery_data.get("schemas", []):
+            for table in schema.get("tables", []):
+                for col in table.get("columns", []):
+                    if 'currency' in col["name"].lower():
+                        has_currency_col = True
+                        break
+        
+        if not has_currency_col:
+            findings["currency"] = "NO CURRENCY COLUMNS DETECTED - assuming single currency"
+        
+        return findings
+    
     def identify_and_classify_columns(
         self, 
         discovery_data: Dict[str, Any]
@@ -164,16 +249,18 @@ class ColumnSampler:
                     "details"
                 ]
         
-        # STATUS INDICATORS
+        # STATUS INDICATORS - CRITICAL FOR FILTERING
         elif any(kw in col_lower for kw in self.STATUS_KEYWORDS):
             semantic_role = "status_indicator"
-            priority = "high"
+            priority = "critical"  # Changed from "high" to "critical"
             nl_aliases = [
                 "status",
                 "state",
                 f"{table_name} status",
                 "active",
-                "cancelled"
+                "cancelled",
+                "completed",
+                "pending"
             ]
         
         # DATE COLUMNS

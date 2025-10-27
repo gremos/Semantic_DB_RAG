@@ -1,577 +1,339 @@
 """
-File: orchestration/pipeline.py
-Main orchestration pipeline for Discovery → Modeling → Q&A
+Orchestration pipeline that ensures semantic model as single source of truth
 """
-
-import json
 import logging
-import os
-from datetime import datetime, timedelta
+import json
+import hashlib
+from pathlib import Path
 from typing import Dict, Any, Optional
-from langchain_openai import AzureChatOpenAI
-from qa.question_handler import QuestionHandler
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
 
 class SemanticPipeline:
     """
-    Orchestrates the three-phase pipeline:
-    1. Discovery (database introspection)
-    2. Semantic Modeling (business layer creation)
-    3. Question Answering (LLM-driven SQL generation)
+    Orchestrates Discovery → Semantic Model → Q&A
+    Ensures semantic model is single source of truth
     """
-
-    def __init__(self, config: Dict[str, Any]):
+    
+    def __init__(
+        self,
+        db_connection_string: str,
+        llm_client: Any,
+        cache_dir: Path,
+        discovery_cache_hours: int = 168,
+        semantic_cache_hours: int = 168
+    ):
+        self.db_connection_string = db_connection_string
+        self.llm_client = llm_client
+        self.cache_dir = cache_dir
+        self.discovery_cache_hours = discovery_cache_hours
+        self.semantic_cache_hours = semantic_cache_hours
+        
+        # Ensure cache directory exists
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
+    
+    def process_question(self, question: str) -> Dict[str, Any]:
         """
-        Initialize pipeline with configuration.
-        
-        File: orchestration/pipeline.py, Line: 23
-        
-        Args:
-            config: Configuration dictionary from environment
+        Main entry point - execute full pipeline
         """
-        self.config = config
         
-        # Initialize LLM
-        self.llm = AzureChatOpenAI(
-            deployment_name=config["DEPLOYMENT_NAME"],
-            api_version=config["API_VERSION"],
-            azure_endpoint=config["AZURE_ENDPOINT"],
-            api_key=config["AZURE_OPENAI_API_KEY"],
-        )
+        # Phase 1: Discovery
+        logger.info("=== PHASE 1: DISCOVERY ===")
+        discovery_json = self._get_or_create_discovery()
         
-        # Cache storage
-        self.cache_dir = config.get("cache_dir", "cache")
-        os.makedirs(self.cache_dir, exist_ok=True)
+        # Phase 2: Semantic Model
+        logger.info("=== PHASE 2: SEMANTIC MODELING ===")
+        semantic_model = self._get_or_create_semantic_model(discovery_json)
         
-        # Discovery and semantic model caches
-        self.discovery_json: Optional[Dict[str, Any]] = None
-        self.semantic_model: Optional[Dict[str, Any]] = None
-
-    def run_full_pipeline(self, question: str, force_refresh: bool = False) -> Dict[str, Any]:
+        # Phase 3: Q&A
+        logger.info("=== PHASE 3: QUESTION ANSWERING ===")
+        answer = self._answer_question(question, semantic_model)
+        
+        return answer
+    
+    def _get_or_create_discovery(self) -> Dict[str, Any]:
         """
-        Run complete pipeline: Discovery → Modeling → Q&A
-        
-        File: orchestration/pipeline.py, Line: 51
-        
-        Args:
-            question: Natural language question
-            force_refresh: If True, bypass cache and regenerate discovery/model
-            
-        Returns:
-            Answer JSON or Refusal JSON
+        Get cached discovery or create new one
+        Cache key is based on database fingerprint
         """
-        try:
-            # Phase 1: Discovery
-            logger.info("=== PHASE 1: DISCOVERY ===")
-            discovery_json = self._get_or_create_discovery(force_refresh=force_refresh)
-            
-            # Phase 2: Semantic Modeling
-            logger.info("=== PHASE 2: SEMANTIC MODELING ===")
-            semantic_model = self._get_or_create_semantic_model(
-                discovery_json, 
-                force_refresh=force_refresh
-            )
-            
-            # Phase 3: Question Answering
-            logger.info("=== PHASE 3: QUESTION ANSWERING ===")
-            handler = QuestionHandler(self.llm, semantic_model)
-            answer = handler.answer_question(question)
-            
-            return answer
-            
-        except Exception as e:
-            logger.error(f"Pipeline error: {e}", exc_info=True)
-            return {
-                "status": "refuse",
-                "refusal": {
-                    "reason": f"System error: {str(e)}",
-                    "suggestions": ["Please try again or contact support"]
-                }
-            }
-
-    def _get_or_create_discovery(self, force_refresh: bool = False) -> Dict[str, Any]:
-        """
-        Get cached discovery or create new one via LLM-driven introspection.
         
-        File: orchestration/pipeline.py, Line: 85
+        # Compute cache key from connection string
+        cache_key = self._compute_discovery_cache_key()
+        cache_file = self.cache_dir / f"discovery_{cache_key}.json"
         
-        Args:
-            force_refresh: If True, bypass cache and regenerate
-            
-        Returns:
-            Discovery JSON
-        """
-        cache_path = os.path.join(self.cache_dir, "discovery.json")
-        cache_meta_path = os.path.join(self.cache_dir, "discovery_meta.json")
+        # Check cache
+        if cache_file.exists():
+            cache_age = datetime.now() - datetime.fromtimestamp(cache_file.stat().st_mtime)
+            if cache_age < timedelta(hours=self.discovery_cache_hours):
+                logger.info("Using cached discovery JSON")
+                with open(cache_file, "r") as f:
+                    return json.load(f)
+            else:
+                logger.info(f"Discovery cache expired (age: {cache_age})")
         
-        # Check cache validity (unless force_refresh)
-        if not force_refresh and os.path.exists(cache_path) and os.path.exists(cache_meta_path):
-            with open(cache_meta_path, 'r') as f:
-                meta = json.load(f)
-                cache_time = datetime.fromisoformat(meta["created_at"])
-                cache_hours = int(self.config.get("discovery_cache_hours", 168))
-                
-                if datetime.now() - cache_time < timedelta(hours=cache_hours):
-                    logger.info("Using cached discovery JSON")
-                    with open(cache_path, 'r') as df:
-                        return json.load(df)
-                else:
-                    logger.info("Discovery cache expired")
-        elif force_refresh:
-            logger.info("Force refresh enabled - bypassing cache")
+        # Run discovery
+        logger.info("Running discovery on database")
+        from discovery.schema_inspector import SchemaInspector
         
-        # Create new discovery
-        logger.info("Running discovery introspection")
-        discovery_json = self._run_discovery_via_llm()
+        inspector = SchemaInspector(self.db_connection_string)
+        discovery_json = inspector.discover()
         
         # Cache it
-        with open(cache_path, 'w') as f:
-            json.dump(discovery_json, f, indent=2)
-        with open(cache_meta_path, 'w') as f:
-            json.dump({"created_at": datetime.now().isoformat()}, f)
+        with open(cache_file, "w") as f:
+            json.dump(discovery_json, f, indent=2, default=str)
         
+        logger.info(f"Discovery complete - cached to {cache_file}")
         return discovery_json
-
-    def _run_discovery_via_llm(self) -> Dict[str, Any]:
+    
+    def _get_or_create_semantic_model(self, discovery_json: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Introspect database using LLM to guide the process.
-        
-        File: orchestration/pipeline.py, Line: 121
-        
-        Returns:
-            Discovery JSON with normalized metadata
+        Get cached semantic model or create new one
+        Cache key is based on discovery fingerprint
         """
-        # NOTE: In production, this would connect to the actual database
-        # For this spec, we'll simulate with a sample discovery
         
-        logger.info("Introspecting database schema...")
+        # Compute discovery fingerprint
+        discovery_fingerprint = self._compute_discovery_fingerprint(discovery_json)
+        cache_file = self.cache_dir / f"semantic_model_{discovery_fingerprint}.json"
         
-        # Sample discovery structure (replace with actual DB introspection)
-        discovery_json = {
-            "database": {
-                "vendor": "mssql",
-                "version": "2019",
-                "fingerprint": "sample_db_v1"
-            },
-            "dialect": "mssql",
-            "schemas": [
-                {
-                    "name": "dbo",
-                    "tables": [
-                        {
-                            "name": "Customer",
-                            "type": "table",
-                            "columns": [
-                                {"name": "CustomerID", "type": "int", "nullable": False},
-                                {"name": "CustomerName", "type": "varchar(100)", "nullable": False},
-                                {"name": "Email", "type": "varchar(100)", "nullable": True},
-                                {"name": "CreatedDate", "type": "datetime", "nullable": False}
-                            ],
-                            "primary_key": ["CustomerID"],
-                            "foreign_keys": [],
-                            "rowcount_sample": 5000,
-                            "source_assets": []
-                        },
-                        {
-                            "name": "Orders",
-                            "type": "table",
-                            "columns": [
-                                {"name": "OrderID", "type": "int", "nullable": False},
-                                {"name": "CustomerID", "type": "int", "nullable": False},
-                                {"name": "OrderDate", "type": "datetime", "nullable": False},
-                                {"name": "TotalAmount", "type": "decimal(18,2)", "nullable": False},
-                                {"name": "Status", "type": "varchar(50)", "nullable": False}
-                            ],
-                            "primary_key": ["OrderID"],
-                            "foreign_keys": [
-                                {
-                                    "column": "CustomerID",
-                                    "ref_table": "dbo.Customer",
-                                    "ref_column": "CustomerID"
-                                }
-                            ],
-                            "rowcount_sample": 50000,
-                            "source_assets": []
-                        },
-                        {
-                            "name": "OrderLines",
-                            "type": "table",
-                            "columns": [
-                                {"name": "OrderLineID", "type": "int", "nullable": False},
-                                {"name": "OrderID", "type": "int", "nullable": False},
-                                {"name": "ProductID", "type": "int", "nullable": False},
-                                {"name": "Quantity", "type": "int", "nullable": False},
-                                {"name": "UnitPrice", "type": "decimal(18,2)", "nullable": False},
-                                {"name": "LineTotal", "type": "decimal(18,2)", "nullable": False}
-                            ],
-                            "primary_key": ["OrderLineID"],
-                            "foreign_keys": [
-                                {
-                                    "column": "OrderID",
-                                    "ref_table": "dbo.Orders",
-                                    "ref_column": "OrderID"
-                                }
-                            ],
-                            "rowcount_sample": 150000,
-                            "source_assets": []
-                        }
-                    ]
-                }
-            ],
-            "named_assets": [
-                {
-                    "kind": "view",
-                    "name": "dbo.vCustomerSales",
-                    "sql_normalized": "SELECT c.CustomerID, c.CustomerName, SUM(o.TotalAmount) AS TotalSales FROM dbo.Customer c INNER JOIN dbo.Orders o ON c.CustomerID = o.CustomerID GROUP BY c.CustomerID, c.CustomerName"
-                }
-            ]
+        # Check cache
+        if cache_file.exists():
+            cache_age = datetime.now() - datetime.fromtimestamp(cache_file.stat().st_mtime)
+            if cache_age < timedelta(hours=self.semantic_cache_hours):
+                logger.info("Using cached semantic model")
+                with open(cache_file, "r") as f:
+                    return json.load(f)
+            else:
+                logger.info(f"Semantic model cache expired (age: {cache_age})")
+        
+        # Build semantic model
+        logger.info("Building semantic model via LLM")
+        from modeling.semantic_builder import SemanticModelBuilder
+        
+        builder = SemanticModelBuilder(discovery_json, self.llm_client)
+        semantic_model = builder.build()
+        
+        # CRITICAL: Validate model completeness
+        validation_result = self._validate_model_completeness(semantic_model)
+        if not validation_result["is_complete"]:
+            logger.warning(f"Semantic model incomplete: {validation_result['missing']}")
+            # Add warnings to model
+            semantic_model["warnings"] = validation_result["missing"]
+        
+        # Cache it
+        with open(cache_file, "w") as f:
+            json.dump(semantic_model, f, indent=2, default=str)
+        
+        logger.info(f"Semantic model complete - cached to {cache_file}")
+        return semantic_model
+    
+    def _answer_question(self, question: str, semantic_model: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Answer question using semantic model as AUTHORITY
+        """
+        from qa.question_handler import QuestionHandler
+        
+        handler = QuestionHandler(semantic_model, self.llm_client)
+        answer = handler.answer(question)
+        
+        return answer
+    
+    def _validate_model_completeness(self, model: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Validate that semantic model has all required metadata
+        to serve as single source of truth
+        """
+        
+        validation = {
+            "is_complete": True,
+            "missing": []
         }
         
-        logger.info(f"Discovered {len(discovery_json['schemas'][0]['tables'])} tables")
-        return discovery_json
-
-    def _get_or_create_semantic_model(
-        self, discovery_json: Dict[str, Any], force_refresh: bool = False
-    ) -> Dict[str, Any]:
-        """
-        Get cached semantic model or create via LLM.
+        # Check entities have column metadata
+        for entity in model.get("entities", []):
+            if not entity.get("columns"):
+                validation["is_complete"] = False
+                validation["missing"].append(f"Entity '{entity['name']}' missing column metadata")
         
-        File: orchestration/pipeline.py, Line: 218
-        
-        Args:
-            discovery_json: Discovery JSON from Phase 1
-            force_refresh: If True, bypass cache and regenerate
+        # Check facts have column metadata and filter columns
+        for fact in model.get("facts", []):
+            if not fact.get("columns"):
+                validation["is_complete"] = False
+                validation["missing"].append(f"Fact '{fact['name']}' missing column metadata")
             
-        Returns:
-            Semantic Model JSON
-        """
-        cache_path = os.path.join(self.cache_dir, "semantic_model.json")
-        cache_meta_path = os.path.join(self.cache_dir, "semantic_model_meta.json")
-        
-        # Check cache validity (unless force_refresh)
-        if not force_refresh and os.path.exists(cache_path) and os.path.exists(cache_meta_path):
-            with open(cache_meta_path, 'r') as f:
-                meta = json.load(f)
-                cache_time = datetime.fromisoformat(meta["created_at"])
-                cache_hours = int(self.config.get("semantic_cache_hours", 168))
-                
-                if datetime.now() - cache_time < timedelta(hours=cache_hours):
-                    logger.info("Using cached semantic model")
-                    with open(cache_path, 'r') as sf:
-                        return json.load(sf)
-                else:
-                    logger.info("Semantic model cache expired")
-        elif force_refresh:
-            logger.info("Force refresh enabled - bypassing semantic model cache")
-        
-        # Create new semantic model
-        logger.info("Building semantic model via LLM")
-        semantic_model = self._build_semantic_model_via_llm(discovery_json)
-        
-        # Cache it
-        with open(cache_path, 'w') as f:
-            json.dump(semantic_model, f, indent=2)
-        with open(cache_meta_path, 'w') as f:
-            json.dump({"created_at": datetime.now().isoformat()}, f)
-        
-        return semantic_model
-
-    def _build_semantic_model_via_llm(
-        self, discovery_json: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """
-        Build semantic model using LLM with strict grounding to discovery.
-        
-        File: orchestration/pipeline.py, Line: 261
-        
-        Args:
-            discovery_json: Discovery JSON
+            if not fact.get("filter_columns"):
+                validation["missing"].append(f"Fact '{fact['name']}' missing filter column metadata (may limit Q&A)")
             
-        Returns:
-            Semantic Model JSON
-        """
-        prompt = f"""You are building a business-friendly semantic data model from database metadata.
-
-Discovery JSON:
-{json.dumps(discovery_json, indent=2)}
-
-Your task:
-1. Classify tables as entities (master data), dimensions (descriptive), or facts (transactional)
-2. Generate friendly business names for each
-3. Infer measures from numeric columns in facts (SUM, AVG, COUNT, etc.)
-4. Map relationships using foreign keys
-5. Suggest useful business metrics
-
-STRICT RULES:
-- ONLY use tables/columns from Discovery JSON
-- DO NOT invent tables or columns
-- Every source reference must be valid
-- Rate confidence (high/medium/low) for each inference
-
-Return JSON matching this schema:
-{{
-  "entities": [
-    {{
-      "name": "Customer",
-      "source": "dbo.Customer",
-      "primary_key": ["CustomerID"],
-      "business_name": "Customer",
-      "description": "Customer master data",
-      "confidence": "high"
-    }}
-  ],
-  "dimensions": [
-    {{
-      "name": "Date",
-      "source": "dbo.DimDate",
-      "keys": ["DateKey"],
-      "attributes": ["Year", "Month", "Quarter"],
-      "business_name": "Date Dimension",
-      "confidence": "high"
-    }}
-  ],
-  "facts": [
-    {{
-      "name": "Sales",
-      "source": "dbo.Orders",
-      "grain": ["OrderID"],
-      "measures": [
-        {{
-          "name": "Revenue",
-          "expression": "SUM(TotalAmount)",
-          "aggregation": "sum",
-          "column": "TotalAmount",
-          "business_name": "Total Revenue",
-          "confidence": "high"
-        }}
-      ],
-      "foreign_keys": [
-        {{
-          "column": "CustomerID",
-          "references": "Customer.CustomerID"
-        }}
-      ],
-      "business_name": "Sales Transactions",
-      "confidence": "high"
-    }}
-  ],
-  "relationships": [
-    {{
-      "from": "Sales.CustomerID",
-      "to": "Customer.CustomerID",
-      "cardinality": "many_to_one",
-      "confidence": "high"
-    }}
-  ],
-  "metrics": [
-    {{
-      "name": "Customer Lifetime Value",
-      "logic": "Sum of all sales per customer over their lifetime",
-      "required_objects": ["Customer", "Sales"],
-      "confidence": "medium"
-    }}
-  ],
-  "audit": {{
-    "dialect": "{discovery_json.get('dialect', 'unknown')}",
-    "created_at": "{datetime.now().isoformat()}"
-  }}
-}}
-
-Return ONLY valid JSON."""
-
-        response = self.llm.invoke(prompt)
-        try:
-            semantic_model = json.loads(response.content)
-            
-            # Validate that all sources exist in discovery
-            valid = self._validate_semantic_model(semantic_model, discovery_json)
-            if not valid["is_valid"]:
-                logger.error(f"Semantic model validation failed: {valid['errors']}")
-                # Retry once
-                retry_prompt = f"""{prompt}
-
-VALIDATION ERRORS FROM PREVIOUS ATTEMPT:
-{json.dumps(valid['errors'], indent=2)}
-
-Fix these errors and return corrected JSON."""
-                retry_response = self.llm.invoke(retry_prompt)
-                semantic_model = json.loads(retry_response.content)
-            
-            return semantic_model
-            
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse semantic model: {e}")
-            raise
-
-    def _validate_semantic_model(
-        self, semantic_model: Dict[str, Any], discovery_json: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """
-        Validate that semantic model only references discovered objects.
+            # Check measures have column stats
+            for measure in fact.get("measures", []):
+                if not measure.get("column_stats"):
+                    validation["missing"].append(f"Measure '{measure['name']}' missing column statistics")
         
-        File: orchestration/pipeline.py, Line: 373
+        # Check negative findings exist
+        if not model.get("negative_findings"):
+            validation["is_complete"] = False
+            validation["missing"].append("Missing negative findings (what doesn't exist in database)")
         
-        Args:
-            semantic_model: Proposed semantic model
-            discovery_json: Ground truth discovery
-            
-        Returns:
-            Validation result with errors
+        return validation
+    
+    def _compute_discovery_cache_key(self) -> str:
         """
-        errors = []
-        
-        # Build valid sources from discovery
-        valid_tables = set()
-        valid_columns = {}
+        Compute cache key from connection string
+        """
+        # Hash connection string (without password for security)
+        # In production, extract server/database only
+        hash_input = self.db_connection_string[:100]  # Truncate for safety
+        return hashlib.sha256(hash_input.encode()).hexdigest()[:16]
+    
+    def _compute_discovery_fingerprint(self, discovery_json: Dict[str, Any]) -> str:
+        """
+        Compute fingerprint from discovery JSON
+        Used to invalidate semantic model cache when discovery changes
+        """
+        fingerprint_data = []
         
         for schema in discovery_json.get("schemas", []):
             for table in schema.get("tables", []):
-                table_full_name = f"{schema['name']}.{table['name']}"
-                valid_tables.add(table_full_name)
-                valid_columns[table_full_name] = {col["name"] for col in table["columns"]}
+                # Include table name + rowcount + column count
+                col_count = len(table.get("columns", []))
+                row_count = table.get("rowcount_sample", 0)
+                fingerprint_data.append(f"{schema['name']}.{table['name']}:{col_count}:{row_count}")
         
-        # Validate entities
-        for entity in semantic_model.get("entities", []):
-            if entity["source"] not in valid_tables:
-                errors.append(f"Entity '{entity['name']}' references invalid source: {entity['source']}")
-        
-        # Validate facts
-        for fact in semantic_model.get("facts", []):
-            if fact["source"] not in valid_tables:
-                errors.append(f"Fact '{fact['name']}' references invalid source: {fact['source']}")
-            
-            # Validate measures
-            for measure in fact.get("measures", []):
-                column = measure.get("column")
-                if column and column not in valid_columns.get(fact["source"], set()):
-                    errors.append(
-                        f"Measure '{measure['name']}' references invalid column: "
-                        f"{fact['source']}.{column}"
-                    )
-        
-        return {
-            "is_valid": len(errors) == 0,
-            "errors": errors
-        }
-
-    def invalidate_cache(self, cache_type: Optional[str] = None) -> Dict[str, Any]:
+        fingerprint_str = "|".join(sorted(fingerprint_data))
+        return hashlib.sha256(fingerprint_str.encode()).hexdigest()[:16]
+    
+    def invalidate_caches(self):
         """
-        Invalidate cache files (discovery, semantic model, or both).
-        
-        File: orchestration/pipeline.py, Line: 410
-        
-        Args:
-            cache_type: Type of cache to clear ('discovery', 'semantic', or None for both)
-            
-        Returns:
-            Dictionary with cleared cache info
+        Force invalidate all caches
+        Useful when database schema changes
         """
-        cleared = []
+        logger.info("Invalidating all caches")
         
-        cache_files = {
-            "discovery": ["discovery.json", "discovery_meta.json"],
-            "semantic": ["semantic_model.json", "semantic_model_meta.json"]
+        for cache_file in self.cache_dir.glob("discovery_*.json"):
+            cache_file.unlink()
+            logger.info(f"Deleted {cache_file}")
+        
+        for cache_file in self.cache_dir.glob("semantic_model_*.json"):
+            cache_file.unlink()
+            logger.info(f"Deleted {cache_file}")
+    
+    def get_model_summary(self) -> Dict[str, Any]:
+        """
+        Get summary of current semantic model for debugging
+        """
+        
+        # Try to load cached model
+        cached_models = list(self.cache_dir.glob("semantic_model_*.json"))
+        if not cached_models:
+            return {"error": "No semantic model cached"}
+        
+        # Load most recent
+        latest_model_file = max(cached_models, key=lambda p: p.stat().st_mtime)
+        with open(latest_model_file, "r") as f:
+            model = json.load(f)
+        
+        summary = {
+            "cache_file": str(latest_model_file),
+            "cache_age_hours": (datetime.now() - datetime.fromtimestamp(latest_model_file.stat().st_mtime)).total_seconds() / 3600,
+            "entity_count": len(model.get("entities", [])),
+            "dimension_count": len(model.get("dimensions", [])),
+            "fact_count": len(model.get("facts", [])),
+            "relationship_count": len(model.get("relationships", [])),
+            "metric_count": len(model.get("metrics", [])),
+            "facts": []
         }
         
-        # Determine which caches to clear
-        if cache_type is None:
-            types_to_clear = ["discovery", "semantic"]
-        elif cache_type in cache_files:
-            types_to_clear = [cache_type]
-        else:
-            return {
-                "status": "error",
-                "message": f"Invalid cache_type: {cache_type}. Use 'discovery', 'semantic', or None"
+        # Summarize facts (most important for Q&A)
+        for fact in model.get("facts", []):
+            fact_summary = {
+                "name": fact.get("name"),
+                "source": fact.get("source"),
+                "measure_count": len(fact.get("measures", [])),
+                "filter_column_count": len(fact.get("filter_columns", [])),
+                "measures": [m.get("name") for m in fact.get("measures", [])],
+                "filter_columns": [f.get("name") for f in fact.get("filter_columns", [])]
             }
+            summary["facts"].append(fact_summary)
         
-        # Clear the specified caches
-        for cache_type_name in types_to_clear:
-            for filename in cache_files[cache_type_name]:
-                filepath = os.path.join(self.cache_dir, filename)
-                if os.path.exists(filepath):
-                    try:
-                        os.remove(filepath)
-                        cleared.append(filename)
-                        logger.info(f"Removed cache file: {filename}")
-                    except Exception as e:
-                        logger.error(f"Failed to remove {filename}: {e}")
+        return summary
+    
+    def explain_refusal(self, question: str, answer: Dict[str, Any]) -> str:
+        """
+        Generate human-readable explanation of why a question was refused
+        Useful for debugging
+        """
         
-        return {
-            "status": "success",
-            "cleared": cleared,
-            "cache_dir": self.cache_dir
-        }
+        if answer.get("status") != "refuse":
+            return "Question was not refused"
+        
+        refusal = answer.get("refusal", {})
+        
+        explanation = f"""
+        Question: {question}
+        
+        Status: REFUSED
+        
+        Reason: {refusal.get("reason", "Unknown")}
+        
+        Missing from semantic model:
+        {json.dumps(refusal.get("missing", []), indent=2)}
+        
+        Ambiguities detected:
+        {json.dumps(refusal.get("ambiguities", []), indent=2)}
+        
+        Clarifying questions:
+        {json.dumps(refusal.get("clarifying_questions", []), indent=2)}
+        
+        To fix this:
+        1. Check if semantic model has the required entities/measures/filters
+        2. Run get_model_summary() to see what's available
+        3. If model is incomplete, invalidate caches and rebuild
+        4. If user question is ambiguous, rephrase with more specifics
+        """
+        
+        return explanation.strip()
 
 
-def load_config_from_env() -> Dict[str, Any]:
+def create_pipeline_from_env() -> SemanticPipeline:
     """
-    Load configuration from environment variables.
-    
-    File: orchestration/pipeline.py, Line: 460
-    
-    Returns:
-        Configuration dictionary
+    Factory method to create pipeline from environment variables
     """
-    required_vars = [
-        "DEPLOYMENT_NAME",
-        "API_VERSION",
-        "AZURE_ENDPOINT",
-        "AZURE_OPENAI_API_KEY",
-        "DATABASE_CONNECTION_STRING"
-    ]
+    import os
+    from pathlib import Path
     
-    config = {}
-    missing = []
+    # Load environment
+    db_connection_string = os.getenv("DATABASE_CONNECTION_STRING")
+    if not db_connection_string:
+        raise ValueError("DATABASE_CONNECTION_STRING environment variable required")
     
-    for var in required_vars:
-        value = os.getenv(var)
-        if not value:
-            missing.append(var)
-        config[var] = value
+    # Azure OpenAI config
+    azure_endpoint = os.getenv("AZURE_ENDPOINT")
+    azure_api_key = os.getenv("AZURE_OPENAI_API_KEY")
+    deployment_name = os.getenv("DEPLOYMENT_NAME", "gpt-5-mini")
     
-    if missing:
-        raise ValueError(f"Missing required environment variables: {missing}")
+    if not azure_endpoint or not azure_api_key:
+        raise ValueError("AZURE_ENDPOINT and AZURE_OPENAI_API_KEY environment variables required")
     
-    # Optional config with defaults
-    config["discovery_cache_hours"] = os.getenv("DISCOVERY_CACHE_HOURS", "168")
-    config["semantic_cache_hours"] = os.getenv("SEMANTIC_CACHE_HOURS", "168")
-    config["schema_exclusions"] = os.getenv("SCHEMA_EXCLUSIONS", "sys,information_schema").split(",")
-    config["table_exclusions"] = os.getenv("TABLE_EXCLUSIONS", "temp_,test_,backup_,old_").split(",")
-    config["cache_dir"] = os.getenv("CACHE_DIR", "cache")
+    # Create LLM client
+    from langchain_openai import AzureChatOpenAI
     
-    return config
-
-
-# Example usage
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
+    llm_client = AzureChatOpenAI(
+        azure_endpoint=azure_endpoint,
+        api_key=azure_api_key,
+        deployment_name=deployment_name,
+        api_version="2025-01-01-preview"
+    )
     
-    # Load config
-    config = load_config_from_env()
+    # Cache config
+    discovery_cache_hours = int(os.getenv("DISCOVERY_CACHE_HOURS", "168"))
+    semantic_cache_hours = int(os.getenv("SEMANTIC_CACHE_HOURS", "168"))
+    cache_dir = Path(os.getenv("CACHE_DIR", "./cache"))
     
-    # Initialize pipeline
-    pipeline = SemanticPipeline(config)
-    
-    # Example 1: Normal query (uses cache)
-    question = "What are the total sales by customer?"
-    result = pipeline.run_full_pipeline(question)
-    
-    print("\n" + "="*80)
-    print("RESULT:")
-    print("="*80)
-    print(json.dumps(result, indent=2))
-    
-    # Example 2: Force refresh (bypasses cache)
-    # result = pipeline.run_full_pipeline(question, force_refresh=True)
-    
-    # Example 3: Clear cache
-    # cache_result = pipeline.invalidate_cache()
-    # print(f"Cache cleared: {cache_result['cleared']}")
-    
-    # Example 4: Clear only discovery cache
-    # cache_result = pipeline.invalidate_cache(cache_type='discovery')
-    
-    # Example 5: Clear only semantic model cache
-    # cache_result = pipeline.invalidate_cache(cache_type='semantic')
+    return SemanticPipeline(
+        db_connection_string=db_connection_string,
+        llm_client=llm_client,
+        cache_dir=cache_dir,
+        discovery_cache_hours=discovery_cache_hours,
+        semantic_cache_hours=semantic_cache_hours
+    )
