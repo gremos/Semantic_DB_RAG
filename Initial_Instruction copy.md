@@ -57,7 +57,7 @@ ASSEMBLY_MAX_RETRIES=3
 
 
 ## 3. CLI Commands
-```
+```sh
 python main.py discovery           # Phase 1: discover & cache
 python main.py model               # Phase 2: build semantic model from cache
 python main.py question "..."      # Phase 3: NL → SQL (returns Answer JSON)
@@ -89,7 +89,7 @@ What we do
 - Basic stats: distinct_count, null_rate, min/max (when sensible), unit/currency hints if detectable.
 
 Discovery JSON (delta)
-```
+```json
 {
   "database": {"vendor": "mssql", "version": "16.0"},
   "dialect": "mssql",
@@ -190,7 +190,7 @@ DISCOVERY TIMEOUT env DISCOVERY_TIMEOUT
   - Abort if schema validation fails (1 retry max)
 
 
-```
+```json
 {
   "entities": [
     {
@@ -264,7 +264,7 @@ Rules
 - return results on terminal
 
 Response
-```
+```json
 {
   "status": "ok|refuse",
   "sql": [{
