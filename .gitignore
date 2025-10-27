@@ -6,3 +6,56 @@ venv/
 data/
 cache/
 **/__pycache__/
+
+
+# Environment variables
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Cache
+cache/
+*.cache
+
+# Logs
+logs/
+*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data uploads (optional - uncomment if you don't want to track RDL files)
+# data_upload/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/

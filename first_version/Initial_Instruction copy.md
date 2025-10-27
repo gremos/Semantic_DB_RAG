@@ -66,7 +66,7 @@ python main.py cache-clear         # Clear discovery + semantic caches
 
 ## 4. QuadRails (Hallucination Prevention)
 - Grounding: whitelist to Discovery JSON objects
-- Constraint: strict JSON Schema (1 retry)
+- Constraint: strict JSON Schema (3 retries with exponential backoff)
 - Verification: sqlglot parse + dry-run lint (tables/columns/joins exist)
 - Escalation: ambiguity → structured refusal with clarifying Qs
 
@@ -185,6 +185,15 @@ DISCOVERY TIMEOUT env DISCOVERY_TIMEOUT
   - Chunk assets by type with ENTITY_BATCH_SIZE / DIMENSION_BATCH_SIZE / FACT_BATCH_SIZE.
   - COMPRESSION_STRATEGY
     - tldr: extract compact column lists, types, PK/FK, top 5 values
+      ```
+      COMPRESSION_STRATEGIES = {
+          "detailed": {
+              "include_all": true,
+              "sample_values": 10,
+              "full_stats": true
+          }
+      }
+      ```
     - map_reduce: summarize per-table then combine
     - recap: dedupe synonyms/aliases across chunks
   - Abort if schema validation fails (1 retry max)
@@ -312,6 +321,21 @@ Always include:
 - Constraint: Strict JSON schema validation (1 retry max).
 - Verification: sqlglot dry-run (parse + lint + object existence + join keys).
 - Escalation: Ambiguous intent (<70% confidence) → Refusal JSON + 2–3 clarifiers.
+  ```
+    CONFIDENCE_SCORING = {
+      "entity_match": 0.3,      # Found entities in question
+      "measure_match": 0.3,     # Found measures
+      "relationship_clear": 0.2, # Joins are unambiguous
+      "temporal_clarity": 0.1,   # Date filters clear
+      "aggregation_clarity": 0.1 # Grouping clear
+  }
+
+  CONFIDENCE_THRESHOLDS = {
+      "high": 0.85,    # Auto-execute
+      "medium": 0.70,  # Execute with disclaimer
+      "low": 0.50,     # Refuse + clarifying questions
+  }
+  ```
 
 ## 10. Source Priority (unchanged)
 - Curated Views
