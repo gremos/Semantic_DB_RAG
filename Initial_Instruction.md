@@ -174,6 +174,31 @@ Discovery JSON (delta)
 Exclusions: sys, SCHEMA_EXCLUSIONS, TABLE_EXCLUSIONS, TABLE_EXCLUSION_PATTERNS
 DISCOVERY TIMEOUT env DISCOVERY_TIMEOUT
 
+## 5.1 View Discovery Optimization
+
+To improve performance when sampling views (which can take 12+ hours with sequential processing):
+
+- Process views concurrently using ThreadPoolExecutor with 10 max workers
+- Use simplified SQL for sampling:
+```sql
+  -- For SQL Server
+  SELECT TOP 10 * FROM schema.view_name WITH (NOLOCK)
+  
+  -- For MySQL/PostgreSQL
+  SELECT * FROM schema.view_name LIMIT 10
+```
+- Implement timeouts with partial results fallback:
+  - Set 5-minute timeout per view (configurable via DISCOVERY_TIMEOUT)
+  - Store partial results rather than failing completely
+  - For expensive views that timeout, attempt simpler queries
+- Use central connection pool with proper sizing (workers + buffer)
+- Track discovery progress with logging at 10% intervals
+- Store sampling failures in discovery JSON for semantic model phase
+
+Add CONCURRENCY_MAX_WORKERS=10 to .env configuration to control parallel processing.
+
+Follow fail-fast principles for column statistics: if full-table stats are expensive, prioritize collecting basic metadata and representative samples instead of exhaustive analytics.
+
 
 ## 6. Phase 2 — Semantic Model (Upgrades)
 

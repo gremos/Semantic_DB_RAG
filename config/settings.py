@@ -96,6 +96,32 @@ class Settings(BaseSettings):
         return v
     
     @property
+    def DATABASE_DIALECT(self) -> str:
+        """
+        Get the database dialect from the connection string.
+        Fallback to extracting from the connection string.
+        """
+        if hasattr(self, '_database_dialect'):
+            return self._database_dialect
+        
+        conn_str = self.DATABASE_CONNECTION_STRING.lower()
+        
+        if 'sqlserver' in conn_str or 'mssql' in conn_str:
+            self._database_dialect = 'mssql'
+        elif 'mysql' in conn_str or 'mariadb' in conn_str:
+            self._database_dialect = 'mysql'
+        elif 'postgresql' in conn_str or 'postgres' in conn_str:
+            self._database_dialect = 'postgresql'
+        elif 'oracle' in conn_str:
+            self._database_dialect = 'oracle'
+        elif 'sqlite' in conn_str:
+            self._database_dialect = 'sqlite'
+        else:
+            self._database_dialect = 'generic'
+            
+        return self._database_dialect
+    
+    @property
     def schema_exclusions_list(self) -> List[str]:
         """Get schema exclusions as list."""
         return [s.strip() for s in self.SCHEMA_EXCLUSIONS.split(',') if s.strip()]
