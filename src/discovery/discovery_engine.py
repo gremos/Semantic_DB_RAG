@@ -636,30 +636,99 @@ class DiscoveryEngine:
             return 0
     
     def _get_sample_rows(self, schema: str, table: str, limit: int = 10) -> List[Dict]:
-        """Get sample rows from table"""
+        """Get sample rows from table/view with timeout protection"""
+        import signal
+        from contextlib import contextmanager
+        
+        @contextmanager
+        def timeout(seconds):
+            def timeout_handler(signum, frame):
+                raise TimeoutError("Query timeout")
+            
+            # Set the signal handler
+            old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(seconds)
+            try:
+                yield
+            finally:
+                signal.alarm(0)
+                signal.signal(signal.SIGALRM, old_handler)
+        
         try:
             dialect = self.engine.dialect.name.lower()
             
             if dialect == 'mssql':
-                query = text(f"SELECT TOP {limit} * FROM [{schema}].[{table}]")
+                # Add NOLOCK hint for views to avoid blocking
+                query = text(f"SELECT TOP {limit} * FROM [{schema}].[{table}] WITH (NOLOCK)")
             else:
                 query = text(f'SELECT * FROM "{schema}"."{table}" LIMIT {limit}')
             
-            result = self.engine.execute(query).fetchall()
-            
-            if not result:
-                return []
-            
-            # Convert to list of dicts
-            columns = result[0].keys()
-            return [
-                {col: str(row[col]) if row[col] is not None else None for col in columns}
-                for row in result
-            ]
-            
-        except Exception as e:
-            logger.debug(f"Error getting sample rows from {schema}.{table}: {e}")
+            # Use timeout for expensive views
+            with timeout(30):  # 30 second timeout per sample
+                result = self.engine.execute(query).fetchall()
+                
+                if not result:
+                    logger.warning(f"No data returned from {schema}.{table}")
+                    return []
+                
+                # Convert to list of dicts
+                columns = result[0].keys()
+                rows = [
+                    {col: str(row[col]) if row[col] is not None else None for col in columns}
+                    for row in result
+                ]
+                
+                logger.info(f"✓ Sampled {len(rows)} rows from {schema}.{table}")
+                return rows
+                
+        except TimeoutError:
+            logger.error(f"⏱️ TIMEOUT sampling {schema}.{table} - view may be too expensive")
             return []
+        except Exception as e:
+            logger.error(f"❌ Error sampling {schema}.{table}: {e}")
+            return []
+
+
+    def _get_rowcount_sample(self, schema: str, table: str) -> int:
+        """Get approximate row count with timeout"""
+        import signal
+        from contextmanager import contextmanager
+        
+        @contextmanager
+        def timeout(seconds):
+            def timeout_handler(signum, frame):
+                raise TimeoutError("Query timeout")
+            
+            old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(seconds)
+            try:
+                yield
+            finally:
+                signal.alarm(0)
+                signal.signal(signal.SIGALRM, old_handler)
+        
+        try:
+            dialect = self.engine.dialect.name.lower()
+            
+            if dialect == 'mssql':
+                # Use lightweight query with NOLOCK
+                query = text(f"SELECT TOP 1 COUNT(*) OVER() FROM [{schema}].[{table}] WITH (NOLOCK)")
+            else:
+                query = text(f'SELECT COUNT(*) FROM "{schema}"."{table}"')
+            
+            with timeout(30):
+                result = self.engine.execute(query).scalar()
+                count = int(result) if result else 0
+                
+                logger.info(f"✓ Row count for {schema}.{table}: {count}")
+                return count
+                
+        except TimeoutError:
+            logger.error(f"⏱️ TIMEOUT getting row count for {schema}.{table}")
+            return 0
+        except Exception as e:
+            logger.error(f"❌ Error getting row count for {schema}.{table}: {e}")
+            return 0
     
     def _discover_named_assets(self) -> List[Dict]:
         """

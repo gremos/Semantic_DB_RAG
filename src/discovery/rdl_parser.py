@@ -299,8 +299,3 @@ class RDLParser:
                         f"found {len(relationships)} relationships")
             
             return relationships
-
-
-# Import the _parse_join_condition function from relationship_detector
-# (or duplicate it here if preferred)
-
