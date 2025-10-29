@@ -4,12 +4,16 @@ Extracts datasets, queries, joins, and parameters from .rdl files.
 """
 
 import os
+import logging
 import xml.etree.ElementTree as ET
 from typing import Dict, List, Any, Optional
 from pathlib import Path
 
 from config.settings import Settings
 
+from src.discovery.relationship_detector import _parse_join_condition
+
+logger = logging.getLogger(__name__)
 
 class RDLParser:
     """Parse RDL files to extract data definitions."""
@@ -180,3 +184,123 @@ class RDLParser:
                 assets.append(asset)
         
         return assets
+    
+
+    def extract_relationships_from_rdl(
+            rdl_assets: List[Dict[str, Any]],
+            config: Any
+        ) -> List[Dict[str, Any]]:
+            """
+            Extract relationships from RDL dataset join definitions
+            
+            RDL datasets often define joins between tables explicitly in queries.
+            These are high-confidence relationships since they're curated.
+            
+            Args:
+                rdl_assets: List of RDL asset dictionaries
+                config: Relationship detection configuration
+                
+            Returns:
+                List of relationship dictionaries
+            """
+            import xml.etree.ElementTree as ET
+            from pathlib import Path
+            import sqlglot
+            
+            if not config.detect_rdl_joins:
+                logger.info("RDL relationship detection disabled")
+                return []
+            
+            logger.info("Starting RDL relationship detection...")
+            relationships = []
+            rdls_analyzed = 0
+            
+            for asset in rdl_assets:
+                if asset.get("kind") != "rdl":
+                    continue
+                
+                rdl_path = asset.get("path")
+                if not rdl_path or not Path(rdl_path).exists():
+                    logger.debug(f"Skipping RDL asset: invalid path {rdl_path}")
+                    continue
+                
+                try:
+                    tree = ET.parse(rdl_path)
+                    root = tree.getroot()
+                    
+                    # Find DataSets in multiple RDL namespaces
+                    namespaces = [
+                        "{http://schemas.microsoft.com/sqlserver/reporting/2010/01/reportdefinition}",
+                        "{http://schemas.microsoft.com/sqlserver/reporting/2008/01/reportdefinition}",
+                        "{http://schemas.microsoft.com/sqlserver/reporting/2005/01/reportdefinition}"
+                    ]
+                    
+                    for ns in namespaces:
+                        datasets = root.findall(f".//{ns}DataSet")
+                        
+                        for dataset in datasets:
+                            # Get dataset name
+                            name_elem = dataset.find(f"{ns}Name")
+                            dataset_name = name_elem.text if name_elem is not None else "Unknown"
+                            
+                            # Look for query with JOINs
+                            query_elem = dataset.find(f".//{ns}CommandText")
+                            if query_elem is not None and query_elem.text:
+                                query = query_elem.text.strip()
+                                
+                                # Parse joins from query
+                                try:
+                                    parsed = sqlglot.parse_one(query)
+                                    
+                                    for join in parsed.find_all(sqlglot.exp.Join):
+                                        on_clause = join.args.get("on")
+                                        if not on_clause:
+                                            continue
+                                        
+                                        # Use same parsing logic as views
+                                        left_table, left_col, right_table, right_col = \
+                                            _parse_join_condition(on_clause)
+                                        
+                                        if all([left_table, left_col, right_table, right_col]):
+                                            # Map confidence based on config
+                                            confidence_map = {
+                                                "high": "high",
+                                                "medium": "medium",
+                                                "low": "low"
+                                            }
+                                            confidence = confidence_map.get(
+                                                config.rdl_trust_level.lower(), 
+                                                "high"
+                                            )
+                                            
+                                            relationships.append({
+                                                "from": f"{left_table}.{left_col}",
+                                                "to": f"{right_table}.{right_col}",
+                                                "method": "rdl_join_analysis",
+                                                "cardinality": "unknown",
+                                                "confidence": confidence,
+                                                "source_rdl": Path(rdl_path).name,
+                                                "source_dataset": dataset_name
+                                            })
+                                
+                                except sqlglot.errors.ParseError as e:
+                                    logger.debug(f"Failed to parse RDL query in {rdl_path}/{dataset_name}: {e}")
+                                except Exception as e:
+                                    logger.warning(f"Error parsing RDL query in {rdl_path}/{dataset_name}: {e}")
+                    
+                    rdls_analyzed += 1
+                
+                except ET.ParseError as e:
+                    logger.error(f"Failed to parse RDL XML file {rdl_path}: {e}")
+                except Exception as e:
+                    logger.error(f"Error processing RDL file {rdl_path}: {e}")
+            
+            logger.info(f"RDL relationship detection complete: analyzed {rdls_analyzed} files, "
+                        f"found {len(relationships)} relationships")
+            
+            return relationships
+
+
+# Import the _parse_join_condition function from relationship_detector
+# (or duplicate it here if preferred)
+

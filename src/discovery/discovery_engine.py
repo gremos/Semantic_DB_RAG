@@ -127,7 +127,7 @@ class DiscoveryCache:
         try:
             # Save discovery data
             with open(self.cache_file, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2)
+                json.dump(data, f, indent=2, ensure_ascii=False)
             
             # Save fingerprint
             fingerprint = self.get_database_fingerprint(engine)
@@ -135,7 +135,7 @@ class DiscoveryCache:
                 json.dump({
                     'fingerprint': fingerprint,
                     'timestamp': datetime.now().isoformat()
-                }, f, indent=2)
+                }, f, indent=2 , ensure_ascii=False)
             
             logger.info(f"Saved discovery cache to {self.cache_file}")
             
@@ -665,7 +665,12 @@ class DiscoveryEngine:
         """
         Discover named assets: views, stored procedures, RDL files
         Returns list of asset dictionaries
+        
+        IMPORTANT: Cache results for use in relationship detection
         """
+        if hasattr(self, '_named_assets_cache'):
+            return self._named_assets_cache
+        
         assets = []
         
         # Discover views (already included in schema discovery, but normalize SQL)
@@ -678,44 +683,172 @@ class DiscoveryEngine:
         rdl_path = self.path_config.rdl_path
         if rdl_path.exists():
             logger.info(f"Scanning RDL files in {rdl_path}")
-            # This would parse RDL files and extract datasets
-            # For now, just log
-            rdl_files = list(rdl_path.rglob('*.rdl'))
-            logger.info(f"Found {len(rdl_files)} RDL files")
+            from .rdl_parser import RDLParser
+            
+            parser = RDLParser(rdl_path)
+            rdl_assets = parser.parse_all()
+            assets.extend(rdl_assets)
+            
+            logger.info(f"Found {len(rdl_assets)} RDL files")
+        
+        # Cache for reuse
+        self._named_assets_cache = assets
         
         return assets
     
     def _detect_relationships(self, schemas_data: List[Dict], dialect: str) -> List[Dict]:
         """
-        Detect foreign key relationships using optimized detector
+        Detect foreign key relationships using multiple methods:
+        1. Explicit FKs from database metadata
+        2. Implicit FKs from value overlap
+        3. View join analysis (NEW)
+        4. RDL join analysis (NEW)
         
         Args:
             schemas_data: List of schema dictionaries from discovery
             dialect: Database dialect
             
         Returns:
-            List of relationship dictionaries
+            List of unique relationship dictionaries
         """
+        import time
+        
+        start_time = time.time()
+        all_relationships = []
+        
         # Build discovery data structure for relationship detector
+        # IMPORTANT: Ensure named_assets are already discovered before this call
         discovery_for_relationships = {
             'database': {'vendor': dialect, 'version': 'unknown'},
             'dialect': dialect,
             'schemas': schemas_data,
+            'named_assets': []  # Will be populated below
         }
         
-        # Call optimized relationship detector
+        # Get named assets (views, stored procedures, RDL files)
+        # This should have been called earlier in discover() method
+        # If not available, we need to call it here
+        if hasattr(self, '_named_assets_cache'):
+            discovery_for_relationships['named_assets'] = self._named_assets_cache
+        else:
+            logger.warning("Named assets not cached, discovering now...")
+            discovery_for_relationships['named_assets'] = self._discover_named_assets()
+        
+        # Method 1 & 2: Standard detection (explicit + implicit FKs)
         try:
+            from .relationship_detector import detect_relationships
+            
             relationships = detect_relationships(
                 connection_string=self.connection_string,
                 discovery_data=discovery_for_relationships,
                 config=self.relationship_config
             )
-            
-            return relationships
+            all_relationships.extend(relationships)
+            logger.info(f"✓ Standard detection: {len(relationships)} relationships")
             
         except Exception as e:
-            logger.error(f"Relationship detection failed: {e}", exc_info=True)
-            return []
+            logger.error(f"Standard relationship detection failed: {e}", exc_info=True)
+        
+        # Method 3: View join analysis
+        if self.relationship_config.detect_views:
+            try:
+                from .relationship_detector import detect_relationships_from_views
+                
+                view_relationships = detect_relationships_from_views(
+                    discovery_data=discovery_for_relationships,
+                    config=self.relationship_config
+                )
+                all_relationships.extend(view_relationships)
+                logger.info(f"✓ View join analysis: {len(view_relationships)} relationships")
+                
+            except Exception as e:
+                logger.error(f"View relationship detection failed: {e}", exc_info=True)
+        else:
+            logger.info("⊘ View join analysis disabled")
+        
+        # Method 4: RDL join analysis
+        if self.relationship_config.detect_rdl_joins:
+            try:
+                from .rdl_parser import extract_relationships_from_rdl
+                
+                rdl_relationships = extract_relationships_from_rdl(
+                    rdl_assets=discovery_for_relationships['named_assets'],
+                    config=self.relationship_config
+                )
+                all_relationships.extend(rdl_relationships)
+                logger.info(f"✓ RDL join analysis: {len(rdl_relationships)} relationships")
+                
+            except Exception as e:
+                logger.error(f"RDL relationship detection failed: {e}", exc_info=True)
+        else:
+            logger.info("⊘ RDL join analysis disabled")
+        
+        # Deduplicate relationships, preferring higher confidence sources
+        unique_relationships = self._deduplicate_relationships(all_relationships)
+        
+        elapsed = time.time() - start_time
+        logger.info(f"═══════════════════════════════════════════════════")
+        logger.info(f"RELATIONSHIP DETECTION SUMMARY")
+        logger.info(f"───────────────────────────────────────────────────")
+        logger.info(f"Total found:        {len(all_relationships)}")
+        logger.info(f"After dedup:        {len(unique_relationships)}")
+        logger.info(f"Duration:           {elapsed:.2f}s")
+        logger.info(f"═══════════════════════════════════════════════════")
+        
+        return unique_relationships
+
+
+    def _deduplicate_relationships(self, relationships: List[Dict]) -> List[Dict]:
+        """
+        Deduplicate relationships, preferring higher confidence sources
+        
+        Priority order (highest to lowest):
+        1. RDL join analysis (most curated)
+        2. View join analysis (curated)
+        3. Explicit FKs (database-defined)
+        4. Implicit FKs (value overlap)
+        
+        Args:
+            relationships: List of all relationships from various sources
+            
+        Returns:
+            List of unique relationships with highest confidence
+        """
+        seen = {}
+        
+        # Priority mapping
+        priority = {
+            "rdl_join_analysis": 4,
+            "view_join_analysis": 3,
+            "explicit_fk": 2,
+            "value_overlap": 1,
+            "name_pattern": 1
+        }
+        
+        for rel in relationships:
+            # Create unique key from relationship
+            key = (rel["from"], rel["to"])
+            
+            # Get priority for this method
+            method = rel.get("method", "unknown")
+            current_priority = priority.get(method, 0)
+            
+            # Keep this relationship if:
+            # 1. We haven't seen this relationship before, OR
+            # 2. This method has higher priority than what we've seen
+            if key not in seen:
+                seen[key] = rel
+            else:
+                existing_priority = priority.get(seen[key].get("method", ""), 0)
+                if current_priority > existing_priority:
+                    # Replace with higher confidence relationship
+                    logger.debug(
+                        f"Replacing relationship {key}: "
+                        f"{seen[key]['method']} → {method} (higher priority)"
+                    )
+                    seen[key] = rel
+        
+        return list(seen.values())
 
 
 # ============================================================================

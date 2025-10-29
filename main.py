@@ -246,7 +246,7 @@ def cmd_config(args):
                     'max_comparisons': settings.relationships.max_comparisons,
                 },
             }
-            print(json.dumps(config_dict, indent=2))
+            print(json.dumps(config_dict, indent=2, ensure_ascii=False))
         else:
             # Output as formatted text
             print(settings.summary())

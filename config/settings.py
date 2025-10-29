@@ -213,6 +213,14 @@ class RelationshipDetectionConfig:
     prioritize_named_patterns: bool
     require_index_on_target: bool
     confidence_threshold: float
+
+    detect_views: bool
+    view_timeout: int
+    max_views: int
+    
+    # NEW: RDL relationship detection
+    detect_rdl_joins: bool
+    rdl_trust_level: str  # 'high', 'medium', 'low'
     
     @classmethod
     def from_env(cls) -> 'RelationshipDetectionConfig':
@@ -228,6 +236,11 @@ class RelationshipDetectionConfig:
             prioritize_named_patterns=get_env_bool('RELATIONSHIP_PRIORITIZE_PATTERNS', True),
             require_index_on_target=get_env_bool('RELATIONSHIP_REQUIRE_INDEX', True),
             confidence_threshold=get_env_float('RELATIONSHIP_CONFIDENCE_THRESHOLD', 0.7),
+            detect_views=get_env_bool('RELATIONSHIP_DETECT_VIEWS', True),
+            view_timeout=get_env_int('RELATIONSHIP_VIEW_TIMEOUT', 10),
+            max_views=get_env_int('RELATIONSHIP_MAX_VIEWS', 50),
+            detect_rdl_joins=get_env_bool('RELATIONSHIP_DETECT_RDL_JOINS', True),
+            rdl_trust_level=get_env('RELATIONSHIP_RDL_TRUST_LEVEL', 'high'),
         )
     
     def validate(self):

@@ -7,9 +7,12 @@ import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple, Any
 from sqlalchemy import create_engine, text, pool
 from sqlalchemy.engine import Engine
+
+import sqlglot
+
 
 from .relationship_config import RelationshipDetectionConfig
 
@@ -189,6 +192,171 @@ class RelationshipDetector:
         finally:
             if self.engine:
                 self.engine.dispose()
+
+
+
+    def detect_relationships_from_views(
+            discovery_data: Dict[str, Any],
+            config: Any
+        ) -> List[Dict[str, Any]]:
+            """
+            Detect relationships by analyzing JOIN clauses in view definitions
+            
+            Process:
+            1. Extract view SQL from named_assets
+            2. Parse SQL with sqlglot
+            3. Identify JOIN conditions
+            4. Map to discovery tables
+            5. Create high-confidence relationships
+            
+            Args:
+                discovery_data: Discovery JSON with named_assets
+                config: Relationship detection configuration
+                
+            Returns:
+                List of relationship dictionaries
+            """
+            import time
+            
+            if not config.detect_views:
+                logger.info("View relationship detection disabled")
+                return []
+            
+            logger.info("Starting view relationship detection...")
+            relationships = []
+            views_analyzed = 0
+            max_views = config.max_views
+            start_time = time.time()
+            
+            for asset in discovery_data.get("named_assets", []):
+                if asset.get("kind") != "view":
+                    continue
+                
+                if views_analyzed >= max_views:
+                    logger.warning(f"Reached max views limit ({max_views}), stopping analysis")
+                    break
+                
+                view_name = asset.get("name", "unknown")
+                sql = asset.get("sql_normalized", "")
+                
+                if not sql:
+                    logger.debug(f"Skipping view {view_name}: no SQL definition")
+                    continue
+                
+                try:
+                    # Parse SQL with timeout protection
+                    parsed = sqlglot.parse_one(sql, dialect=discovery_data.get("dialect", ""))
+                    
+                    # Extract joins
+                    for join in parsed.find_all(sqlglot.exp.Join):
+                        # Get join condition
+                        on_clause = join.args.get("on")
+                        if not on_clause:
+                            continue
+                        
+                        # Extract left and right columns
+                        left_table, left_col, right_table, right_col = \
+                            _parse_join_condition(on_clause)
+                        
+                        if all([left_table, left_col, right_table, right_col]):
+                            # Normalize table names (add schema if missing)
+                            left_table = _normalize_table_name(left_table, discovery_data)
+                            right_table = _normalize_table_name(right_table, discovery_data)
+                            
+                            relationships.append({
+                                "from": f"{left_table}.{left_col}",
+                                "to": f"{right_table}.{right_col}",
+                                "method": "view_join_analysis",
+                                "cardinality": "unknown",  # Would need value analysis
+                                "confidence": "high",  # Views are curated
+                                "source_view": view_name,
+                                "detection_timestamp": time.time()
+                            })
+                    
+                    views_analyzed += 1
+                    
+                except sqlglot.errors.ParseError as e:
+                    logger.warning(f"Failed to parse view {view_name}: {e}")
+                except Exception as e:
+                    logger.error(f"Error analyzing view {view_name}: {e}")
+            
+            elapsed = time.time() - start_time
+            logger.info(f"View relationship detection complete: analyzed {views_analyzed} views, "
+                        f"found {len(relationships)} relationships in {elapsed:.2f}s")
+            
+            return relationships
+
+
+    def _parse_join_condition(on_clause) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
+        """
+        Extract table.column pairs from JOIN ON clause
+        
+        Args:
+            on_clause: sqlglot ON clause expression
+            
+        Returns:
+            Tuple of (left_table, left_col, right_table, right_col)
+            Returns (None, None, None, None) if parsing fails
+        """
+        try:
+            # Handle simple equality: table1.col1 = table2.col2
+            if isinstance(on_clause, sqlglot.exp.EQ):
+                left = on_clause.left
+                right = on_clause.right
+                
+                # Both sides must be columns
+                if isinstance(left, sqlglot.exp.Column) and isinstance(right, sqlglot.exp.Column):
+                    left_table = left.table if left.table else None
+                    left_col = left.name if left.name else None
+                    right_table = right.table if right.table else None
+                    right_col = right.name if right.name else None
+                    
+                    if all([left_table, left_col, right_table, right_col]):
+                        return left_table, left_col, right_table, right_col
+            
+            # Handle complex conditions (AND, OR) - extract first simple equality
+            elif isinstance(on_clause, (sqlglot.exp.And, sqlglot.exp.Or)):
+                # Recursively check left side
+                result = _parse_join_condition(on_clause.left)
+                if result and all(result):
+                    return result
+                
+                # Recursively check right side
+                result = _parse_join_condition(on_clause.right)
+                if result and all(result):
+                    return result
+        
+        except Exception as e:
+            logger.debug(f"Failed to parse join condition: {e}")
+        
+        return None, None, None, None
+
+
+    def _normalize_table_name(table: str, discovery_data: Dict[str, Any]) -> str:
+        """
+        Normalize table name to include schema if missing
+        
+        Args:
+            table: Table name (may or may not include schema)
+            discovery_data: Discovery data to look up schemas
+            
+        Returns:
+            Normalized table name (schema.table)
+        """
+        # Already has schema
+        if "." in table:
+            return table
+        
+        # Try to find schema by searching discovery data
+        for schema in discovery_data.get("schemas", []):
+            schema_name = schema.get("name")
+            for tbl in schema.get("tables", []):
+                if tbl.get("name") == table:
+                    return f"{schema_name}.{table}"
+        
+        # Fallback: assume dbo schema (SQL Server default)
+        logger.debug(f"Could not find schema for table {table}, assuming 'dbo'")
+        return f"dbo.{table}"
     
     def _init_connection_pool(self):
         """Initialize connection pool for parallel operations"""
