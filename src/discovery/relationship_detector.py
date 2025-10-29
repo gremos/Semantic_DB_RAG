@@ -1,54 +1,38 @@
 """
-Enhanced relationship detector with timeout and exclusion support.
-Consolidated into a single function per requirements.
+Relationship Detector - FIXED VERSION with SQL Server Collation Conflict Handling
+
+This version handles collation conflicts that occur when comparing columns
+with different collations (e.g., Greek_CI_AS vs SQL_Latin1_General_CP1_CI_AI)
 """
 
-import re
-import signal
 from typing import Dict, List, Any, Optional
-from contextlib import contextmanager
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import SQLAlchemyError, OperationalError
+import re
+
 from config.settings import Settings
 from src.utils.logging_config import get_logger
 
 logger = get_logger(__name__)
 
 
-class TimeoutException(Exception):
-    """Raised when operation times out."""
-    pass
-
-
-@contextmanager
-def timeout_context(seconds: int):
-    """Context manager for operation timeout."""
-    def timeout_handler(signum, frame):
-        raise TimeoutException(f"Operation timed out after {seconds} seconds")
-    
-    # Set up the signal handler
-    old_handler = signal.signal(signal.SIGALRM, timeout_handler)
-    signal.alarm(seconds)
-    
-    try:
-        yield
-    finally:
-        # Restore the old handler and cancel the alarm
-        signal.alarm(0)
-        signal.signal(signal.SIGALRM, old_handler)
-
-
 class RelationshipDetector:
-    """Detect implicit foreign key relationships between tables."""
+    """Detect implicit foreign key relationships with collation conflict handling."""
     
     def __init__(self, settings: Settings):
         self.settings = settings
         self.engine = None
-        self.excluded_prefixes = settings.table_exclusions_list
-        self.excluded_patterns = [
-            re.compile(p, re.IGNORECASE) 
-            for p in settings.table_exclusion_patterns_list
-        ]
+        self.db_dialect = None
+        
+        # Table exclusions
+        self.excluded_prefixes = getattr(settings, 'TABLE_EXCLUSIONS', [])
+        self.excluded_patterns = []
+        
+        # Compile exclusion patterns
+        pattern_str = getattr(settings, 'TABLE_EXCLUSION_PATTERNS', '')
+        if pattern_str:
+            patterns = [p.strip() for p in pattern_str.split(',') if p.strip()]
+            self.excluded_patterns = [re.compile(p) for p in patterns]
     
     def connect(self) -> None:
         """Establish database connection."""
@@ -56,14 +40,11 @@ class RelationshipDetector:
             self.engine = create_engine(
                 self.settings.DATABASE_CONNECTION_STRING,
                 pool_pre_ping=True,
-                pool_size=5,
-                max_overflow=10,
-                pool_timeout=30,
                 echo=False
             )
-            # Test connection
-            with self.engine.connect() as conn:
-                conn.execute(text("SELECT 1"))
+            # Detect dialect
+            self.db_dialect = self.engine.dialect.name.lower()
+            logger.info(f"RelationshipDetector connected to {self.db_dialect} database")
         except SQLAlchemyError as e:
             raise ConnectionError(f"Failed to connect to database: {str(e)}")
     
@@ -73,274 +54,18 @@ class RelationshipDetector:
             self.engine.dispose()
             self.engine = None
     
-    def should_exclude_table(self, table_name: str) -> bool:
-        """
-        Belt-and-suspenders check: verify table should not be excluded.
-        Tables should already be filtered by introspector, but this adds safety.
-        """
-        table_lower = table_name.lower()
-        
-        # Check prefix exclusions
-        for prefix in self.excluded_prefixes:
-            if table_lower.startswith(prefix.lower()):
-                return True
-        
-        # Check regex patterns
-        for pattern in self.excluded_patterns:
-            if pattern.match(table_name):
-                return True
-        
-        return False
-    
-    def detect_relationships(
-        self, 
-        discovery_data: Dict[str, Any],
-        overlap_threshold: float = 0.80,
-        timeout_seconds: Optional[int] = None
-    ) -> List[Dict[str, Any]]:
-        """
-        Consolidated relationship detection with timeout and exclusion support.
-        
-        Args:
-            discovery_data: Discovery JSON from Phase 1
-            overlap_threshold: Minimum overlap rate to consider (default 0.80)
-            timeout_seconds: Timeout in seconds (default from settings)
-        
-        Returns:
-            List of inferred relationships
-        
-        Features:
-            - Timeout protection (default 300s from DISCOVERY_TIMEOUT)
-            - Exclusion safety check (belt-and-suspenders)
-            - Progress logging every 10%
-            - Graceful degradation on timeout (returns partial results)
-            - SQL-level timeouts for individual queries
-        """
-        if timeout_seconds is None:
-            timeout_seconds = self.settings.DISCOVERY_TIMEOUT
-        
-        if not self.engine:
-            self.connect()
-        
-        relationships = []
-        start_time = None
-        
-        try:
-            # Use timeout context manager
-            with timeout_context(timeout_seconds):
-                start_time = __import__('time').time()
-                
-                # Build list of all tables with their columns
-                all_tables = []
-                for schema in discovery_data.get('schemas', []):
-                    schema_name = schema['name']
-                    for table in schema.get('tables', []):
-                        table_name = table['name']
-                        
-                        # Belt-and-suspenders: double-check exclusions
-                        if self.should_exclude_table(table_name):
-                            logger.debug(
-                                f"Skipping excluded table in relationship detection: "
-                                f"{schema_name}.{table_name}"
-                            )
-                            continue
-                        
-                        table_info = {
-                            'schema': schema_name,
-                            'name': table_name,
-                            'full_name': f"{schema_name}.{table_name}",
-                            'columns': table['columns'],
-                            'primary_key': table.get('primary_key', [])
-                        }
-                        all_tables.append(table_info)
-                
-                total_comparisons = (len(all_tables) * (len(all_tables) - 1)) // 2
-                logger.info(
-                    f"Starting relationship detection: {len(all_tables)} tables, "
-                    f"{total_comparisons} potential comparisons, "
-                    f"{timeout_seconds}s timeout"
-                )
-                
-                comparisons_done = 0
-                last_log_percent = 0
-                
-                # Compare all table pairs
-                for i, table_a in enumerate(all_tables):
-                    for table_b in all_tables[i+1:]:
-                        comparisons_done += 1
-                        
-                        # Progress logging every 10%
-                        progress_percent = int((comparisons_done / total_comparisons) * 100)
-                        if progress_percent >= last_log_percent + 10:
-                            elapsed = __import__('time').time() - start_time
-                            logger.info(
-                                f"Relationship detection progress: {progress_percent}% "
-                                f"({comparisons_done}/{total_comparisons}), "
-                                f"{len(relationships)} relationships found, "
-                                f"{elapsed:.1f}s elapsed"
-                            )
-                            last_log_percent = progress_percent
-                        
-                        # Check for potential FK columns between these tables
-                        potential_fks = self._find_potential_fks(table_a, table_b)
-                        
-                        for fk_candidate in potential_fks:
-                            try:
-                                # Calculate overlap with query timeout
-                                overlap = self._calculate_overlap(
-                                    table_a['schema'], table_a['name'], fk_candidate['col_a'],
-                                    table_b['schema'], table_b['name'], fk_candidate['col_b']
-                                )
-                                
-                                if overlap >= overlap_threshold:
-                                    # Check cardinality with query timeout
-                                    cardinality = self._determine_cardinality(
-                                        table_a['schema'], table_a['name'], fk_candidate['col_a'],
-                                        table_b['schema'], table_b['name'], fk_candidate['col_b']
-                                    )
-                                    
-                                    # Determine direction (many-to-one preferred)
-                                    from_col = f"{table_a['full_name']}.{fk_candidate['col_a']}"
-                                    to_col = f"{table_b['full_name']}.{fk_candidate['col_b']}"
-                                    
-                                    if cardinality == 'one_to_many':
-                                        # Reverse direction
-                                        from_col, to_col = to_col, from_col
-                                        cardinality = 'many_to_one'
-                                    
-                                    relationship = {
-                                        'from': from_col,
-                                        'to': to_col,
-                                        'method': 'value_overlap',
-                                        'overlap_rate': round(overlap, 3),
-                                        'cardinality': cardinality,
-                                        'confidence': self._calculate_confidence(
-                                            overlap, cardinality, fk_candidate
-                                        )
-                                    }
-                                    
-                                    relationships.append(relationship)
-                                    logger.debug(
-                                        f"Found relationship: {from_col} -> {to_col} "
-                                        f"(overlap={overlap:.2%}, {cardinality})"
-                                    )
-                            
-                            except OperationalError as e:
-                                # Query timeout or database error
-                                logger.warning(
-                                    f"Query error checking {table_a['full_name']}.{fk_candidate['col_a']} "
-                                    f"vs {table_b['full_name']}.{fk_candidate['col_b']}: {e}"
-                                )
-                                continue
-                            except Exception as e:
-                                logger.warning(
-                                    f"Error processing FK candidate: {e}"
-                                )
-                                continue
-                
-                elapsed = __import__('time').time() - start_time
-                logger.info(
-                    f"Relationship detection completed: {len(relationships)} relationships "
-                    f"found in {elapsed:.1f}s"
-                )
-        
-        except TimeoutException as e:
-            elapsed = __import__('time').time() - start_time if start_time else 0
-            logger.warning(
-                f"Relationship detection timed out after {elapsed:.1f}s. "
-                f"Returning {len(relationships)} partial relationships."
-            )
-        
-        except Exception as e:
-            logger.error(f"Unexpected error in relationship detection: {e}")
-            raise
-        
-        return relationships
-    
-    def _find_potential_fks(
-        self, 
-        table_a: Dict[str, Any], 
-        table_b: Dict[str, Any]
-    ) -> List[Dict[str, str]]:
-        """
-        Find potential FK column pairs based on:
-        - Name similarity (suffix matching)
-        - Type compatibility
-        """
-        candidates = []
-        
-        for col_a in table_a['columns']:
-            for col_b in table_b['columns']:
-                # Check if names suggest a relationship
-                if self._names_suggest_relationship(
-                    col_a['name'], 
-                    col_b['name'],
-                    table_b['primary_key']
-                ):
-                    # Check type compatibility
-                    if self._types_compatible(col_a['type'], col_b['type']):
-                        candidates.append({
-                            'col_a': col_a['name'],
-                            'col_b': col_b['name'],
-                            'name_match': True
-                        })
-        
-        return candidates
-    
-    def _names_suggest_relationship(
-        self, 
-        name_a: str, 
-        name_b: str,
-        pk_columns: List[str]
-    ) -> bool:
-        """Check if column names suggest a FK relationship."""
-        # Exact match
-        if name_a.lower() == name_b.lower():
-            return True
-        
-        # name_b is a PK and name_a contains it
-        if name_b in pk_columns:
-            if name_b.lower() in name_a.lower():
-                return True
-            # Common patterns: CustomerID -> Customer, CustomerId -> CustomerId
-            if name_a.lower().endswith('id') and name_b.lower().endswith('id'):
-                base_a = name_a[:-2].lower()
-                base_b = name_b[:-2].lower()
-                if base_a == base_b or base_a in base_b or base_b in base_a:
-                    return True
-        
-        return False
-    
-    def _types_compatible(self, type_a: str, type_b: str) -> bool:
-        """Check if two column types are compatible for FK relationship."""
-        # Normalize types
-        type_a = type_a.lower()
-        type_b = type_b.lower()
-        
-        # Integer types
-        int_types = ['int', 'integer', 'bigint', 'smallint', 'tinyint']
-        if any(t in type_a for t in int_types) and any(t in type_b for t in int_types):
-            return True
-        
-        # String types
-        str_types = ['char', 'varchar', 'text', 'string']
-        if any(t in type_a for t in str_types) and any(t in type_b for t in str_types):
-            return True
-        
-        # UUID types
-        if 'uuid' in type_a and 'uuid' in type_b:
-            return True
-        
-        return False
-    
     def _calculate_overlap(
         self,
         schema_a: str, table_a: str, col_a: str,
         schema_b: str, table_b: str, col_b: str
     ) -> float:
         """
-        Calculate value overlap rate between two columns with timeout.
+        Calculate value overlap rate with COLLATION CONFLICT HANDLING.
+        
         Returns percentage of values in col_a that exist in col_b.
+        
+        FIX: Uses COLLATE DATABASE_DEFAULT for SQL Server to handle columns
+        with different collations (e.g., Greek_CI_AS vs SQL_Latin1_General_CP1_CI_AI)
         """
         if not self.engine:
             return 0.0
@@ -348,16 +73,16 @@ class RelationshipDetector:
         try:
             with self.engine.connect() as conn:
                 # Set query timeout (10 seconds per query)
-                vendor = self.engine.dialect.name
-                if vendor == 'mssql':
+                if self.db_dialect == 'mssql':
                     conn.execute(text("SET LOCK_TIMEOUT 10000"))  # 10s in ms
-                elif vendor == 'postgresql':
+                elif self.db_dialect == 'postgresql':
                     conn.execute(text("SET statement_timeout = '10s'"))
-                elif vendor == 'mysql':
-                    conn.execute(text("SET SESSION max_execution_time = 10000"))  # 10s in ms
+                elif self.db_dialect == 'mysql':
+                    conn.execute(text("SET SESSION max_execution_time = 10000"))
                 
-                # Build dialect-appropriate query
-                if vendor == 'mssql':
+                # Build dialect-appropriate query with collation handling
+                if self.db_dialect == 'mssql':
+                    # SQL Server with COLLATE DATABASE_DEFAULT to handle collation conflicts
                     query = text(f"""
                         WITH sample_a AS (
                             SELECT DISTINCT TOP 1000 [{col_a}] AS val
@@ -371,11 +96,58 @@ class RelationshipDetector:
                         )
                         SELECT 
                             COUNT(DISTINCT a.val) AS total_a,
+                            COUNT(DISTINCT CASE 
+                                WHEN b.val IS NOT NULL THEN a.val 
+                            END) AS overlap
+                        FROM sample_a a
+                        LEFT JOIN sample_b b 
+                            ON a.val COLLATE DATABASE_DEFAULT = b.val COLLATE DATABASE_DEFAULT
+                    """)
+                    
+                elif self.db_dialect == 'postgresql':
+                    # PostgreSQL uses text collation
+                    query = text(f"""
+                        WITH sample_a AS (
+                            SELECT DISTINCT "{col_a}" AS val
+                            FROM "{schema_a}"."{table_a}"
+                            WHERE "{col_a}" IS NOT NULL
+                            LIMIT 1000
+                        ),
+                        sample_b AS (
+                            SELECT DISTINCT "{col_b}" AS val
+                            FROM "{schema_b}"."{table_b}"
+                            WHERE "{col_b}" IS NOT NULL
+                        )
+                        SELECT 
+                            COUNT(DISTINCT a.val) AS total_a,
                             COUNT(DISTINCT CASE WHEN b.val IS NOT NULL THEN a.val END) AS overlap
                         FROM sample_a a
-                        LEFT JOIN sample_b b ON a.val = b.val
+                        LEFT JOIN sample_b b ON a.val::text = b.val::text
                     """)
-                else:  # PostgreSQL, MySQL, etc.
+                    
+                elif self.db_dialect == 'mysql':
+                    # MySQL uses binary comparison for collation safety
+                    query = text(f"""
+                        WITH sample_a AS (
+                            SELECT DISTINCT `{col_a}` AS val
+                            FROM `{schema_a}`.`{table_a}`
+                            WHERE `{col_a}` IS NOT NULL
+                            LIMIT 1000
+                        ),
+                        sample_b AS (
+                            SELECT DISTINCT `{col_b}` AS val
+                            FROM `{schema_b}`.`{table_b}`
+                            WHERE `{col_b}` IS NOT NULL
+                        )
+                        SELECT 
+                            COUNT(DISTINCT a.val) AS total_a,
+                            COUNT(DISTINCT CASE WHEN b.val IS NOT NULL THEN a.val END) AS overlap
+                        FROM sample_a a
+                        LEFT JOIN sample_b b ON BINARY a.val = BINARY b.val
+                    """)
+                    
+                else:
+                    # Generic SQL (SQLite, etc.)
                     query = text(f"""
                         WITH sample_a AS (
                             SELECT DISTINCT "{col_a}" AS val
@@ -399,13 +171,27 @@ class RelationshipDetector:
                 row = result.fetchone()
                 
                 if row and row[0] > 0:
-                    return row[1] / row[0]
-        
+                    overlap_rate = row[1] / row[0]
+                    logger.debug(
+                        f"Overlap: {schema_a}.{table_a}.{col_a} -> "
+                        f"{schema_b}.{table_b}.{col_b} = {overlap_rate:.2%}"
+                    )
+                    return overlap_rate
+                
         except OperationalError as e:
             # Query timeout
             logger.debug(f"Query timeout for overlap calculation: {e}")
         except SQLAlchemyError as e:
-            logger.debug(f"SQL error in overlap calculation: {e}")
+            error_msg = str(e).lower()
+            
+            # Log collation errors specifically
+            if 'collation' in error_msg or 'collate' in error_msg:
+                logger.warning(
+                    f"Collation conflict between {schema_a}.{table_a}.{col_a} "
+                    f"and {schema_b}.{table_b}.{col_b}: {e}"
+                )
+            else:
+                logger.debug(f"SQL error in overlap calculation: {e}")
         
         return 0.0
     
@@ -415,7 +201,7 @@ class RelationshipDetector:
         schema_b: str, table_b: str, col_b: str
     ) -> str:
         """
-        Determine cardinality of relationship with timeout.
+        Determine cardinality of relationship with COLLATION HANDLING.
         Returns: one_to_one, one_to_many, many_to_one, many_to_many
         """
         if not self.engine:
@@ -424,16 +210,16 @@ class RelationshipDetector:
         try:
             with self.engine.connect() as conn:
                 # Set query timeout
-                vendor = self.engine.dialect.name
-                if vendor == 'mssql':
+                if self.db_dialect == 'mssql':
                     conn.execute(text("SET LOCK_TIMEOUT 10000"))
-                elif vendor == 'postgresql':
+                elif self.db_dialect == 'postgresql':
                     conn.execute(text("SET statement_timeout = '10s'"))
-                elif vendor == 'mysql':
+                elif self.db_dialect == 'mysql':
                     conn.execute(text("SET SESSION max_execution_time = 10000"))
                 
-                # Build dialect-appropriate query
-                if vendor == 'mssql':
+                # Build dialect-appropriate query with collation handling
+                if self.db_dialect == 'mssql':
+                    # SQL Server with COLLATE DATABASE_DEFAULT
                     query = text(f"""
                         WITH sample_a AS (
                             SELECT TOP 1000 [{col_a}] AS val
@@ -444,15 +230,23 @@ class RelationshipDetector:
                             SELECT TOP 1000 [{col_b}] AS val
                             FROM [{schema_b}].[{table_b}]
                             WHERE [{col_b}] IS NOT NULL
+                        ),
+                        joined AS (
+                            SELECT 
+                                a.val AS val_a,
+                                b.val AS val_b
+                            FROM sample_a a
+                            INNER JOIN sample_b b 
+                                ON a.val COLLATE DATABASE_DEFAULT = b.val COLLATE DATABASE_DEFAULT
                         )
-                        SELECT
-                            COUNT(*) AS count_a,
-                            COUNT(DISTINCT val) AS distinct_a,
-                            (SELECT COUNT(DISTINCT val) FROM sample_b) AS distinct_b,
-                            (SELECT COUNT(*) FROM sample_b) AS count_b
-                        FROM sample_a
+                        SELECT 
+                            COUNT(DISTINCT val_a) AS distinct_a,
+                            COUNT(DISTINCT val_b) AS distinct_b,
+                            COUNT(*) AS total_matches
+                        FROM joined
                     """)
-                else:
+                    
+                elif self.db_dialect == 'postgresql':
                     query = text(f"""
                         WITH sample_a AS (
                             SELECT "{col_a}" AS val
@@ -465,80 +259,298 @@ class RelationshipDetector:
                             FROM "{schema_b}"."{table_b}"
                             WHERE "{col_b}" IS NOT NULL
                             LIMIT 1000
+                        ),
+                        joined AS (
+                            SELECT 
+                                a.val AS val_a,
+                                b.val AS val_b
+                            FROM sample_a a
+                            INNER JOIN sample_b b ON a.val::text = b.val::text
                         )
-                        SELECT
-                            COUNT(*) AS count_a,
-                            COUNT(DISTINCT val) AS distinct_a,
-                            (SELECT COUNT(DISTINCT val) FROM sample_b) AS distinct_b,
-                            (SELECT COUNT(*) FROM sample_b) AS count_b
-                        FROM sample_a
+                        SELECT 
+                            COUNT(DISTINCT val_a) AS distinct_a,
+                            COUNT(DISTINCT val_b) AS distinct_b,
+                            COUNT(*) AS total_matches
+                        FROM joined
+                    """)
+                    
+                elif self.db_dialect == 'mysql':
+                    query = text(f"""
+                        WITH sample_a AS (
+                            SELECT `{col_a}` AS val
+                            FROM `{schema_a}`.`{table_a}`
+                            WHERE `{col_a}` IS NOT NULL
+                            LIMIT 1000
+                        ),
+                        sample_b AS (
+                            SELECT `{col_b}` AS val
+                            FROM `{schema_b}`.`{table_b}`
+                            WHERE `{col_b}` IS NOT NULL
+                            LIMIT 1000
+                        ),
+                        joined AS (
+                            SELECT 
+                                a.val AS val_a,
+                                b.val AS val_b
+                            FROM sample_a a
+                            INNER JOIN sample_b b ON BINARY a.val = BINARY b.val
+                        )
+                        SELECT 
+                            COUNT(DISTINCT val_a) AS distinct_a,
+                            COUNT(DISTINCT val_b) AS distinct_b,
+                            COUNT(*) AS total_matches
+                        FROM joined
+                    """)
+                    
+                else:
+                    # Generic SQL
+                    query = text(f"""
+                        WITH sample_a AS (
+                            SELECT "{col_a}" AS val
+                            FROM "{schema_a}"."{table_a}"
+                            WHERE "{col_a}" IS NOT NULL
+                            LIMIT 1000
+                        ),
+                        sample_b AS (
+                            SELECT "{col_b}" AS val
+                            FROM "{schema_b}"."{table_b}"
+                            WHERE "{col_b}" IS NOT NULL
+                            LIMIT 1000
+                        ),
+                        joined AS (
+                            SELECT 
+                                a.val AS val_a,
+                                b.val AS val_b
+                            FROM sample_a a
+                            INNER JOIN sample_b b ON a.val = b.val
+                        )
+                        SELECT 
+                            COUNT(DISTINCT val_a) AS distinct_a,
+                            COUNT(DISTINCT val_b) AS distinct_b,
+                            COUNT(*) AS total_matches
+                        FROM joined
                     """)
                 
                 result = conn.execute(query)
                 row = result.fetchone()
                 
-                if row:
-                    count_a, distinct_a, distinct_b, count_b = row
-                    
-                    # Calculate uniqueness ratios
-                    unique_a = distinct_a / count_a if count_a > 0 else 0
-                    unique_b = distinct_b / count_b if count_b > 0 else 0
-                    
-                    # Determine cardinality
-                    if unique_a > 0.95 and unique_b > 0.95:
-                        return 'one_to_one'
-                    elif unique_a > 0.95:
-                        return 'one_to_many'  # A is unique, B has duplicates
-                    elif unique_b > 0.95:
-                        return 'many_to_one'  # B is unique, A has duplicates
-                    else:
-                        return 'many_to_many'
+                if not row or row[2] == 0:
+                    return 'many_to_many'
+                
+                distinct_a = row[0]
+                distinct_b = row[1]
+                total = row[2]
+                
+                # Determine cardinality based on ratios
+                ratio_a = total / distinct_a if distinct_a > 0 else 0
+                ratio_b = total / distinct_b if distinct_b > 0 else 0
+                
+                if ratio_a <= 1.1 and ratio_b <= 1.1:
+                    return 'one_to_one'
+                elif ratio_a <= 1.1:
+                    return 'many_to_one'
+                elif ratio_b <= 1.1:
+                    return 'one_to_many'
+                else:
+                    return 'many_to_many'
         
-        except OperationalError as e:
-            logger.debug(f"Query timeout for cardinality check: {e}")
         except SQLAlchemyError as e:
-            logger.debug(f"SQL error in cardinality check: {e}")
+            logger.debug(f"Error determining cardinality: {e}")
         
         return 'many_to_many'
     
+    def _types_compatible(self, type_a: str, type_b: str) -> bool:
+        """Check if two column types are compatible for FK relationship."""
+        # Normalize types
+        type_a = type_a.lower()
+        type_b = type_b.lower()
+        
+        # Integer types
+        int_types = ['int', 'integer', 'bigint', 'smallint', 'tinyint']
+        if any(t in type_a for t in int_types) and any(t in type_b for t in int_types):
+            return True
+        
+        # String types
+        str_types = ['char', 'varchar', 'text', 'string', 'nchar', 'nvarchar']
+        if any(t in type_a for t in str_types) and any(t in type_b for t in str_types):
+            return True
+        
+        # UUID types
+        if 'uuid' in type_a and 'uuid' in type_b:
+            return True
+        
+        return False
+    
     def _calculate_confidence(
-        self, 
-        overlap: float, 
+        self,
+        overlap_rate: float,
         cardinality: str,
         fk_candidate: Dict[str, Any]
     ) -> str:
-        """
-        Calculate confidence level for inferred relationship.
-        Returns: high, medium, low
-        """
+        """Calculate confidence level for relationship."""
         score = 0.0
         
-        # Overlap score (50%)
-        score += overlap * 0.5
+        # Overlap rate contribution (max 50 points)
+        score += overlap_rate * 50
         
-        # Cardinality score (30%)
-        if cardinality in ['many_to_one', 'one_to_one']:
-            score += 0.3
+        # Cardinality contribution (max 20 points)
+        if cardinality in ('many_to_one', 'one_to_one'):
+            score += 20
         elif cardinality == 'one_to_many':
-            score += 0.2
+            score += 10
         
-        # Name match score (20%)
-        if fk_candidate.get('name_match'):
-            score += 0.2
+        # Name matching contribution (max 30 points)
+        if fk_candidate.get('suffix_match'):
+            score += 20
+        if fk_candidate.get('name_similarity', 0) > 0.7:
+            score += 10
         
-        if score >= 0.85:
+        # Determine confidence level
+        if score >= 70:
             return 'high'
-        elif score >= 0.70:
+        elif score >= 50:
             return 'medium'
         else:
             return 'low'
     
-    def __enter__(self):
-        """Context manager entry."""
-        self.connect()
-        return self
-    
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit."""
-        self.disconnect()
-        return False
+    def detect_relationships(
+        self,
+        discovery_data: Dict[str, Any],
+        overlap_threshold: float = 0.80
+    ) -> List[Dict[str, Any]]:
+        """
+        Detect implicit relationships with COLLATION CONFLICT HANDLING.
+        
+        Args:
+            discovery_data: Discovery JSON from Phase 1
+            overlap_threshold: Minimum overlap rate (default 0.80)
+        
+        Returns:
+            List of inferred relationships
+        """
+        if not self.engine:
+            self.connect()
+        
+        relationships = []
+        
+        try:
+            # Build list of all tables
+            all_tables = []
+            for schema in discovery_data.get('schemas', []):
+                schema_name = schema['name']
+                for table in schema.get('tables', []):
+                    table_info = {
+                        'schema': schema_name,
+                        'name': table['name'],
+                        'full_name': f"{schema_name}.{table['name']}",
+                        'columns': table.get('columns', []),
+                        'primary_key': table.get('primary_key', [])
+                    }
+                    all_tables.append(table_info)
+            
+            total_pairs = len(all_tables) * (len(all_tables) - 1)
+            processed = 0
+            
+            logger.info(f"Analyzing {total_pairs} table pairs for relationships...")
+            
+            # Compare each table pair
+            for table_a in all_tables:
+                for table_b in all_tables:
+                    if table_a['full_name'] == table_b['full_name']:
+                        continue
+                    
+                    # Find FK candidates
+                    for col_a in table_a['columns']:
+                        for col_b in table_b['columns']:
+                            # Check if col_b is a primary key
+                            if col_b['name'] not in table_b['primary_key']:
+                                continue
+                            
+                            # Check type compatibility
+                            if not self._types_compatible(
+                                col_a.get('type', ''),
+                                col_b.get('type', '')
+                            ):
+                                continue
+                            
+                            # Calculate overlap with collation handling
+                            overlap = self._calculate_overlap(
+                                table_a['schema'], table_a['name'], col_a['name'],
+                                table_b['schema'], table_b['name'], col_b['name']
+                            )
+                            
+                            if overlap >= overlap_threshold:
+                                # Determine cardinality with collation handling
+                                cardinality = self._determine_cardinality(
+                                    table_a['schema'], table_a['name'], col_a['name'],
+                                    table_b['schema'], table_b['name'], col_b['name']
+                                )
+                                
+                                fk_candidate = {
+                                    'col_a': col_a['name'],
+                                    'col_b': col_b['name']
+                                }
+                                
+                                relationship = {
+                                    'from': f"{table_a['full_name']}.{col_a['name']}",
+                                    'to': f"{table_b['full_name']}.{col_b['name']}",
+                                    'method': 'value_overlap',
+                                    'overlap_rate': round(overlap, 3),
+                                    'cardinality': cardinality,
+                                    'confidence': self._calculate_confidence(
+                                        overlap, cardinality, fk_candidate
+                                    )
+                                }
+                                
+                                relationships.append(relationship)
+                                logger.info(
+                                    f"Found relationship: {relationship['from']} -> "
+                                    f"{relationship['to']} (overlap={overlap:.2%}, {cardinality})"
+                                )
+                    
+                    processed += 1
+                    if processed % 100 == 0:
+                        logger.info(f"Progress: {processed}/{total_pairs} pairs analyzed")
+            
+            logger.info(f"Relationship detection complete: {len(relationships)} relationships found")
+        
+        except Exception as e:
+            logger.error(f"Error in relationship detection: {e}")
+        
+        return relationships
+
+
+# Usage note:
+"""
+COLLATION CONFLICT FIX:
+
+The key change is in the JOIN conditions:
+
+SQL Server:
+    ON a.val COLLATE DATABASE_DEFAULT = b.val COLLATE DATABASE_DEFAULT
+
+PostgreSQL:
+    ON a.val::text = b.val::text
+
+MySQL:
+    ON BINARY a.val = BINARY b.val
+
+This forces both sides of the comparison to use the same collation,
+preventing errors like:
+    "Cannot resolve the collation conflict between Greek_CI_AS 
+     and SQL_Latin1_General_CP1_CI_AI"
+
+The DATABASE_DEFAULT collation is a safe choice as it uses the 
+database's default collation, which both columns can be cast to.
+
+Alternative approaches:
+1. Use specific collation: COLLATE Latin1_General_CI_AS
+2. Use case-sensitive collation: COLLATE Latin1_General_CS_AS
+3. Use binary comparison: CAST(a.val AS VARBINARY) = CAST(b.val AS VARBINARY)
+
+DATABASE_DEFAULT is preferred because:
+- Works across different database collations
+- Doesn't require knowing specific collation names
+- Handles mixed collations gracefully
+- Standard SQL Server recommendation
+"""
