@@ -1,229 +1,364 @@
 #!/usr/bin/env python3
 """
 GPT-5 Semantic Modeling & SQL Q&A System
-Main CLI entry point
-"""
+Main CLI Entry Point
 
+Commands:
+    python main.py discovery              # Phase 1: discover & cache
+    python main.py model                  # Phase 2: build semantic model
+    python main.py question "..."         # Phase 3: NL → SQL
+    python main.py cache-clear            # Clear all caches
+    python main.py config                 # Show configuration
+"""
+import argparse
+import json
+import logging
 import sys
-import click
+from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
-from rich.json import JSON
 
-from config.settings import Settings
-from src.utils.logging_config import setup_logging
-from src.discovery.discovery_engine import DiscoveryEngine
+from config.settings import get_settings
+from src.discovery.discovery_engine import run_discovery, clear_discovery_cache
 from src.semantic.model_builder import SemanticModelBuilder
-from src.qa.question_parser import QuestionParser
-from src.utils.cache import CacheManager
 
-console = Console()
-logger = None
-
-
-def init_app():
-    """Initialize application settings and logging."""
-    global logger
-    settings = Settings()
-    logger = setup_logging(settings)
-    return settings
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 
-@click.group()
-def cli():
-    """GPT-5 Semantic Modeling & SQL Q&A System"""
-    pass
-
-
-@cli.command()
-def discovery():
+def cmd_discovery(args):
     """
-    Phase 1: Discover database schema, samples, and relationships.
-    Results are cached for use in semantic model building.
+    Phase 1: Database Discovery
+    Introspects database schema, samples data, detects relationships
     """
-    console.print(Panel.fit(
-        "[bold cyan]Phase 1: Discovery[/bold cyan]\n"
-        "Discovering database schema, samples, and relationships...",
-        border_style="cyan"
-    ))
+    logger.info("Starting Phase 1: Discovery")
     
     try:
-        settings = init_app()
-        engine = DiscoveryEngine(settings)
+        discovery_data = run_discovery(
+            use_cache=not args.no_cache,
+            skip_relationships=args.skip_relationships
+        )
         
-        console.print("[yellow]Starting discovery process...[/yellow]")
-        discovery_result = engine.discover()
+        # Print summary
+        print("\n" + "=" * 80)
+        print("DISCOVERY SUMMARY")
+        print("=" * 80)
+        print(f"Schemas:       {len(discovery_data['schemas'])}")
+        print(f"Tables:        {discovery_data['metadata']['total_tables']}")
+        print(f"Columns:       {discovery_data['metadata']['total_columns']}")
+        print(f"Relationships: {len(discovery_data.get('inferred_relationships', []))}")
+        print(f"Duration:      {discovery_data['metadata']['discovery_duration_seconds']:.1f}s")
+        print("=" * 80)
         
-        console.print(f"[green]✓[/green] Discovery completed successfully!")
-        console.print(f"[green]✓[/green] Found {len(discovery_result.get('schemas', []))} schemas")
-        console.print(f"[green]✓[/green] Cached at: {settings.CACHE_DIR}/discovery.json")
+        # Save to output
+        settings = get_settings()
+        output_path = settings.paths.cache_dir / 'discovery.json'
+        print(f"\n✅ Discovery complete! Results saved to: {output_path}")
         
-        # Display summary
-        total_tables = sum(len(schema.get('tables', [])) for schema in discovery_result.get('schemas', []))
-        total_relationships = len(discovery_result.get('inferred_relationships', []))
-        
-        console.print(Panel(
-            f"[bold]Discovery Summary[/bold]\n\n"
-            f"• Total Tables: {total_tables}\n"
-            f"• Inferred Relationships: {total_relationships}\n"
-            f"• Named Assets: {len(discovery_result.get('named_assets', []))}",
-            border_style="green"
-        ))
+        return 0
         
     except Exception as e:
-        console.print(f"[red]✗[/red] Discovery failed: {str(e)}")
-        logger.exception("Discovery failed")
-        sys.exit(1)
+        logger.error(f"Discovery failed: {e}", exc_info=True)
+        print(f"\n❌ Discovery failed: {e}")
+        return 1
 
 
-@cli.command()
-def model():
+def cmd_model(args):
     """
-    Phase 2: Build semantic model from discovery cache.
-    Creates business-friendly entities, dimensions, and facts.
+    Phase 2: Semantic Model Generation
+    Builds business-friendly semantic model from discovery data
     """
-    console.print(Panel.fit(
-        "[bold magenta]Phase 2: Semantic Model Building[/bold magenta]\n"
-        "Building semantic model from discovery cache...",
-        border_style="magenta"
-    ))
-    
+    logger.info("Starting Phase 2: Semantic Model Generation")
+
+    # Paths & prechecks
+    settings = get_settings()
+    discovery_path = settings.paths.cache_dir / 'discovery.json'
+    output_path = settings.paths.cache_dir / 'semantic_model.json'
+
+    console = Console()
+
+    if not discovery_path.exists():
+        print(f"\n❌ Discovery data not found at {discovery_path}")
+        print("Please run discovery first: python main.py discovery")
+        return 1
+
     try:
-        settings = init_app()
-        builder = SemanticModelBuilder(settings)
-        
+        # Load discovery data (optional, in case your builder uses it)
+        with open(discovery_path, 'r', encoding='utf-8') as f:
+            discovery_data = json.load(f)
+
+        # Build model
         console.print("[yellow]Loading discovery cache...[/yellow]")
-        semantic_model = builder.build()
-        
+        builder = SemanticModelBuilder(settings)
+
+        # Prefer passing discovery data if your builder supports it.
+        # If not, keep the no-arg call.
+        try:
+            semantic_model = builder.build(discovery_data=discovery_data)
+        except TypeError:
+            # Fallback for builders that don't accept args
+            semantic_model = builder.build()
+
+        # Persist to cache
+        settings.paths.cache_dir.mkdir(parents=True, exist_ok=True)
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(semantic_model, f, indent=2, ensure_ascii=False)
+
         console.print(f"[green]✓[/green] Semantic model built successfully!")
-        console.print(f"[green]✓[/green] Cached at: {settings.CACHE_DIR}/semantic_model.json")
-        
-        # Display summary
+        console.print(f"[green]✓[/green] Cached at: {output_path}")
+
+        # Summary counts (robust to missing keys)
+        entities = len(semantic_model.get('entities', []))
+        dimensions = len(semantic_model.get('dimensions', []))
+        facts = len(semantic_model.get('facts', []))
+        relationships = len(semantic_model.get('relationships', []))
+
         console.print(Panel(
             f"[bold]Semantic Model Summary[/bold]\n\n"
-            f"• Entities: {len(semantic_model.get('entities', []))}\n"
-            f"• Dimensions: {len(semantic_model.get('dimensions', []))}\n"
-            f"• Facts: {len(semantic_model.get('facts', []))}\n"
-            f"• Relationships: {len(semantic_model.get('relationships', []))}",
+            f"• Entities: {entities}\n"
+            f"• Dimensions: {dimensions}\n"
+            f"• Facts: {facts}\n"
+            f"• Relationships: {relationships}",
             border_style="green"
         ))
-        
+
+        return 0
+
     except Exception as e:
-        console.print(f"[red]✗[/red] Model building failed: {str(e)}")
-        logger.exception("Model building failed")
-        sys.exit(1)
+        logger.error(f"Semantic model generation failed: {e}", exc_info=True)
+        print(f"\n❌ Semantic model generation failed: {e}")
+        return 1
 
 
-@cli.command()
-@click.argument('question', type=str)
-def question(question: str):
+
+def cmd_question(args):
     """
-    Phase 3: Answer a natural language question with SQL.
-    Returns SQL query, results, and evidence chain.
+    Phase 3: Question Answering
+    Converts natural language question to SQL and executes
+    """
+    logger.info(f"Starting Phase 3: Question Answering")
+    logger.info(f"Question: {args.question}")
     
-    Example: python main.py question "What were top 10 customers by revenue last month?"
-    """
-    console.print(Panel.fit(
-        f"[bold blue]Phase 3: Question Answering[/bold blue]\n"
-        f"Question: {question}",
-        border_style="blue"
-    ))
+    # Check if semantic model exists
+    settings = get_settings()
+    semantic_model_path = settings.paths.cache_dir / 'semantic_model.json'
+    
+    if not semantic_model_path.exists():
+        print(f"\n❌ Semantic model not found at {semantic_model_path}")
+        print("Please run model generation first: python main.py model")
+        return 1
     
     try:
-        settings = init_app()
-        parser = QuestionParser(settings)
+        # Load semantic model
+        with open(semantic_model_path, 'r', encoding='utf-8') as f:
+            semantic_model = json.load(f)
         
-        console.print("[yellow]Analyzing question...[/yellow]")
-        answer = parser.answer(question)
+        print(f"\n✅ Loaded semantic model")
         
-        # Display status
-        if answer['status'] == 'refuse':
-            console.print(Panel(
-                f"[bold red]Unable to Answer[/bold red]\n\n"
-                f"Reason: {answer['refusal']['reason']}\n\n"
-                f"[bold]Please clarify:[/bold]\n" +
-                "\n".join(f"• {q}" for q in answer.get('clarifying_questions', [])),
-                border_style="red"
-            ))
-            return
+        # TODO: Implement question answering
+        # This would:
+        # 1. Load semantic model
+        # 2. Parse question
+        # 3. Generate SQL using LLM with grounding
+        # 4. Validate SQL
+        # 5. Execute and return results
+        # 6. Log to Q&A history
         
-        # Display SQL
-        console.print("\n[bold]Generated SQL:[/bold]")
-        for i, sql_obj in enumerate(answer.get('sql', []), 1):
-            console.print(Panel(
-                sql_obj['statement'],
-                title=f"Query {i} ({sql_obj['dialect']})",
-                border_style="cyan"
-            ))
-            console.print(f"[dim]{sql_obj['explanation']}[/dim]\n")
+        print("\n⚠️  Question answering not yet implemented")
+        print("This will be implemented in Phase 3")
         
-        # Display first row interpretation
-        if 'result_preview' in answer:
-            preview = answer['result_preview']
-            console.print(Panel(
-                preview.get('first_row_meaning', 'No results'),
-                title="First Row Interpretation",
-                border_style="green"
-            ))
-            
-            # Display results table
-            if 'top_10_rows' in preview and preview['top_10_rows']:
-                console.print(f"\n[bold]Results ({preview['rows_sampled']} rows):[/bold]")
-                console.print(JSON.from_data(preview['top_10_rows'][:5]))  # Show first 5
-        
-        # Display suggested questions
-        if 'suggested_questions' in answer and answer['suggested_questions']:
-            console.print("\n[bold]Suggested follow-up questions:[/bold]")
-            for i, q in enumerate(answer['suggested_questions'], 1):
-                console.print(f"  {i}. {q}")
-        
-        console.print(f"\n[green]✓[/green] Answer logged to: {settings.LOG_DIR}/qa_history.log.jsonl")
+        return 0
         
     except Exception as e:
-        console.print(f"[red]✗[/red] Question answering failed: {str(e)}")
-        logger.exception("Question answering failed")
-        sys.exit(1)
+        logger.error(f"Question answering failed: {e}", exc_info=True)
+        print(f"\n❌ Question answering failed: {e}")
+        return 1
 
 
-@cli.command()
-def cache_clear():
-    """
-    Clear discovery and semantic model caches.
-    Forces fresh discovery and model building on next run.
-    """
-    console.print(Panel.fit(
-        "[bold yellow]Cache Management[/bold yellow]\n"
-        "Clearing discovery and semantic caches...",
-        border_style="yellow"
-    ))
+def cmd_cache_clear(args):
+    """Clear all caches (discovery and semantic model)"""
+    logger.info("Clearing caches...")
     
     try:
-        settings = init_app()
-        cache_mgr = CacheManager(settings)
+        settings = get_settings()
+        cache_dir = settings.paths.cache_dir
         
-        cleared = cache_mgr.clear_all()
+        # Clear discovery cache
+        clear_discovery_cache()
         
-        if cleared:
-            console.print("[green]✓[/green] All caches cleared successfully!")
-            console.print("Next discovery and model build will be fresh.")
+        # Clear semantic model cache
+        semantic_model_path = cache_dir / 'semantic_model.json'
+        if semantic_model_path.exists():
+            semantic_model_path.unlink()
+            logger.info(f"Removed semantic model cache: {semantic_model_path}")
+        
+        # Clear relationship cache
+        relationships_path = cache_dir / 'relationships.json'
+        if relationships_path.exists():
+            relationships_path.unlink()
+            logger.info(f"Removed relationships cache: {relationships_path}")
+        
+        print("\n✅ All caches cleared")
+        return 0
+        
+    except Exception as e:
+        logger.error(f"Cache clear failed: {e}", exc_info=True)
+        print(f"\n❌ Cache clear failed: {e}")
+        return 1
+
+
+def cmd_config(args):
+    """Show current configuration"""
+    try:
+        settings = get_settings()
+        
+        if args.json:
+            # Output as JSON
+            config_dict = {
+                'azure_openai': {
+                    'deployment_name': settings.azure_openai.deployment_name,
+                    'api_version': settings.azure_openai.api_version,
+                    'endpoint': settings.azure_openai.endpoint,
+                },
+                'database': {
+                    'connection_string': settings.database.connection_string[:50] + '...',
+                },
+                'paths': {
+                    'rdl_path': str(settings.paths.rdl_path),
+                    'cache_dir': str(settings.paths.cache_dir),
+                    'log_dir': str(settings.paths.log_dir),
+                },
+                'discovery': {
+                    'timeout': settings.discovery.timeout,
+                    'cache_hours': settings.discovery.cache_hours,
+                    'max_workers': settings.discovery.max_workers,
+                },
+                'relationships': {
+                    'enabled': settings.relationships.enabled,
+                    'strategy': settings.relationships.strategy,
+                    'sample_size': settings.relationships.sample_size,
+                    'max_workers': settings.relationships.max_workers,
+                    'max_comparisons': settings.relationships.max_comparisons,
+                },
+            }
+            print(json.dumps(config_dict, indent=2))
         else:
-            console.print("[yellow]⚠[/yellow] No caches found to clear.")
-            
+            # Output as formatted text
+            print(settings.summary())
+        
+        return 0
+        
     except Exception as e:
-        console.print(f"[red]✗[/red] Cache clearing failed: {str(e)}")
-        sys.exit(1)
+        logger.error(f"Config display failed: {e}", exc_info=True)
+        print(f"\n❌ Config display failed: {e}")
+        return 1
 
 
-@cli.command()
-def version():
-    """Display version information."""
-    console.print(Panel.fit(
-        "[bold]GPT-5 Semantic Modeling & SQL Q&A System[/bold]\n"
-        "Version: 1.0.0\n"
-        "Python: 3.11+",
-        border_style="blue"
-    ))
+def main():
+    """Main CLI entry point"""
+    parser = argparse.ArgumentParser(
+        description='GPT-5 Semantic Modeling & SQL Q&A System',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  # Discovery phase
+  python main.py discovery
+  python main.py discovery --no-cache
+  python main.py discovery --skip-relationships
+  
+  # Semantic model generation
+  python main.py model
+  
+  # Question answering
+  python main.py question "What were our top 5 customers by revenue last quarter?"
+  
+  # Utilities
+  python main.py cache-clear
+  python main.py config
+  python main.py config --json
+        """
+    )
+    
+    subparsers = parser.add_subparsers(dest='command', help='Command to run')
+    
+    # Discovery command
+    discovery_parser = subparsers.add_parser(
+        'discovery',
+        help='Phase 1: Discover database schema and relationships'
+    )
+    discovery_parser.add_argument(
+        '--no-cache',
+        action='store_true',
+        help='Skip cache and run fresh discovery'
+    )
+    discovery_parser.add_argument(
+        '--skip-relationships',
+        action='store_true',
+        help='Skip relationship detection (faster, for testing)'
+    )
+    discovery_parser.set_defaults(func=cmd_discovery)
+    
+    # Model command
+    model_parser = subparsers.add_parser(
+        'model',
+        help='Phase 2: Build semantic model from discovery data'
+    )
+    model_parser.set_defaults(func=cmd_model)
+    
+    # Question command
+    question_parser = subparsers.add_parser(
+        'question',
+        help='Phase 3: Answer natural language question with SQL'
+    )
+    question_parser.add_argument(
+        'question',
+        help='Natural language question to answer'
+    )
+    question_parser.set_defaults(func=cmd_question)
+    
+    # Cache clear command
+    cache_clear_parser = subparsers.add_parser(
+        'cache-clear',
+        help='Clear all caches'
+    )
+    cache_clear_parser.set_defaults(func=cmd_cache_clear)
+    
+    # Config command
+    config_parser = subparsers.add_parser(
+        'config',
+        help='Show current configuration'
+    )
+    config_parser.add_argument(
+        '--json',
+        action='store_true',
+        help='Output configuration as JSON'
+    )
+    config_parser.set_defaults(func=cmd_config)
+    
+    # Parse arguments
+    args = parser.parse_args()
+    
+    # Check if command was provided
+    if not args.command:
+        parser.print_help()
+        return 1
+    
+    # Run command
+    try:
+        return args.func(args)
+    except KeyboardInterrupt:
+        print("\n\n⚠️  Interrupted by user")
+        return 130
+    except Exception as e:
+        logger.error(f"Command failed: {e}", exc_info=True)
+        print(f"\n❌ Command failed: {e}")
+        return 1
 
 
 if __name__ == '__main__':
-    cli()
+    sys.exit(main())

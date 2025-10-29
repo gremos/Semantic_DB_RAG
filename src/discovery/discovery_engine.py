@@ -1,720 +1,760 @@
 """
-Discovery Engine - Main orchestrator for Phase 1.
-Coordinates introspection, sampling, relationship detection, and caching.
+Discovery Engine for GPT-5 Semantic Modeling & SQL Q&A System
+
+Phase 1: Database Discovery
+- Introspects schemas, tables, columns, keys, indexes
+- Samples data with statistics
+- Normalizes SQL (views, stored procedures, RDL)
+- Detects implicit foreign key relationships (optimized)
+- Caches results with fingerprinting
 """
-
-import json
 import hashlib
-import time
-import concurrent.futures
-from typing import Dict, Any, List, Tuple, Optional
-from pathlib import Path
-import queue
-import threading
+import json
+import logging
 import re
+import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
-from sqlalchemy import text, create_engine
+import sqlglot
+from sqlalchemy import create_engine, inspect, text, MetaData, Table
+from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 
-from config.settings import Settings
-from src.discovery.introspector import DatabaseIntrospector
-from src.discovery.sampler import DataSampler
-from src.discovery.relationship_detector import RelationshipDetector
-from src.discovery.rdl_parser import RDLParser
-from src.utils.cache import CacheManager
-from src.utils.logging_config import get_logger
+from config.settings import (
+    get_settings,
+    get_database_config,
+    get_discovery_config,
+    get_path_config,
+    get_relationship_config
+)
+from src.discovery.relationship_detector import detect_relationships
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
+
+
+class DiscoveryCache:
+    """
+    Cache manager for discovery results
+    Implements fingerprinting to detect database changes
+    """
+    
+    def __init__(self, cache_dir: Path, cache_hours: int = 168):
+        self.cache_dir = cache_dir
+        self.cache_hours = cache_hours
+        self.cache_file = cache_dir / 'discovery.json'
+        self.fingerprint_file = cache_dir / 'discovery_fingerprint.json'
+    
+    def get_database_fingerprint(self, engine: Engine) -> str:
+        """
+        Generate fingerprint of database structure
+        Used to detect schema changes
+        """
+        fingerprint_data = []
+        
+        inspector = inspect(engine)
+        
+        # Collect schema metadata
+        for schema in inspector.get_schema_names():
+            for table_name in inspector.get_table_names(schema=schema):
+                # Table fingerprint: name + column names + types
+                columns = inspector.get_columns(table_name, schema=schema)
+                col_signatures = [
+                    f"{col['name']}:{col['type']}" 
+                    for col in columns
+                ]
+                
+                table_sig = f"{schema}.{table_name}:{','.join(sorted(col_signatures))}"
+                fingerprint_data.append(table_sig)
+        
+        # Generate hash
+        fingerprint_str = '|'.join(sorted(fingerprint_data))
+        return hashlib.sha256(fingerprint_str.encode()).hexdigest()
+    
+    def is_valid(self, engine: Engine) -> bool:
+        """
+        Check if cached discovery is still valid
+        Returns True if cache exists, is fresh, and fingerprint matches
+        """
+        # Check if cache exists
+        if not self.cache_file.exists():
+            logger.info("No discovery cache found")
+            return False
+        
+        # Check cache age
+        cache_age = datetime.now() - datetime.fromtimestamp(self.cache_file.stat().st_mtime)
+        if cache_age > timedelta(hours=self.cache_hours):
+            logger.info(f"Discovery cache expired (age: {cache_age})")
+            return False
+        
+        # Check fingerprint
+        if not self.fingerprint_file.exists():
+            logger.info("No fingerprint found, assuming cache invalid")
+            return False
+        
+        try:
+            with open(self.fingerprint_file, 'r') as f:
+                cached_fingerprint = json.load(f).get('fingerprint')
+            
+            current_fingerprint = self.get_database_fingerprint(engine)
+            
+            if cached_fingerprint != current_fingerprint:
+                logger.info("Database schema changed, cache invalid")
+                return False
+            
+            logger.info("Discovery cache is valid")
+            return True
+            
+        except Exception as e:
+            logger.warning(f"Error checking cache validity: {e}")
+            return False
+    
+    def load(self) -> Optional[Dict]:
+        """Load cached discovery data"""
+        try:
+            with open(self.cache_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            logger.info(f"Loaded discovery cache from {self.cache_file}")
+            return data
+        except Exception as e:
+            logger.error(f"Failed to load cache: {e}")
+            return None
+    
+    def save(self, data: Dict, engine: Engine):
+        """Save discovery data to cache"""
+        try:
+            # Save discovery data
+            with open(self.cache_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2)
+            
+            # Save fingerprint
+            fingerprint = self.get_database_fingerprint(engine)
+            with open(self.fingerprint_file, 'w', encoding='utf-8') as f:
+                json.dump({
+                    'fingerprint': fingerprint,
+                    'timestamp': datetime.now().isoformat()
+                }, f, indent=2)
+            
+            logger.info(f"Saved discovery cache to {self.cache_file}")
+            
+        except Exception as e:
+            logger.error(f"Failed to save cache: {e}")
 
 
 class DiscoveryEngine:
-    """Main engine for database discovery (Phase 1)."""
+    """
+    Main discovery engine
+    Orchestrates database introspection, sampling, and relationship detection
+    """
     
-    def __init__(self, settings: Settings):
-        self.settings = settings
-        self.cache_manager = CacheManager(settings)
-        self.max_concurrency = 10  # Max concurrent sampling operations
-        self.progress_lock = threading.Lock()
-        self.completed_tables = 0
-        self.total_tables = 0
-        self.partial_results_queue = queue.Queue()  # For tables with partial results
+    def __init__(self, connection_string: Optional[str] = None):
+        """
+        Initialize discovery engine
         
-        # Create a shared connection engine to reuse
-        self.engine = self._create_engine()
+        Args:
+            connection_string: Database connection string (uses config if not provided)
+        """
+        # Load settings
+        self.settings = get_settings()
+        self.db_config = get_database_config()
+        self.discovery_config = get_discovery_config()
+        self.path_config = get_path_config()
+        self.relationship_config = get_relationship_config()
         
-        # Extract dialect from connection string
-        self.db_dialect = self._detect_database_dialect()
-        self.db_version = self._detect_database_version()
+        # Use provided connection string or from config
+        self.connection_string = connection_string or self.db_config.connection_string
         
-        logger.info(f"Detected database dialect: {self.db_dialect}, version: {self.db_version}")
+        # Initialize cache
+        self.cache = DiscoveryCache(
+            cache_dir=self.path_config.cache_dir,
+            cache_hours=self.discovery_config.cache_hours
+        )
+        
+        # Engine and inspector (lazy init)
+        self._engine: Optional[Engine] = None
+        self._inspector = None
+        
+        # Discovery results
+        self.discovery_data: Optional[Dict] = None
     
-    def _create_engine(self):
-        """
-        Create a SQLAlchemy engine with appropriate timeout settings.
-        """
-        try:
-            # Get connection string from settings
-            conn_str = self.settings.DATABASE_CONNECTION_STRING
-            
-            # Create engine with read-only connection parameters
-            if 'sqlserver' in conn_str.lower() or 'mssql' in conn_str.lower():
-                # SQL Server specific params for read-only
-                if 'ApplicationIntent' not in conn_str:
-                    if '?' in conn_str:
-                        conn_str += '&ApplicationIntent=ReadOnly'
-                    else:
-                        conn_str += '?ApplicationIntent=ReadOnly'
-            
-            # Create engine with appropriate connection pooling
-            engine = create_engine(
-                conn_str,
-                pool_size=self.max_concurrency + 2,  # Add a few extra connections
-                max_overflow=5,
-                pool_timeout=60,  # 60 seconds timeout for getting a connection
-                pool_recycle=300  # Recycle connections every 5 minutes
+    @property
+    def engine(self) -> Engine:
+        """Get or create database engine"""
+        if self._engine is None:
+            logger.info("Creating database engine...")
+            self._engine = create_engine(
+                self.connection_string,
+                pool_pre_ping=True,
+                pool_recycle=3600,
+                echo=False
             )
-            
-            # Test the connection
-            with engine.connect() as conn:
-                conn.execute(text("SELECT 1"))
-                
-            logger.info(f"Successfully created database engine")
-            return engine
-            
-        except Exception as e:
-            logger.error(f"Failed to create database engine: {str(e)}")
-            # Still return None so initialization continues, we'll handle this later
-            return None
+        return self._engine
     
-    def _detect_database_dialect(self) -> str:
-        """
-        Detect the database dialect from the connection string and engine.
-        
-        Returns:
-            Database dialect string: 'mssql', 'mysql', 'postgresql', 'oracle', or 'generic'
-        """
-        # First try to get dialect from the engine
-        if self.engine is not None:
-            try:
-                dialect_name = self.engine.dialect.name
-                if dialect_name:
-                    return dialect_name.lower()
-            except:
-                pass  # Fall back to connection string detection
-        
-        # Fall back to connection string detection
-        conn_str = self.settings.DATABASE_CONNECTION_STRING.lower()
-        
-        if 'sqlserver' in conn_str or 'mssql' in conn_str:
-            return 'mssql'
-        elif 'mysql' in conn_str or 'mariadb' in conn_str:
-            return 'mysql'
-        elif 'postgresql' in conn_str or 'postgres' in conn_str:
-            return 'postgresql'
-        elif 'oracle' in conn_str:
-            return 'oracle'
-        elif 'sqlite' in conn_str:
-            return 'sqlite'
-        else:
-            logger.warning(f"Could not detect database dialect from connection string. Using 'generic'.")
-            return 'generic'
+    @property
+    def inspector(self):
+        """Get or create database inspector"""
+        if self._inspector is None:
+            self._inspector = inspect(self.engine)
+        return self._inspector
     
-    def _detect_database_version(self) -> str:
+    def discover(self, use_cache: bool = True, skip_relationships: bool = False) -> Dict:
         """
-        Detect the database version using a simple query.
-        
-        Returns:
-            Database version string or 'unknown'
-        """
-        if self.engine is None:
-            return 'unknown'
-            
-        try:
-            with self.engine.connect() as conn:
-                if self.db_dialect == 'mssql':
-                    result = conn.execute(text("SELECT @@VERSION AS version"))
-                elif self.db_dialect == 'mysql':
-                    result = conn.execute(text("SELECT VERSION() AS version"))
-                elif self.db_dialect == 'postgresql':
-                    result = conn.execute(text("SHOW server_version"))
-                elif self.db_dialect == 'oracle':
-                    result = conn.execute(text("SELECT banner FROM v$version WHERE banner LIKE 'Oracle%'"))
-                else:
-                    return 'unknown'
-                    
-                row = result.fetchone()
-                if row:
-                    # Extract just the major version number
-                    version_str = str(row[0])
-                    # Look for the first numeric part
-                    match = re.search(r'(\d+)\.(\d+)', version_str)
-                    if match:
-                        return f"{match.group(1)}.{match.group(2)}"
-                    else:
-                        return version_str[:20]  # Truncate to avoid huge version strings
-                        
-        except Exception as e:
-            logger.warning(f"Could not detect database version: {str(e)}")
-            
-        return 'unknown'
-        
-    def _generate_fingerprint(self) -> str:
-        """
-        Generate a fingerprint for the database connection.
-        Used to detect if the database has changed.
-        """
-        # Use connection string as basis (without password)
-        conn_str = self.settings.DATABASE_CONNECTION_STRING
-        # Remove password from connection string for fingerprint
-        conn_str_safe = conn_str.split('@')[-1] if '@' in conn_str else conn_str
-        
-        fingerprint_data = f"{conn_str_safe}:{self.settings.SCHEMA_EXCLUSIONS}:{self.settings.TABLE_EXCLUSIONS}"
-        return hashlib.sha256(fingerprint_data.encode()).hexdigest()[:16]
-    
-    def discover(self, force_refresh: bool = False) -> Dict[str, Any]:
-        """
-        Run full discovery process with concurrent sampling.
-        
-        Steps:
-        1. Check cache
-        2. Introspect database schema
-        3. Sample data and collect statistics (now concurrent)
-        4. Detect implicit relationships
-        5. Parse RDL files
-        6. Cache results
+        Main discovery entry point
         
         Args:
-            force_refresh: If True, bypass cache and force fresh discovery
+            use_cache: If True, use cached discovery if valid
+            skip_relationships: If True, skip relationship detection (for testing)
             
         Returns:
-            Discovery JSON structure
+            Discovery data dictionary
         """
-        logger.info("Starting discovery process...")
+        logger.info("=" * 80)
+        logger.info("STARTING DATABASE DISCOVERY")
+        logger.info("=" * 80)
+        logger.info(f"Connection: {self.connection_string[:50]}...")
+        logger.info(f"Cache: {'enabled' if use_cache else 'disabled'}")
+        logger.info(f"Relationships: {'enabled' if not skip_relationships else 'disabled'}")
         
-        # Check cache unless force refresh
-        if not force_refresh:
-            cached = self.cache_manager.get_discovery()
-            if cached:
-                logger.info("Using cached discovery results")
-                return cached
-        
-        # Verify engine is available
-        if self.engine is None:
-            logger.error("Database engine is not available. Attempting to recreate.")
-            self.engine = self._create_engine()
-            if self.engine is None:
-                logger.error("Failed to create database engine. Cannot proceed with discovery.")
-                raise RuntimeError("Database connection failed")
-        
-        # Generate database fingerprint
-        fingerprint = self._generate_fingerprint()
-        logger.info(f"Database fingerprint: {fingerprint}")
-        
-        # Step 1: Introspect database
-        logger.info("Step 1/4: Introspecting database schema...")
-        with DatabaseIntrospector(self.settings) as introspector:
-            discovery_data = introspector.introspect_full()
-        
-        logger.info(f"Found {len(discovery_data['schemas'])} schemas")
-        
-        # Add database info to discovery data
-        if 'database' not in discovery_data:
-            discovery_data['database'] = {}
-        
-        discovery_data['database']['dialect'] = self.db_dialect
-        discovery_data['database']['version'] = self.db_version
-        
-        # Step 2: Sample data and collect statistics concurrently
-        logger.info(f"Step 2/4: Sampling data and collecting statistics with {self.max_concurrency} concurrent workers...")
-        self._sample_data_concurrently(discovery_data)
-        
-        # Step 3: Detect implicit relationships
-        logger.info("Step 3/4: Detecting implicit relationships...")
-        detector = RelationshipDetector(self.settings)
-        discovery_data['inferred_relationships'] = detector.detect_relationships(discovery_data)
-        
-        # Step 4: Parse RDL files (if configured)
-        logger.info("Step 4/4: Parsing RDL files...")
-        rdl_path = Path(self.settings.RDL_PATH)
-        if rdl_path.exists():
-            parser = RDLParser(self.settings)
-            discovery_data['rdl_assets'] = parser.parse_directory(rdl_path)
-        else:
-            discovery_data['rdl_assets'] = []
-        
-        # Record tables with partial or failed results
-        partial_results = []
-        while not self.partial_results_queue.empty():
-            partial_results.append(self.partial_results_queue.get())
-        
-        if partial_results:
-            discovery_data['partial_results'] = partial_results
-            logger.warning(f"Discovery completed with {len(partial_results)} partial/failed results")
-        
-        # Cache the results
-        logger.info("Caching discovery results...")
-        self.cache_manager.save_discovery(discovery_data)
-        
-        logger.info("Discovery complete!")
-        return discovery_data
-    
-    def _sample_data_concurrently(self, discovery_data: Dict[str, Any]) -> None:
-        """
-        Sample data from tables and views concurrently using a thread pool.
-        
-        Args:
-            discovery_data: The discovery data structure to update
-        """
-        # Collect all tables and views for processing
-        all_objects = []
-        for schema in discovery_data['schemas']:
-            for table in schema['tables']:
-                all_objects.append((schema['name'], table))
-        
-        # Sort objects - prioritize regular tables before views
-        # This helps with dependencies where views rely on tables
-        all_objects.sort(key=lambda x: 0 if x[1].get('type', 'table') == 'table' else 1)
-        
-        self.total_tables = len(all_objects)
-        self.completed_tables = 0
-        
-        logger.info(f"Processing {self.total_tables} objects with max {self.max_concurrency} concurrent operations")
-        
-        # Process objects concurrently using ThreadPoolExecutor
-        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_concurrency) as executor:
-            # Submit each object for processing - use own shared engine
-            futures = {
-                executor.submit(self._sample_object, schema_name, table_obj): 
-                (schema_name, table_obj) 
-                for schema_name, table_obj in all_objects
-            }
-            
-            # Process results as they complete
-            for future in concurrent.futures.as_completed(futures):
-                schema_name, table_obj = futures[future]
-                try:
-                    # Get the result and update discovery_data
-                    result = future.result()
-                    if result:
-                        # Update the original object in discovery_data
-                        self._update_table_in_discovery_data(discovery_data, schema_name, result)
-                except Exception as e:
-                    logger.error(f"Error processing {schema_name}.{table_obj['name']}: {str(e)}")
-                    # Record failed processing
-                    self.partial_results_queue.put({
-                        "schema": schema_name,
-                        "table": table_obj['name'],
-                        "error": str(e)
-                    })
-    
-    def _sample_object(self, schema_name: str, table_obj: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        """
-        Sample a single table or view with appropriate optimizations.
-        
-        Args:
-            schema_name: Schema name
-            table_obj: Table dictionary to enrich
-            
-        Returns:
-            Updated table dictionary or None if failed
-        """
-        object_type = table_obj.get('type', 'table')
-        object_name = table_obj['name']
-        full_name = f"{schema_name}.{object_name}"
-        
-        logger.debug(f"Sampling {object_type} {full_name}")
         start_time = time.time()
         
-        try:
-            # Use different sampling approaches based on object type
-            if object_type == 'view':
-                # Views get optimized sampling with timeouts
-                success = self._sample_view_optimized(schema_name, table_obj)
-            else:
-                # Regular tables use standard sampling
-                success = self._sample_table_standard(schema_name, table_obj)
-            
-            # Update progress
-            with self.progress_lock:
-                self.completed_tables += 1
-                completed = self.completed_tables
-                total = self.total_tables
-            
-            # Log progress periodically
-            if completed % 10 == 0 or completed == total:
-                elapsed = time.time() - start_time
-                logger.info(f"Progress: {completed}/{total} objects ({completed/total:.1%}) - {full_name} took {elapsed:.2f}s")
-            
-            return table_obj if success else None
-            
-        except Exception as e:
-            elapsed = time.time() - start_time
-            logger.error(f"Failed to sample {full_name} after {elapsed:.2f}s: {str(e)}")
-            
-            # Update progress counter even for failures
-            with self.progress_lock:
-                self.completed_tables += 1
-            
-            # Record partial results
-            table_obj['sampling_error'] = str(e)
-            table_obj['partial_results'] = True
-            self.partial_results_queue.put({
-                "schema": schema_name,
-                "table": object_name,
-                "error": str(e)
-            })
-            
-            return table_obj
-    
-    def _execute_query_with_timeout(self, query: str, timeout_seconds: int) -> List[Dict[str, Any]]:
-        """
-        Execute a query with a timeout and return the results.
+        # Check cache
+        if use_cache and self.cache.is_valid(self.engine):
+            logger.info("Using cached discovery data")
+            self.discovery_data = self.cache.load()
+            if self.discovery_data:
+                return self.discovery_data
         
-        Args:
-            query: SQL query to execute
-            timeout_seconds: Maximum execution time in seconds
-            
-        Returns:
-            List of row dictionaries
-        """
-        # Verify engine is available
-        if self.engine is None:
-            logger.error("Database engine is not available for query execution")
-            raise RuntimeError("Database engine is not available")
-            
+        logger.info("Running fresh discovery...")
+        
         try:
-            # Start timer for manual timeout check
-            start_time = time.time()
+            # Step 1: Detect database vendor/version
+            db_info = self._detect_database_info()
+            logger.info(f"Database: {db_info['vendor']} {db_info.get('version', 'unknown')}")
             
-            with self.engine.connect() as connection:
-                # Set session timeout if supported by dialect
-                try:
-                    if self.db_dialect == 'postgresql':
-                        connection.execute(text(f"SET statement_timeout = {timeout_seconds * 1000}"))
-                    # Don't use QUERY_GOVERNOR_COST_LIMIT as it's not reliable
-                except Exception as e:
-                    logger.debug(f"Could not set timeout parameters: {str(e)}")
-                
-                # Execute the query
-                result = connection.execute(text(query))
-                
-                # Collect results as dictionaries
-                rows = []
-                for row in result:
-                    # Check for timeout during iteration
-                    if time.time() - start_time > timeout_seconds:
-                        logger.warning(f"Query execution timed out after {timeout_seconds}s")
-                        break
-                    
-                    # Convert row to dictionary
-                    row_dict = {}
-                    for key, value in row._mapping.items():
-                        row_dict[key] = value
-                    
-                    rows.append(row_dict)
-                    
-                    # Limit to maximum 100 rows regardless
-                    if len(rows) >= 100:
-                        break
-                
-                return rows
+            # Step 2: Discover schemas and tables
+            schemas_data = self._discover_schemas()
+            logger.info(f"Discovered {len(schemas_data)} schemas")
+            
+            # Step 3: Process named assets (views, stored procedures, RDL)
+            named_assets = self._discover_named_assets()
+            logger.info(f"Discovered {len(named_assets)} named assets")
+            
+            # Step 4: Detect relationships (optimized)
+            if skip_relationships or not self.relationship_config.enabled:
+                logger.info("Skipping relationship detection")
+                relationships = []
+            else:
+                logger.info("Starting optimized relationship detection...")
+                relationships = self._detect_relationships(schemas_data, db_info['dialect'])
+                logger.info(f"Detected {len(relationships)} relationships")
+            
+            # Assemble discovery data
+            self.discovery_data = {
+                'database': db_info,
+                'dialect': db_info['dialect'],
+                'schemas': schemas_data,
+                'named_assets': named_assets,
+                'inferred_relationships': relationships,
+                'metadata': {
+                    'discovered_at': datetime.utcnow().isoformat(),
+                    'discovery_duration_seconds': time.time() - start_time,
+                    'total_tables': sum(len(s['tables']) for s in schemas_data),
+                    'total_columns': sum(
+                        len(t['columns']) 
+                        for s in schemas_data 
+                        for t in s['tables']
+                    ),
+                }
+            }
+            
+            # Save to cache
+            self.cache.save(self.discovery_data, self.engine)
+            
+            elapsed = time.time() - start_time
+            logger.info("=" * 80)
+            logger.info(f"DISCOVERY COMPLETE in {elapsed:.1f}s")
+            logger.info("=" * 80)
+            
+            return self.discovery_data
             
         except Exception as e:
-            logger.error(f"Query execution failed: {str(e)}")
-            # Determine if it's a timeout error
-            if "timeout" in str(e).lower() or "timed out" in str(e).lower():
-                logger.warning(f"Query timed out after {timeout_seconds}s")
+            logger.error(f"Discovery failed: {e}", exc_info=True)
             raise
+        finally:
+            # Cleanup
+            if self._engine:
+                self._engine.dispose()
     
-    def _sample_view_optimized(self, schema_name: str, view_obj: Dict[str, Any]) -> bool:
+    def _detect_database_info(self) -> Dict:
+        """Detect database vendor and version"""
+        try:
+            # Get dialect name
+            dialect_name = self.engine.dialect.name.lower()
+            
+            # Map to standardized names
+            dialect_map = {
+                'mssql': 'mssql',
+                'postgresql': 'postgres',
+                'mysql': 'mysql',
+                'mariadb': 'mysql',
+                'sqlite': 'sqlite',
+                'oracle': 'oracle',
+            }
+            
+            dialect = dialect_map.get(dialect_name, dialect_name)
+            
+            # Try to get version
+            version = None
+            try:
+                if dialect == 'mssql':
+                    result = self.engine.execute(text("SELECT @@VERSION")).scalar()
+                    version_match = re.search(r'Microsoft SQL Server (\d+)', str(result))
+                    if version_match:
+                        version = version_match.group(1)
+                elif dialect in ['postgres', 'postgresql']:
+                    result = self.engine.execute(text("SELECT version()")).scalar()
+                    version_match = re.search(r'PostgreSQL ([\d.]+)', str(result))
+                    if version_match:
+                        version = version_match.group(1)
+                elif dialect == 'mysql':
+                    result = self.engine.execute(text("SELECT VERSION()")).scalar()
+                    version = str(result).split('-')[0]
+            except Exception as e:
+                logger.warning(f"Could not detect database version: {e}")
+            
+            return {
+                'vendor': dialect,
+                'version': version,
+                'dialect': dialect,
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to detect database info: {e}")
+            return {
+                'vendor': 'unknown',
+                'dialect': 'generic',
+            }
+    
+    def _should_exclude_schema(self, schema_name: str) -> bool:
+        """Check if schema should be excluded"""
+        schema_lower = schema_name.lower()
+        return any(excl.lower() in schema_lower 
+                  for excl in self.discovery_config.schema_exclusions)
+    
+    def _should_exclude_table(self, table_name: str) -> bool:
+        """Check if table should be excluded"""
+        table_lower = table_name.lower()
+        
+        # Check prefix exclusions
+        for excl in self.discovery_config.table_exclusions:
+            if table_lower.startswith(excl.lower()):
+                return True
+        
+        # Check regex patterns
+        for pattern in self.discovery_config.table_exclusion_patterns:
+            try:
+                if re.match(pattern, table_name, re.IGNORECASE):
+                    return True
+            except re.error:
+                logger.warning(f"Invalid regex pattern: {pattern}")
+        
+        return False
+    
+    def _discover_schemas(self) -> List[Dict]:
         """
-        Sample a view with optimizations for performance.
-        Uses LIMIT/TOP clauses and query hints to improve performance.
+        Discover all schemas, tables, columns, keys, and indexes
+        Returns list of schema dictionaries
+        """
+        schemas_data = []
+        
+        for schema_name in self.inspector.get_schema_names():
+            # Skip excluded schemas
+            if self._should_exclude_schema(schema_name):
+                logger.debug(f"Skipping excluded schema: {schema_name}")
+                continue
+            
+            logger.info(f"Discovering schema: {schema_name}")
+            
+            # Discover tables in this schema
+            tables_data = self._discover_tables(schema_name)
+            
+            if tables_data:
+                schemas_data.append({
+                    'name': schema_name,
+                    'tables': tables_data
+                })
+        
+        return schemas_data
+    
+    def _discover_tables(self, schema_name: str) -> List[Dict]:
+        """Discover tables in a schema"""
+        tables_data = []
+        table_names = self.inspector.get_table_names(schema=schema_name)
+        
+        # Include views
+        view_names = self.inspector.get_view_names(schema=schema_name)
+        
+        # Process tables
+        for table_name in table_names:
+            if self._should_exclude_table(table_name):
+                logger.debug(f"Skipping excluded table: {schema_name}.{table_name}")
+                continue
+            
+            try:
+                table_data = self._discover_table(schema_name, table_name, 'table')
+                if table_data:
+                    tables_data.append(table_data)
+            except Exception as e:
+                logger.error(f"Error discovering table {schema_name}.{table_name}: {e}")
+        
+        # Process views
+        for view_name in view_names:
+            if self._should_exclude_table(view_name):
+                logger.debug(f"Skipping excluded view: {schema_name}.{view_name}")
+                continue
+            
+            try:
+                view_data = self._discover_table(schema_name, view_name, 'view')
+                if view_data:
+                    tables_data.append(view_data)
+            except Exception as e:
+                logger.error(f"Error discovering view {schema_name}.{view_name}: {e}")
+        
+        return tables_data
+    
+    def _discover_table(self, schema_name: str, table_name: str, table_type: str) -> Optional[Dict]:
+        """
+        Discover single table/view with columns, keys, indexes, and samples
         
         Args:
             schema_name: Schema name
-            view_obj: View dictionary to update
+            table_name: Table/view name
+            table_type: 'table' or 'view'
             
         Returns:
-            True if sampling was successful (even partially), False otherwise
+            Table data dictionary or None if error
         """
-        view_name = view_obj['name']
-        full_name = f"{schema_name}.{view_name}"
+        logger.debug(f"Discovering {table_type}: {schema_name}.{table_name}")
         
         try:
-            # Build optimized query with LIMIT/TOP but without problematic hints
-            if self.db_dialect == 'mssql':
-                # SQL Server optimization - removed problematic FAST hint
-                query = f"""
-                SELECT TOP 10 * 
-                FROM {schema_name}.{view_name} WITH (NOLOCK)
-                """
-            elif self.db_dialect == 'mysql':
-                # MySQL optimization
-                query = f"""
-                SELECT * FROM {schema_name}.{view_name} LIMIT 10
-                """
-            elif self.db_dialect == 'postgresql':
-                # PostgreSQL optimization
-                query = f"""
-                SELECT * FROM {schema_name}.{view_name} LIMIT 10
-                """
-            elif self.db_dialect == 'oracle':
-                # Oracle optimization
-                query = f"""
-                SELECT * FROM {schema_name}.{view_name}
-                WHERE ROWNUM <= 10
-                """
-            elif self.db_dialect == 'sqlite':
-                # SQLite optimization
-                query = f"SELECT * FROM {schema_name}.{view_name} LIMIT 10"
-            else:
-                # Generic optimization
-                query = f"SELECT * FROM {schema_name}.{view_name} LIMIT 10"
+            # Get columns
+            columns_info = self.inspector.get_columns(table_name, schema=schema_name)
+            columns_data = []
             
-            # Execute the optimized query with timeout
-            sample_rows = self._execute_query_with_timeout(
-                query, 
-                self.settings.DISCOVERY_TIMEOUT
+            for col in columns_info:
+                col_data = {
+                    'name': col['name'],
+                    'type': str(col['type']),
+                    'nullable': col.get('nullable', True),
+                    'default': str(col.get('default')) if col.get('default') else None,
+                }
+                
+                # Get statistics and samples
+                try:
+                    stats = self._get_column_stats(schema_name, table_name, col['name'], str(col['type']))
+                    if stats:
+                        col_data['stats'] = stats
+                except Exception as e:
+                    logger.debug(f"Could not get stats for {schema_name}.{table_name}.{col['name']}: {e}")
+                
+                columns_data.append(col_data)
+            
+            # Get primary key
+            pk_constraint = self.inspector.get_pk_constraint(table_name, schema=schema_name)
+            primary_key = pk_constraint.get('constrained_columns', []) if pk_constraint else []
+            
+            # Get foreign keys
+            foreign_keys_data = []
+            try:
+                fk_constraints = self.inspector.get_foreign_keys(table_name, schema=schema_name)
+                for fk in fk_constraints:
+                    if fk.get('constrained_columns') and fk.get('referred_columns'):
+                        for local_col, ref_col in zip(fk['constrained_columns'], fk['referred_columns']):
+                            ref_schema = fk.get('referred_schema', schema_name)
+                            foreign_keys_data.append({
+                                'column': local_col,
+                                'ref_table': f"{ref_schema}.{fk['referred_table']}",
+                                'ref_column': ref_col
+                            })
+            except Exception as e:
+                logger.debug(f"Could not get foreign keys for {schema_name}.{table_name}: {e}")
+            
+            # Get indexes
+            indexes_data = []
+            try:
+                indexes = self.inspector.get_indexes(table_name, schema=schema_name)
+                for idx in indexes:
+                    indexes_data.append({
+                        'name': idx.get('name'),
+                        'columns': idx.get('column_names', []),
+                        'unique': idx.get('unique', False)
+                    })
+            except Exception as e:
+                logger.debug(f"Could not get indexes for {schema_name}.{table_name}: {e}")
+            
+            # Get row count sample
+            rowcount_sample = self._get_rowcount_sample(schema_name, table_name)
+            
+            # Get sample rows
+            sample_rows = self._get_sample_rows(schema_name, table_name)
+            
+            return {
+                'name': table_name,
+                'type': table_type,
+                'columns': columns_data,
+                'primary_key': primary_key,
+                'foreign_keys': foreign_keys_data,
+                'indexes': indexes_data,
+                'rowcount_sample': rowcount_sample,
+                'sample_rows': sample_rows,
+                'source_assets': []  # Populated later if from view/SP/RDL
+            }
+            
+        except Exception as e:
+            logger.error(f"Failed to discover {table_type} {schema_name}.{table_name}: {e}")
+            return None
+    
+    def _get_column_stats(self, schema: str, table: str, column: str, col_type: str) -> Optional[Dict]:
+        """
+        Get statistics for a column
+        Returns dict with distinct_count, null_rate, min, max, sample_values
+        """
+        try:
+            # Build query based on dialect
+            dialect = self.engine.dialect.name.lower()
+            
+            if dialect == 'mssql':
+                quote_char = '['
+                quote_end = ']'
+            elif dialect in ['mysql', 'mariadb']:
+                quote_char = '`'
+                quote_end = '`'
+            else:
+                quote_char = '"'
+                quote_end = '"'
+            
+            # Quoted identifiers
+            schema_q = f"{quote_char}{schema}{quote_end}"
+            table_q = f"{quote_char}{table}{quote_end}"
+            column_q = f"{quote_char}{column}{quote_end}"
+            
+            # Stats query with sample limit of 1000
+            if dialect == 'mssql':
+                query = text(f"""
+                    SELECT TOP 1000
+                        COUNT(DISTINCT {column_q}) as distinct_count,
+                        SUM(CASE WHEN {column_q} IS NULL THEN 1 ELSE 0 END) * 1.0 / COUNT(*) as null_rate,
+                        MIN({column_q}) as min_val,
+                        MAX({column_q}) as max_val
+                    FROM {schema_q}.{table_q}
+                """)
+            else:
+                query = text(f"""
+                    SELECT
+                        COUNT(DISTINCT {column_q}) as distinct_count,
+                        SUM(CASE WHEN {column_q} IS NULL THEN 1 ELSE 0 END)::float / COUNT(*) as null_rate,
+                        MIN({column_q}) as min_val,
+                        MAX({column_q}) as max_val
+                    FROM {schema_q}.{table_q}
+                    LIMIT 1000
+                """)
+            
+            result = self.engine.execute(query).fetchone()
+            
+            stats = {
+                'distinct_count': result[0] if result[0] is not None else 0,
+                'null_rate': float(result[1]) if result[1] is not None else 0.0,
+            }
+            
+            # Add min/max for appropriate types
+            if any(t in col_type.lower() for t in ['int', 'float', 'decimal', 'numeric', 'date', 'time']):
+                stats['min'] = str(result[2]) if result[2] is not None else None
+                stats['max'] = str(result[3]) if result[3] is not None else None
+            
+            # Get sample values (top 5)
+            sample_values = self._get_sample_values(schema, table, column, limit=5)
+            if sample_values:
+                stats['sample_values'] = sample_values
+            
+            # Detect currency hint for numeric columns
+            if any(t in col_type.lower() for t in ['decimal', 'numeric', 'money']):
+                if any(kw in column.lower() for kw in ['amount', 'price', 'cost', 'revenue', 'total']):
+                    stats['unit_hint'] = 'currency'
+                    stats['currency_hint'] = 'USD'  # Default, could be detected
+            
+            return stats
+            
+        except Exception as e:
+            logger.debug(f"Error getting stats for {schema}.{table}.{column}: {e}")
+            return None
+    
+    def _get_sample_values(self, schema: str, table: str, column: str, limit: int = 5) -> List[str]:
+        """Get sample distinct values from a column"""
+        try:
+            dialect = self.engine.dialect.name.lower()
+            
+            if dialect == 'mssql':
+                query = text(f"""
+                    SELECT DISTINCT TOP {limit} [{column}]
+                    FROM [{schema}].[{table}]
+                    WHERE [{column}] IS NOT NULL
+                    ORDER BY [{column}]
+                """)
+            else:
+                query = text(f"""
+                    SELECT DISTINCT "{column}"
+                    FROM "{schema}"."{table}"
+                    WHERE "{column}" IS NOT NULL
+                    ORDER BY "{column}"
+                    LIMIT {limit}
+                """)
+            
+            result = self.engine.execute(query).fetchall()
+            return [str(row[0]) for row in result]
+            
+        except Exception as e:
+            logger.debug(f"Error getting sample values: {e}")
+            return []
+    
+    def _get_rowcount_sample(self, schema: str, table: str) -> int:
+        """Get approximate row count (sample, not exact)"""
+        try:
+            dialect = self.engine.dialect.name.lower()
+            
+            if dialect == 'mssql':
+                query = text(f"SELECT TOP 1000 COUNT(*) FROM [{schema}].[{table}]")
+            else:
+                query = text(f'SELECT COUNT(*) FROM "{schema}"."{table}" LIMIT 1000')
+            
+            result = self.engine.execute(query).scalar()
+            return int(result) if result else 0
+            
+        except Exception as e:
+            logger.debug(f"Error getting rowcount for {schema}.{table}: {e}")
+            return 0
+    
+    def _get_sample_rows(self, schema: str, table: str, limit: int = 10) -> List[Dict]:
+        """Get sample rows from table"""
+        try:
+            dialect = self.engine.dialect.name.lower()
+            
+            if dialect == 'mssql':
+                query = text(f"SELECT TOP {limit} * FROM [{schema}].[{table}]")
+            else:
+                query = text(f'SELECT * FROM "{schema}"."{table}" LIMIT {limit}')
+            
+            result = self.engine.execute(query).fetchall()
+            
+            if not result:
+                return []
+            
+            # Convert to list of dicts
+            columns = result[0].keys()
+            return [
+                {col: str(row[col]) if row[col] is not None else None for col in columns}
+                for row in result
+            ]
+            
+        except Exception as e:
+            logger.debug(f"Error getting sample rows from {schema}.{table}: {e}")
+            return []
+    
+    def _discover_named_assets(self) -> List[Dict]:
+        """
+        Discover named assets: views, stored procedures, RDL files
+        Returns list of asset dictionaries
+        """
+        assets = []
+        
+        # Discover views (already included in schema discovery, but normalize SQL)
+        # This would extract view definitions and normalize them
+        
+        # Discover stored procedures
+        # This would extract SP definitions and normalize them
+        
+        # Discover RDL files
+        rdl_path = self.path_config.rdl_path
+        if rdl_path.exists():
+            logger.info(f"Scanning RDL files in {rdl_path}")
+            # This would parse RDL files and extract datasets
+            # For now, just log
+            rdl_files = list(rdl_path.rglob('*.rdl'))
+            logger.info(f"Found {len(rdl_files)} RDL files")
+        
+        return assets
+    
+    def _detect_relationships(self, schemas_data: List[Dict], dialect: str) -> List[Dict]:
+        """
+        Detect foreign key relationships using optimized detector
+        
+        Args:
+            schemas_data: List of schema dictionaries from discovery
+            dialect: Database dialect
+            
+        Returns:
+            List of relationship dictionaries
+        """
+        # Build discovery data structure for relationship detector
+        discovery_for_relationships = {
+            'database': {'vendor': dialect, 'version': 'unknown'},
+            'dialect': dialect,
+            'schemas': schemas_data,
+        }
+        
+        # Call optimized relationship detector
+        try:
+            relationships = detect_relationships(
+                connection_string=self.connection_string,
+                discovery_data=discovery_for_relationships,
+                config=self.relationship_config
             )
             
-            if sample_rows:
-                # Successfully got some rows
-                view_obj['sample_rows'] = sample_rows[:10]  # Limit to 10 rows
-                view_obj['rowcount_sample'] = len(sample_rows)
-                
-                # Sample each column for statistics
-                self._sample_columns_optimized(schema_name, view_obj)
-                
-                return True
-            else:
-                # No rows returned, mark as partial
-                view_obj['sample_rows'] = []
-                view_obj['rowcount_sample'] = 0
-                view_obj['partial_results'] = True
-                
-                # Try to at least sample columns
-                self._sample_columns_optimized(schema_name, view_obj)
-                
-                return False
-                
+            return relationships
+            
         except Exception as e:
-            # Handle timeout or query error
-            logger.warning(f"Optimized view sampling failed for {full_name}: {str(e)}")
-            
-            # Try simplified fallback query to get at least something
-            try:
-                # Use even more restricted query as fallback with bare minimum syntax
-                if self.db_dialect == 'mssql':
-                    fallback_query = f"SELECT TOP 2 * FROM {schema_name}.{view_name}"
-                else:
-                    fallback_query = f"SELECT * FROM {schema_name}.{view_name} LIMIT 2"
-                
-                sample_rows = self._execute_query_with_timeout(fallback_query, 300)  # 30 second timeout
-                
-                if sample_rows:
-                    # Got something with fallback
-                    view_obj['sample_rows'] = sample_rows
-                    view_obj['rowcount_sample'] = len(sample_rows)
-                    view_obj['partial_results'] = True
-                    logger.info(f"Got partial results for {full_name} with fallback query")
-                    
-                    # Try to sample at least a few columns
-                    self._sample_columns_optimized(schema_name, view_obj)
-                    
-                    return True
-                    
-            except Exception as fallback_error:
-                logger.error(f"Fallback query also failed for {full_name}: {str(fallback_error)}")
-            
-            # Both attempts failed
-            view_obj['sampling_error'] = str(e)
-            view_obj['partial_results'] = True
-            self.partial_results_queue.put({
-                "schema": schema_name,
-                "table": view_name,
-                "error": str(e)
-            })
-            
-            return False
-    
-    def _sample_columns_optimized(self, schema_name: str, table_obj: Dict[str, Any]) -> None:
-        """
-        Sample columns for statistics with optimized queries.
-        Uses separate queries with LIMIT/TOP for each column.
-        
-        Args:
-            schema_name: Schema name
-            table_obj: Table dictionary to update
-        """
-        table_name = table_obj['name']
-        full_name = f"{schema_name}.{table_name}"
-        
-        # Process each column with optimized queries
-        for column in table_obj.get('columns', []):
-            col_name = column['name']
-            
-            try:
-                # Construct optimized query for this column - simplified for compatibility
-                if self.db_dialect == 'mssql':
-                    # SQL Server optimized column sampling - removed problematic hints
-                    query = f"""
-                    SELECT TOP 5 [{col_name}] 
-                    FROM {schema_name}.{table_name} 
-                    WHERE [{col_name}] IS NOT NULL
-                    """
-                elif self.db_dialect in ('mysql', 'postgresql', 'sqlite'):
-                    # Generic optimized column sampling
-                    query = f"""
-                    SELECT "{col_name}" FROM {schema_name}.{table_name}
-                    WHERE "{col_name}" IS NOT NULL
-                    LIMIT 5
-                    """
-                elif self.db_dialect == 'oracle':
-                    # Oracle
-                    query = f"""
-                    SELECT "{col_name}" FROM {schema_name}.{table_name}
-                    WHERE "{col_name}" IS NOT NULL AND ROWNUM <= 5
-                    """
-                else:
-                    # Generic
-                    query = f"""
-                    SELECT {col_name} FROM {schema_name}.{table_name}
-                    WHERE {col_name} IS NOT NULL
-                    LIMIT 5
-                    """
-                
-                # Execute with short timeout (300 seconds max per column)
-                column_samples = self._execute_query_with_timeout(query, 300)
-                
-                if column_samples:
-                    # Extract values for statistics
-                    values = [row.get(col_name) for row in column_samples if col_name in row and row.get(col_name) is not None]
-                    
-                    # Create basic stats
-                    stats = {
-                        "sample_values": [str(v) for v in values if v is not None],
-                        "null_rate": 0.0  # Approximate since we filtered nulls
-                    }
-                    
-                    # Add to column
-                    column['stats'] = stats
-                else:
-                    # No samples, add empty stats
-                    column['stats'] = {"sample_values": [], "null_rate": None}
-                
-            except Exception as col_error:
-                logger.warning(f"Error sampling column {full_name}.{col_name}: {str(col_error)}")
-                column['stats'] = {"sample_values": [], "null_rate": None}
-                column['sampling_error'] = str(col_error)
-    
-    def _sample_table_standard(self, schema_name: str, table_obj: Dict[str, Any]) -> bool:
-        """
-        Sample a regular table using the DataSampler approach.
-        
-        Args:
-            schema_name: Schema name
-            table_obj: Table dictionary to update
-            
-        Returns:
-            True if sampling was successful, False otherwise
-        """
-        try:
-            # Use direct queries rather than sampler class for more control
-            table_name = table_obj['name']
-            full_name = f"{schema_name}.{table_name}"
-            
-            # 1. Get a small sample of rows (up to 10)
-            if self.db_dialect == 'mssql':
-                query = f"SELECT TOP 10 * FROM {schema_name}.{table_name}"
-            else:
-                query = f"SELECT * FROM {schema_name}.{table_name} LIMIT 10"
-                
-            sample_rows = self._execute_query_with_timeout(query, 60)  # 60 second timeout
-            
-            if sample_rows:
-                # Store sample rows
-                table_obj['sample_rows'] = sample_rows
-                table_obj['rowcount_sample'] = len(sample_rows)
-                
-                # 2. Get column statistics
-                self._sample_columns_optimized(schema_name, table_obj)
-                
-                return True
-            else:
-                # No rows, add empty samples
-                table_obj['sample_rows'] = []
-                table_obj['rowcount_sample'] = 0
-                table_obj['partial_results'] = True
-                
-                # Still try to sample columns
-                self._sample_columns_optimized(schema_name, table_obj)
-                
-                return False
-                
-        except Exception as e:
-            logger.error(f"Error in standard table sampling for {schema_name}.{table_obj['name']}: {str(e)}")
-            table_obj['sampling_error'] = str(e)
-            table_obj['partial_results'] = True
-            return False
-    
-    def _update_table_in_discovery_data(self, discovery_data: Dict[str, Any], 
-                                       schema_name: str, updated_table: Dict[str, Any]) -> None:
-        """
-        Update a table in the discovery data structure with thread safety.
-        
-        Args:
-            discovery_data: Discovery data structure
-            schema_name: Schema name
-            updated_table: Updated table dictionary
-        """
-        with self.progress_lock:
-            # Find and update the table in discovery_data
-            for schema in discovery_data['schemas']:
-                if schema['name'] == schema_name:
-                    for i, table in enumerate(schema['tables']):
-                        if table['name'] == updated_table['name']:
-                            schema['tables'][i] = updated_table
-                            return
+            logger.error(f"Relationship detection failed: {e}", exc_info=True)
+            return []
 
-    def _identify_negative_findings(self, discovery_data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Identify what was NOT found (critical for Q&A validation).
-        """
-        findings = {}
-        
-        # Check for missing primary keys
-        tables_without_pk = []
-        for schema in discovery_data['schemas']:
-            for table in schema['tables']:
-                if not table.get('primary_key'):
-                    tables_without_pk.append(f"{schema['name']}.{table['name']}")
-        
-        if tables_without_pk:
-            findings['tables_without_primary_key'] = tables_without_pk
-        
-        # Check for tables with sampling errors
-        tables_with_errors = []
-        for schema in discovery_data['schemas']:
-            for table in schema['tables']:
-                if 'sampling_error' in table:
-                    tables_with_errors.append({
-                        'table': f"{schema['name']}.{table['name']}",
-                        'error': table['sampling_error']
-                    })
-        
-        if tables_with_errors:
-            findings['tables_with_sampling_errors'] = tables_with_errors
-        
-        return findings
+
+# ============================================================================
+# CONVENIENCE FUNCTIONS
+# ============================================================================
+
+def run_discovery(use_cache: bool = True, 
+                 skip_relationships: bool = False,
+                 connection_string: Optional[str] = None) -> Dict:
+    """
+    Convenience function to run discovery
     
-    def __del__(self):
-        """
-        Clean up resources when the object is destroyed.
-        """
-        # Close engine if it exists
-        if hasattr(self, 'engine') and self.engine is not None:
-            try:
-                self.engine.dispose()
-            except:
-                pass
+    Args:
+        use_cache: Use cached discovery if valid
+        skip_relationships: Skip relationship detection
+        connection_string: Override connection string from config
+        
+    Returns:
+        Discovery data dictionary
+    """
+    engine = DiscoveryEngine(connection_string=connection_string)
+    return engine.discover(use_cache=use_cache, skip_relationships=skip_relationships)
+
+
+def clear_discovery_cache():
+    """Clear discovery cache"""
+    path_config = get_path_config()
+    cache_file = path_config.cache_dir / 'discovery.json'
+    fingerprint_file = path_config.cache_dir / 'discovery_fingerprint.json'
+    
+    removed = []
+    if cache_file.exists():
+        cache_file.unlink()
+        removed.append(str(cache_file))
+    if fingerprint_file.exists():
+        fingerprint_file.unlink()
+        removed.append(str(fingerprint_file))
+    
+    if removed:
+        logger.info(f"Cleared discovery cache: {', '.join(removed)}")
+    else:
+        logger.info("No discovery cache to clear")
