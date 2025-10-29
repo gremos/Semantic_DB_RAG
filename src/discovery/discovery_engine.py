@@ -309,17 +309,23 @@ class DiscoveryEngine:
             version = None
             try:
                 if dialect == 'mssql':
-                    result = self.engine.execute(text("SELECT @@VERSION")).scalar()
+                    with self.engine.connect() as conn:
+                        result = conn.execute(text("SELECT @@VERSION")).scalar()
+                    # result = self.engine.execute(text("SELECT @@VERSION")).scalar()
                     version_match = re.search(r'Microsoft SQL Server (\d+)', str(result))
                     if version_match:
                         version = version_match.group(1)
                 elif dialect in ['postgres', 'postgresql']:
-                    result = self.engine.execute(text("SELECT version()")).scalar()
+                    with self.engine.connect() as conn:
+                        result = conn.execute(text("SELECT version()")).scalar()
+                    # result = self.engine.execute(text("SELECT version()")).scalar()
                     version_match = re.search(r'PostgreSQL ([\d.]+)', str(result))
                     if version_match:
                         version = version_match.group(1)
                 elif dialect == 'mysql':
-                    result = self.engine.execute(text("SELECT VERSION()")).scalar()
+                    with self.engine.connect() as conn:
+                        result = conn.execute(text("SELECT version()")).scalar()
+                    # result = self.engine.execute(text("SELECT VERSION()")).scalar()
                     version = str(result).split('-')[0]
             except Exception as e:
                 logger.warning(f"Could not detect database version: {e}")
@@ -560,8 +566,8 @@ class DiscoveryEngine:
                     FROM {schema_q}.{table_q}
                     LIMIT 1000
                 """)
-            
-            result = self.engine.execute(query).fetchone()
+            with self.engine.connect() as conn:
+                result = conn.execute(query).fetchone()
             
             stats = {
                 'distinct_count': result[0] if result[0] is not None else 0,
@@ -610,8 +616,9 @@ class DiscoveryEngine:
                     ORDER BY "{column}"
                     LIMIT {limit}
                 """)
-            
-            result = self.engine.execute(query).fetchall()
+            with self.engine.connect() as conn:
+                result = conn.execute(query).fetchall()
+            # result = self.engine.execute(query).fetchall()
             return [str(row[0]) for row in result]
             
         except Exception as e:
@@ -624,11 +631,12 @@ class DiscoveryEngine:
             dialect = self.engine.dialect.name.lower()
             
             if dialect == 'mssql':
-                query = text(f"SELECT TOP 1000 COUNT(*) FROM [{schema}].[{table}]")
+                query = text(f"SELECT COUNT(*) FROM [{schema}].[{table}]")
             else:
-                query = text(f'SELECT COUNT(*) FROM "{schema}"."{table}" LIMIT 1000')
+                query = text(f'SELECT COUNT(*) FROM "{schema}"."{table}"')
             
-            result = self.engine.execute(query).scalar()
+            with self.engine.connect() as conn:
+                result = conn.execute(query).scalar()
             return int(result) if result else 0
             
         except Exception as e:
@@ -636,16 +644,15 @@ class DiscoveryEngine:
             return 0
     
     def _get_sample_rows(self, schema: str, table: str, limit: int = 10) -> List[Dict]:
-        """Get sample rows from table/view with timeout protection"""
+        """Get sample rows from table/view with timeout protection (SQLAlchemy 2.x safe)."""
         import signal
         from contextlib import contextmanager
-        
+
         @contextmanager
-        def timeout(seconds):
+        def timeout(seconds: int):
             def timeout_handler(signum, frame):
                 raise TimeoutError("Query timeout")
-            
-            # Set the signal handler
+
             old_handler = signal.signal(signal.SIGALRM, timeout_handler)
             signal.alarm(seconds)
             try:
@@ -653,82 +660,41 @@ class DiscoveryEngine:
             finally:
                 signal.alarm(0)
                 signal.signal(signal.SIGALRM, old_handler)
-        
+
         try:
             dialect = self.engine.dialect.name.lower()
-            
+
             if dialect == 'mssql':
-                # Add NOLOCK hint for views to avoid blocking
+                # Add NOLOCK hint for views/tables to avoid blocking
                 query = text(f"SELECT TOP {limit} * FROM [{schema}].[{table}] WITH (NOLOCK)")
             else:
                 query = text(f'SELECT * FROM "{schema}"."{table}" LIMIT {limit}')
-            
-            # Use timeout for expensive views
+
+            # Use timeout for potentially expensive objects
             with timeout(30):  # 30 second timeout per sample
-                result = self.engine.execute(query).fetchall()
-                
+                with self.engine.connect() as conn:
+                    # mappings() returns RowMapping objects (dict-like), ideal for JSONable rows
+                    result = conn.execute(query).mappings().fetchall()
+
                 if not result:
                     logger.warning(f"No data returned from {schema}.{table}")
                     return []
-                
-                # Convert to list of dicts
-                columns = result[0].keys()
-                rows = [
-                    {col: str(row[col]) if row[col] is not None else None for col in columns}
-                    for row in result
-                ]
-                
+
+                rows = []
+                for r in result:
+                    # Convert to str while preserving None
+                    rows.append({k: (None if v is None else str(v)) for k, v in r.items()})
+
                 logger.info(f"✓ Sampled {len(rows)} rows from {schema}.{table}")
                 return rows
-                
+
         except TimeoutError:
-            logger.error(f"⏱️ TIMEOUT sampling {schema}.{table} - view may be too expensive")
+            logger.error(f"⏱️ TIMEOUT sampling {schema}.{table} - object may be too expensive")
             return []
         except Exception as e:
             logger.error(f"❌ Error sampling {schema}.{table}: {e}")
             return []
 
-
-    def _get_rowcount_sample(self, schema: str, table: str) -> int:
-        """Get approximate row count with timeout"""
-        import signal
-        from contextmanager import contextmanager
-        
-        @contextmanager
-        def timeout(seconds):
-            def timeout_handler(signum, frame):
-                raise TimeoutError("Query timeout")
-            
-            old_handler = signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(seconds)
-            try:
-                yield
-            finally:
-                signal.alarm(0)
-                signal.signal(signal.SIGALRM, old_handler)
-        
-        try:
-            dialect = self.engine.dialect.name.lower()
-            
-            if dialect == 'mssql':
-                # Use lightweight query with NOLOCK
-                query = text(f"SELECT TOP 1 COUNT(*) OVER() FROM [{schema}].[{table}] WITH (NOLOCK)")
-            else:
-                query = text(f'SELECT COUNT(*) FROM "{schema}"."{table}"')
-            
-            with timeout(30):
-                result = self.engine.execute(query).scalar()
-                count = int(result) if result else 0
-                
-                logger.info(f"✓ Row count for {schema}.{table}: {count}")
-                return count
-                
-        except TimeoutError:
-            logger.error(f"⏱️ TIMEOUT getting row count for {schema}.{table}")
-            return 0
-        except Exception as e:
-            logger.error(f"❌ Error getting row count for {schema}.{table}: {e}")
-            return 0
     
     def _discover_named_assets(self) -> List[Dict]:
         """
