@@ -34,7 +34,7 @@ wheels/
 *.egg
 
 # Cache
-cache/
+# cache/
 *.cache
 
 # Logs
