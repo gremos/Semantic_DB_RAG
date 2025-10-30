@@ -18,6 +18,9 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError, as_completed
+
+
 import sqlglot
 from sqlalchemy import create_engine, inspect, text, MetaData, Table
 from sqlalchemy.engine import Engine
@@ -395,14 +398,16 @@ class DiscoveryEngine:
         return schemas_data
     
     def _discover_tables(self, schema_name: str) -> List[Dict]:
-        """Discover tables in a schema"""
+        """
+        Discover tables and views in a schema
+        Tables are processed sequentially (fast)
+        Views are processed concurrently (can be expensive)
+        """
         tables_data = []
         table_names = self.inspector.get_table_names(schema=schema_name)
-        
-        # Include views
         view_names = self.inspector.get_view_names(schema=schema_name)
         
-        # Process tables
+        # Process tables sequentially (these are typically fast)
         for table_name in table_names:
             if self._should_exclude_table(table_name):
                 logger.debug(f"Skipping excluded table: {schema_name}.{table_name}")
@@ -415,20 +420,234 @@ class DiscoveryEngine:
             except Exception as e:
                 logger.error(f"Error discovering table {schema_name}.{table_name}: {e}")
         
-        # Process views
-        for view_name in view_names:
-            if self._should_exclude_table(view_name):
-                logger.debug(f"Skipping excluded view: {schema_name}.{view_name}")
-                continue
-            
-            try:
-                view_data = self._discover_table(schema_name, view_name, 'view')
-                if view_data:
-                    tables_data.append(view_data)
-            except Exception as e:
-                logger.error(f"Error discovering view {schema_name}.{view_name}: {e}")
+        # Process views CONCURRENTLY (these can be expensive)
+        if view_names:
+            logger.info(f"Processing {len(view_names)} views concurrently in schema {schema_name}")
+            view_data_list = self._discover_views_concurrent(schema_name, view_names)
+            tables_data.extend(view_data_list)
         
         return tables_data
+    
+    def _discover_table_metadata_only(
+        self, 
+        schema_name: str, 
+        table_name: str, 
+        table_type: str
+    ) -> Optional[Dict]:
+        """
+        Discover table/view metadata WITHOUT sampling data
+        Used as fallback for expensive views
+        
+        Args:
+            schema_name: Schema name
+            table_name: Table/view name
+            table_type: 'table' or 'view'
+            
+        Returns:
+            Table metadata dictionary (no samples)
+        """
+        try:
+            # Get columns (metadata only, no sampling)
+            columns_info = self.inspector.get_columns(table_name, schema=schema_name)
+            columns_data = []
+            
+            for col in columns_info:
+                col_data = {
+                    'name': col['name'],
+                    'type': str(col['type']),
+                    'nullable': col.get('nullable', True),
+                    'default': str(col.get('default')) if col.get('default') else None,
+                    'stats': None  # No stats for metadata-only
+                }
+                columns_data.append(col_data)
+            
+            # Get primary key
+            try:
+                pk_constraint = self.inspector.get_pk_constraint(table_name, schema=schema_name)
+                primary_key = pk_constraint.get('constrained_columns', []) if pk_constraint else []
+            except:
+                primary_key = []
+            
+            # Get foreign keys
+            foreign_keys_data = []
+            try:
+                fk_constraints = self.inspector.get_foreign_keys(table_name, schema=schema_name)
+                for fk in fk_constraints:
+                    if fk.get('constrained_columns') and fk.get('referred_columns'):
+                        for local_col, ref_col in zip(fk['constrained_columns'], fk['referred_columns']):
+                            ref_schema = fk.get('referred_schema', schema_name)
+                            foreign_keys_data.append({
+                                'column': local_col,
+                                'ref_table': f"{ref_schema}.{fk['referred_table']}",
+                                'ref_column': ref_col
+                            })
+            except:
+                pass
+            
+            return {
+                'name': table_name,
+                'type': table_type,
+                'columns': columns_data,
+                'primary_key': primary_key,
+                'foreign_keys': foreign_keys_data,
+                'rowcount_sample': None,
+                'sample_rows': [],  # No samples
+                'source_assets': []
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting metadata for {schema_name}.{table_name}: {e}")
+            return None
+
+
+    def _discover_views_concurrent(self, schema_name: str, view_names: List[str]) -> List[Dict]:
+        """
+        Process views concurrently with timeout protection and fallback strategies
+        
+        Args:
+            schema_name: Schema name
+            view_names: List of view names to process
+            
+        Returns:
+            List of view data dictionaries
+        """
+        from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
+        
+        # Filter excluded views
+        filtered_views = [
+            v for v in view_names 
+            if not self._should_exclude_table(v)
+        ]
+        
+        if not filtered_views:
+            return []
+        
+        logger.info(f"Processing {len(filtered_views)} views with {self.discovery_config.max_workers} workers")
+        
+        views_data = []
+        completed = 0
+        timeout_per_view = self.discovery_config.view_sampling_timeout
+        
+        with ThreadPoolExecutor(max_workers=self.discovery_config.max_workers) as executor:
+            # Submit all view discovery tasks
+            future_to_view = {
+                executor.submit(
+                    self._discover_view_with_fallback, 
+                    schema_name, 
+                    view_name,
+                    timeout_per_view
+                ): view_name
+                for view_name in filtered_views
+            }
+            
+            # Process results as they complete
+            for future in as_completed(future_to_view):
+                view_name = future_to_view[future]
+                completed += 1
+                
+                try:
+                    view_data = future.result(timeout=timeout_per_view + 5)
+                    if view_data:
+                        views_data.append(view_data)
+                        
+                    # Log progress every 10%
+                    if completed % max(1, len(filtered_views) // 10) == 0:
+                        pct = 100 * completed / len(filtered_views)
+                        logger.info(
+                            f"View discovery progress: {completed}/{len(filtered_views)} ({pct:.0f}%)"
+                        )
+                        
+                except TimeoutError:
+                    logger.warning(
+                        f"⏱️ Timeout processing view {schema_name}.{view_name} - "
+                        f"skipping sample data"
+                    )
+                    # Still try to get metadata-only
+                    try:
+                        view_data = self._discover_table_metadata_only(schema_name, view_name, 'view')
+                        if view_data:
+                            view_data['sample_rows'] = []
+                            view_data['sampling_failed'] = True
+                            view_data['failure_reason'] = 'timeout'
+                            views_data.append(view_data)
+                    except Exception as e:
+                        logger.error(f"Failed to get even metadata for {schema_name}.{view_name}: {e}")
+                        
+                except Exception as e:
+                    logger.error(f"Error processing view {schema_name}.{view_name}: {e}")
+        
+        logger.info(f"✓ Completed {len(views_data)}/{len(filtered_views)} views in schema {schema_name}")
+        return views_data
+
+
+    def _discover_view_with_fallback(
+        self, 
+        schema_name: str, 
+        view_name: str, 
+        timeout_seconds: int
+    ) -> Optional[Dict]:
+        """
+        Discover a view with progressive fallback strategies
+        
+        Strategy:
+        1. Try full discovery with simplified sampling
+        2. If timeout, try metadata-only
+        3. Return None if all strategies fail
+        
+        Args:
+            schema_name: Schema name
+            view_name: View name
+            timeout_seconds: Timeout in seconds
+            
+        Returns:
+            View data dictionary or None
+        """
+        import signal
+        from contextlib import contextmanager
+        
+        @contextmanager
+        def timeout(seconds: int):
+            def timeout_handler(signum, frame):
+                raise TimeoutError("Query timeout")
+            
+            old_handler = signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(seconds)
+            try:
+                yield
+            finally:
+                signal.alarm(0)
+                signal.signal(signal.SIGALRM, old_handler)
+        
+        try:
+            # Strategy 1: Full discovery with timeout
+            logger.debug(f"Sampling view {schema_name}.{view_name}")
+            
+            with timeout(timeout_seconds):
+                view_data = self._discover_table(schema_name, view_name, 'view')
+                return view_data
+                
+        except TimeoutError:
+            logger.warning(
+                f"Query execution timed out after {timeout_seconds}s for view "
+                f"{schema_name}.{view_name}, trying metadata-only fallback"
+            )
+            
+            # Strategy 2: Metadata-only fallback
+            try:
+                view_data = self._discover_table_metadata_only(schema_name, view_name, 'view')
+                if view_data:
+                    view_data['sample_rows'] = []
+                    view_data['sampling_failed'] = True
+                    view_data['failure_reason'] = 'timeout'
+                    logger.info(f"✓ Got metadata-only for view {schema_name}.{view_name}")
+                    return view_data
+            except Exception as e:
+                logger.error(f"Metadata-only fallback also failed for {schema_name}.{view_name}: {e}")
+                return None
+        
+        except Exception as e:
+            logger.error(f"Error discovering view {schema_name}.{view_name}: {e}")
+            return None
     
     def _discover_table(self, schema_name: str, table_name: str, table_type: str) -> Optional[Dict]:
         """
@@ -644,52 +863,42 @@ class DiscoveryEngine:
             return 0
     
     def _get_sample_rows(self, schema: str, table: str, limit: int = 10) -> List[Dict]:
-        """Get sample rows from table/view with timeout protection (SQLAlchemy 2.x safe)."""
-        import signal
-        from contextlib import contextmanager
-
-        @contextmanager
-        def timeout(seconds: int):
-            def timeout_handler(signum, frame):
-                raise TimeoutError("Query timeout")
-
-            old_handler = signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(seconds)
-            try:
-                yield
-            finally:
-                signal.alarm(0)
-                signal.signal(signal.SIGALRM, old_handler)
-
-        try:
+        """Get sample rows from table/view with timeout protection."""
+        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+        
+        def _execute_query():
             dialect = self.engine.dialect.name.lower()
-
+            
             if dialect == 'mssql':
-                # Add NOLOCK hint for views/tables to avoid blocking
                 query = text(f"SELECT TOP {limit} * FROM [{schema}].[{table}] WITH (NOLOCK)")
             else:
                 query = text(f'SELECT * FROM "{schema}"."{table}" LIMIT {limit}')
-
-            # Use timeout for potentially expensive objects
-            with timeout(30):  # 30 second timeout per sample
-                with self.engine.connect() as conn:
-                    # mappings() returns RowMapping objects (dict-like), ideal for JSONable rows
-                    result = conn.execute(query).mappings().fetchall()
-
-                if not result:
-                    logger.warning(f"No data returned from {schema}.{table}")
-                    return []
-
-                rows = []
-                for r in result:
-                    # Convert to str while preserving None
-                    rows.append({k: (None if v is None else str(v)) for k, v in r.items()})
-
-                logger.info(f"✓ Sampled {len(rows)} rows from {schema}.{table}")
-                return rows
-
-        except TimeoutError:
-            logger.error(f"⏱️ TIMEOUT sampling {schema}.{table} - object may be too expensive")
+            
+            with self.engine.connect() as conn:
+                result = conn.execute(query).mappings().fetchall()
+            return result
+        
+        try:
+            # Use thread-based timeout instead of signal
+            timeout_seconds = self.discovery_config.view_sampling_timeout or 300
+            
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(_execute_query)
+                result = future.result(timeout=timeout_seconds)
+            
+            if not result:
+                logger.warning(f"No data returned from {schema}.{table}")
+                return []
+            
+            rows = []
+            for r in result:
+                rows.append({k: (None if v is None else str(v)) for k, v in r.items()})
+            
+            logger.info(f"✓ Sampled {len(rows)} rows from {schema}.{table}")
+            return rows
+            
+        except FutureTimeoutError:
+            logger.warning(f"Query execution timed out after {timeout_seconds}s")
             return []
         except Exception as e:
             logger.error(f"❌ Error sampling {schema}.{table}: {e}")

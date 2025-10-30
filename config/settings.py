@@ -172,6 +172,13 @@ class DiscoveryConfig:
     
     # Concurrency
     max_workers: int
+
+    view_sampling_timeout: int = 300
+    view_sampling_simplified: bool = True
+    view_sampling_skip_expensive: bool = True
+    view_sampling_metadata_fallback: bool = True
+    view_sampling_log_failures: bool = True
+    concurrency_max_workers: int = 10
     
     @classmethod
     def from_env(cls) -> 'DiscoveryConfig':
