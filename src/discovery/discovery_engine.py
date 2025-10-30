@@ -5,7 +5,7 @@ Phase 1: Database Discovery
 - Introspects schemas, tables, columns, keys, indexes
 - Samples data with statistics
 - Normalizes SQL (views, stored procedures, RDL)
-- Detects implicit foreign key relationships (optimized)
+- Detects implicit foreign key relationships
 - Caches results with fingerprinting
 """
 import hashlib
@@ -13,13 +13,10 @@ import json
 import logging
 import re
 import time
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError, as_completed
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
-
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError, as_completed
-
+from typing import Dict, List, Optional, Tuple, Any
 
 import sqlglot
 from sqlalchemy import create_engine, inspect, text, MetaData, Table
@@ -33,7 +30,6 @@ from config.settings import (
     get_path_config,
     get_relationship_config
 )
-from src.discovery.relationship_detector import detect_relationships
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +45,9 @@ class DiscoveryCache:
         self.cache_hours = cache_hours
         self.cache_file = cache_dir / 'discovery.json'
         self.fingerprint_file = cache_dir / 'discovery_fingerprint.json'
+        
+        # Ensure cache directory exists
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
     
     def get_database_fingerprint(self, engine: Engine) -> str:
         """
@@ -59,22 +58,32 @@ class DiscoveryCache:
         
         inspector = inspect(engine)
         
-        # Collect schema metadata
-        for schema in inspector.get_schema_names():
-            for table_name in inspector.get_table_names(schema=schema):
-                # Table fingerprint: name + column names + types
-                columns = inspector.get_columns(table_name, schema=schema)
-                col_signatures = [
-                    f"{col['name']}:{col['type']}" 
-                    for col in columns
-                ]
-                
-                table_sig = f"{schema}.{table_name}:{','.join(sorted(col_signatures))}"
-                fingerprint_data.append(table_sig)
-        
-        # Generate hash
-        fingerprint_str = '|'.join(sorted(fingerprint_data))
-        return hashlib.sha256(fingerprint_str.encode()).hexdigest()
+        try:
+            # Collect schema metadata
+            for schema in inspector.get_schema_names():
+                try:
+                    for table_name in inspector.get_table_names(schema=schema):
+                        # Table fingerprint: name + column names + types
+                        columns = inspector.get_columns(table_name, schema=schema)
+                        col_signatures = [
+                            f"{col['name']}:{col['type']}" 
+                            for col in columns
+                        ]
+                        
+                        table_sig = f"{schema}.{table_name}:{','.join(sorted(col_signatures))}"
+                        fingerprint_data.append(table_sig)
+                except Exception as e:
+                    logger.warning(f"Error fingerprinting schema {schema}: {e}")
+                    continue
+            
+            # Generate hash
+            fingerprint_str = '|'.join(sorted(fingerprint_data))
+            return hashlib.sha256(fingerprint_str.encode()).hexdigest()
+            
+        except Exception as e:
+            logger.error(f"Error generating database fingerprint: {e}")
+            # Return a timestamp-based fallback
+            return hashlib.sha256(str(time.time()).encode()).hexdigest()
     
     def is_valid(self, engine: Engine) -> bool:
         """
@@ -87,9 +96,13 @@ class DiscoveryCache:
             return False
         
         # Check cache age
-        cache_age = datetime.now() - datetime.fromtimestamp(self.cache_file.stat().st_mtime)
-        if cache_age > timedelta(hours=self.cache_hours):
-            logger.info(f"Discovery cache expired (age: {cache_age})")
+        try:
+            cache_age = datetime.now() - datetime.fromtimestamp(self.cache_file.stat().st_mtime)
+            if cache_age > timedelta(hours=self.cache_hours):
+                logger.info(f"Discovery cache expired (age: {cache_age})")
+                return False
+        except Exception as e:
+            logger.warning(f"Error checking cache age: {e}")
             return False
         
         # Check fingerprint
@@ -128,6 +141,9 @@ class DiscoveryCache:
     def save(self, data: Dict, engine: Engine):
         """Save discovery data to cache"""
         try:
+            # Ensure directory exists
+            self.cache_dir.mkdir(parents=True, exist_ok=True)
+            
             # Save discovery data
             with open(self.cache_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
@@ -138,7 +154,7 @@ class DiscoveryCache:
                 json.dump({
                     'fingerprint': fingerprint,
                     'timestamp': datetime.now().isoformat()
-                }, f, indent=2 , ensure_ascii=False)
+                }, f, indent=2, ensure_ascii=False)
             
             logger.info(f"Saved discovery cache to {self.cache_file}")
             
@@ -181,6 +197,9 @@ class DiscoveryEngine:
         
         # Discovery results
         self.discovery_data: Optional[Dict] = None
+        
+        # Track expensive objects for logging
+        self._expensive_objects = []
     
     @property
     def engine(self) -> Engine:
@@ -191,7 +210,9 @@ class DiscoveryEngine:
                 self.connection_string,
                 pool_pre_ping=True,
                 pool_recycle=3600,
-                echo=False
+                echo=False,
+                pool_size=20,  # Increase pool size for concurrent operations
+                max_overflow=10
             )
         return self._engine
     
@@ -219,6 +240,8 @@ class DiscoveryEngine:
         logger.info(f"Connection: {self.connection_string[:50]}...")
         logger.info(f"Cache: {'enabled' if use_cache else 'disabled'}")
         logger.info(f"Relationships: {'enabled' if not skip_relationships else 'disabled'}")
+        logger.info(f"Max workers: {self.discovery_config.max_workers}")
+        logger.info(f"View timeout: {self.discovery_config.view_sampling_timeout}s")
         
         start_time = time.time()
         
@@ -244,12 +267,12 @@ class DiscoveryEngine:
             named_assets = self._discover_named_assets()
             logger.info(f"Discovered {len(named_assets)} named assets")
             
-            # Step 4: Detect relationships (optimized)
+            # Step 4: Detect relationships
             if skip_relationships or not self.relationship_config.enabled:
                 logger.info("Skipping relationship detection")
                 relationships = []
             else:
-                logger.info("Starting optimized relationship detection...")
+                logger.info("Starting relationship detection...")
                 relationships = self._detect_relationships(schemas_data, db_info['dialect'])
                 logger.info(f"Detected {len(relationships)} relationships")
             
@@ -269,6 +292,7 @@ class DiscoveryEngine:
                         for s in schemas_data 
                         for t in s['tables']
                     ),
+                    'expensive_objects': self._expensive_objects
                 }
             }
             
@@ -279,6 +303,12 @@ class DiscoveryEngine:
             logger.info("=" * 80)
             logger.info(f"DISCOVERY COMPLETE in {elapsed:.1f}s")
             logger.info("=" * 80)
+            
+            # Log expensive objects summary
+            if self._expensive_objects:
+                logger.warning(f"Found {len(self._expensive_objects)} expensive objects:")
+                for obj in self._expensive_objects[:10]:  # Show top 10
+                    logger.warning(f"  - {obj['name']}: {obj['duration']:.1f}s ({obj['reason']})")
             
             return self.discovery_data
             
@@ -314,21 +344,18 @@ class DiscoveryEngine:
                 if dialect == 'mssql':
                     with self.engine.connect() as conn:
                         result = conn.execute(text("SELECT @@VERSION")).scalar()
-                    # result = self.engine.execute(text("SELECT @@VERSION")).scalar()
                     version_match = re.search(r'Microsoft SQL Server (\d+)', str(result))
                     if version_match:
                         version = version_match.group(1)
                 elif dialect in ['postgres', 'postgresql']:
                     with self.engine.connect() as conn:
                         result = conn.execute(text("SELECT version()")).scalar()
-                    # result = self.engine.execute(text("SELECT version()")).scalar()
                     version_match = re.search(r'PostgreSQL ([\d.]+)', str(result))
                     if version_match:
                         version = version_match.group(1)
                 elif dialect == 'mysql':
                     with self.engine.connect() as conn:
                         result = conn.execute(text("SELECT version()")).scalar()
-                    # result = self.engine.execute(text("SELECT VERSION()")).scalar()
                     version = str(result).split('-')[0]
             except Exception as e:
                 logger.warning(f"Could not detect database version: {e}")
@@ -378,13 +405,16 @@ class DiscoveryEngine:
         """
         schemas_data = []
         
-        for schema_name in self.inspector.get_schema_names():
+        schema_names = self.inspector.get_schema_names()
+        logger.info(f"Found {len(schema_names)} schemas to process")
+        
+        for idx, schema_name in enumerate(schema_names, 1):
             # Skip excluded schemas
             if self._should_exclude_schema(schema_name):
                 logger.debug(f"Skipping excluded schema: {schema_name}")
                 continue
             
-            logger.info(f"Discovering schema: {schema_name}")
+            logger.info(f"[{idx}/{len(schema_names)}] Discovering schema: {schema_name}")
             
             # Discover tables in this schema
             tables_data = self._discover_tables(schema_name)
@@ -394,35 +424,48 @@ class DiscoveryEngine:
                     'name': schema_name,
                     'tables': tables_data
                 })
+                logger.info(f"  ✓ Schema {schema_name}: {len(tables_data)} objects")
         
         return schemas_data
     
     def _discover_tables(self, schema_name: str) -> List[Dict]:
         """
         Discover tables and views in a schema
-        Tables are processed sequentially (fast)
+        Tables are processed sequentially (usually fast)
         Views are processed concurrently (can be expensive)
         """
         tables_data = []
-        table_names = self.inspector.get_table_names(schema=schema_name)
-        view_names = self.inspector.get_view_names(schema=schema_name)
         
-        # Process tables sequentially (these are typically fast)
-        for table_name in table_names:
-            if self._should_exclude_table(table_name):
-                logger.debug(f"Skipping excluded table: {schema_name}.{table_name}")
-                continue
-            
-            try:
-                table_data = self._discover_table(schema_name, table_name, 'table')
-                if table_data:
-                    tables_data.append(table_data)
-            except Exception as e:
-                logger.error(f"Error discovering table {schema_name}.{table_name}: {e}")
+        try:
+            table_names = self.inspector.get_table_names(schema=schema_name)
+            view_names = self.inspector.get_view_names(schema=schema_name)
+        except Exception as e:
+            logger.error(f"Error listing tables/views in {schema_name}: {e}")
+            return []
         
-        # Process views CONCURRENTLY (these can be expensive)
+        # Filter excluded objects
+        table_names = [t for t in table_names if not self._should_exclude_table(t)]
+        view_names = [v for v in view_names if not self._should_exclude_table(v)]
+        
+        logger.info(f"  Schema {schema_name}: {len(table_names)} tables, {len(view_names)} views")
+        
+        # Process tables sequentially
+        if table_names:
+            logger.info(f"  Processing {len(table_names)} tables...")
+            for idx, table_name in enumerate(table_names, 1):
+                if idx % 10 == 0 or idx == len(table_names):
+                    logger.info(f"    Tables progress: {idx}/{len(table_names)}")
+                
+                try:
+                    table_data = self._discover_table(schema_name, table_name, 'table')
+                    if table_data:
+                        tables_data.append(table_data)
+                except Exception as e:
+                    logger.error(f"Error discovering table {schema_name}.{table_name}: {e}")
+        
+        # Process views CONCURRENTLY
         if view_names:
-            logger.info(f"Processing {len(view_names)} views concurrently in schema {schema_name}")
+            logger.info(f"  Processing {len(view_names)} views concurrently...")
             view_data_list = self._discover_views_concurrent(schema_name, view_names)
             tables_data.extend(view_data_list)
         
@@ -490,15 +533,17 @@ class DiscoveryEngine:
                 'columns': columns_data,
                 'primary_key': primary_key,
                 'foreign_keys': foreign_keys_data,
+                'indexes': [],
                 'rowcount_sample': None,
                 'sample_rows': [],  # No samples
-                'source_assets': []
+                'source_assets': [],
+                'sampling_failed': True,
+                'failure_reason': 'metadata_only'
             }
             
         except Exception as e:
             logger.error(f"Error getting metadata for {schema_name}.{table_name}: {e}")
             return None
-
 
     def _discover_views_concurrent(self, schema_name: str, view_names: List[str]) -> List[Dict]:
         """
@@ -511,24 +556,17 @@ class DiscoveryEngine:
         Returns:
             List of view data dictionaries
         """
-        from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
-        
-        # Filter excluded views
-        filtered_views = [
-            v for v in view_names 
-            if not self._should_exclude_table(v)
-        ]
-        
-        if not filtered_views:
+        if not view_names:
             return []
         
-        logger.info(f"Processing {len(filtered_views)} views with {self.discovery_config.max_workers} workers")
+        max_workers = self.discovery_config.max_workers
+        logger.info(f"    Processing views with {max_workers} workers")
         
         views_data = []
         completed = 0
         timeout_per_view = self.discovery_config.view_sampling_timeout
         
-        with ThreadPoolExecutor(max_workers=self.discovery_config.max_workers) as executor:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # Submit all view discovery tasks
             future_to_view = {
                 executor.submit(
@@ -537,7 +575,7 @@ class DiscoveryEngine:
                     view_name,
                     timeout_per_view
                 ): view_name
-                for view_name in filtered_views
+                for view_name in view_names
             }
             
             # Process results as they complete
@@ -546,39 +584,41 @@ class DiscoveryEngine:
                 completed += 1
                 
                 try:
-                    view_data = future.result(timeout=timeout_per_view + 5)
+                    view_data = future.result(timeout=timeout_per_view + 10)
                     if view_data:
                         views_data.append(view_data)
                         
                     # Log progress every 10%
-                    if completed % max(1, len(filtered_views) // 10) == 0:
-                        pct = 100 * completed / len(filtered_views)
+                    if completed % max(1, len(view_names) // 10) == 0:
+                        pct = 100 * completed / len(view_names)
                         logger.info(
-                            f"View discovery progress: {completed}/{len(filtered_views)} ({pct:.0f}%)"
+                            f"    Views progress: {completed}/{len(view_names)} ({pct:.0f}%)"
                         )
                         
-                except TimeoutError:
+                except FutureTimeoutError:
                     logger.warning(
                         f"⏱️ Timeout processing view {schema_name}.{view_name} - "
-                        f"skipping sample data"
+                        f"attempting metadata-only fallback"
                     )
-                    # Still try to get metadata-only
+                    # Try metadata-only fallback
                     try:
                         view_data = self._discover_table_metadata_only(schema_name, view_name, 'view')
                         if view_data:
-                            view_data['sample_rows'] = []
-                            view_data['sampling_failed'] = True
-                            view_data['failure_reason'] = 'timeout'
                             views_data.append(view_data)
+                            self._expensive_objects.append({
+                                'name': f"{schema_name}.{view_name}",
+                                'type': 'view',
+                                'reason': 'timeout',
+                                'duration': timeout_per_view
+                            })
                     except Exception as e:
-                        logger.error(f"Failed to get even metadata for {schema_name}.{view_name}: {e}")
+                        logger.error(f"Metadata fallback failed for {schema_name}.{view_name}: {e}")
                         
                 except Exception as e:
                     logger.error(f"Error processing view {schema_name}.{view_name}: {e}")
         
-        logger.info(f"✓ Completed {len(views_data)}/{len(filtered_views)} views in schema {schema_name}")
+        logger.info(f"    ✓ Completed {len(views_data)}/{len(view_names)} views")
         return views_data
-
 
     def _discover_view_with_fallback(
         self, 
@@ -587,12 +627,11 @@ class DiscoveryEngine:
         timeout_seconds: int
     ) -> Optional[Dict]:
         """
-        Discover a view with progressive fallback strategies
+        Discover a view with timeout protection using thread-based approach
         
         Strategy:
-        1. Try full discovery with simplified sampling
-        2. If timeout, try metadata-only
-        3. Return None if all strategies fail
+        1. Try full discovery with timeout
+        2. If timeout, return None (outer function will handle fallback)
         
         Args:
             schema_name: Schema name
@@ -602,49 +641,32 @@ class DiscoveryEngine:
         Returns:
             View data dictionary or None
         """
-        import signal
-        from contextlib import contextmanager
-        
-        @contextmanager
-        def timeout(seconds: int):
-            def timeout_handler(signum, frame):
-                raise TimeoutError("Query timeout")
-            
-            old_handler = signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(seconds)
-            try:
-                yield
-            finally:
-                signal.alarm(0)
-                signal.signal(signal.SIGALRM, old_handler)
+        start_time = time.time()
         
         try:
-            # Strategy 1: Full discovery with timeout
-            logger.debug(f"Sampling view {schema_name}.{view_name}")
-            
-            with timeout(timeout_seconds):
-                view_data = self._discover_table(schema_name, view_name, 'view')
+            # Use a nested executor with timeout for the actual discovery
+            with ThreadPoolExecutor(max_workers=1) as inner_executor:
+                future = inner_executor.submit(self._discover_table, schema_name, view_name, 'view')
+                view_data = future.result(timeout=timeout_seconds)
+                
+                elapsed = time.time() - start_time
+                if elapsed > 10:  # Log if took more than 10 seconds
+                    logger.info(f"      View {schema_name}.{view_name}: {elapsed:.1f}s")
+                    if elapsed > 60:  # Track expensive objects
+                        self._expensive_objects.append({
+                            'name': f"{schema_name}.{view_name}",
+                            'type': 'view',
+                            'reason': 'slow_query',
+                            'duration': elapsed
+                        })
+                
                 return view_data
                 
-        except TimeoutError:
-            logger.warning(
-                f"Query execution timed out after {timeout_seconds}s for view "
-                f"{schema_name}.{view_name}, trying metadata-only fallback"
-            )
+        except FutureTimeoutError:
+            elapsed = time.time() - start_time
+            logger.warning(f"⏱️ View {schema_name}.{view_name} timed out after {elapsed:.1f}s")
+            raise  # Re-raise to be caught by outer function
             
-            # Strategy 2: Metadata-only fallback
-            try:
-                view_data = self._discover_table_metadata_only(schema_name, view_name, 'view')
-                if view_data:
-                    view_data['sample_rows'] = []
-                    view_data['sampling_failed'] = True
-                    view_data['failure_reason'] = 'timeout'
-                    logger.info(f"✓ Got metadata-only for view {schema_name}.{view_name}")
-                    return view_data
-            except Exception as e:
-                logger.error(f"Metadata-only fallback also failed for {schema_name}.{view_name}: {e}")
-                return None
-        
         except Exception as e:
             logger.error(f"Error discovering view {schema_name}.{view_name}: {e}")
             return None
@@ -661,7 +683,7 @@ class DiscoveryEngine:
         Returns:
             Table data dictionary or None if error
         """
-        logger.debug(f"Discovering {table_type}: {schema_name}.{table_name}")
+        start_time = time.time()
         
         try:
             # Get columns
@@ -676,19 +698,23 @@ class DiscoveryEngine:
                     'default': str(col.get('default')) if col.get('default') else None,
                 }
                 
-                # Get statistics and samples
-                try:
-                    stats = self._get_column_stats(schema_name, table_name, col['name'], str(col['type']))
-                    if stats:
-                        col_data['stats'] = stats
-                except Exception as e:
-                    logger.debug(f"Could not get stats for {schema_name}.{table_name}.{col['name']}: {e}")
+                # Get statistics and samples (OPTIONAL - can be disabled)
+                if getattr(self.discovery_config, 'collect_stats', True):
+                    try:
+                        stats = self._get_column_stats(schema_name, table_name, col['name'], str(col['type']))
+                        if stats:
+                            col_data['stats'] = stats
+                    except Exception as e:
+                        logger.debug(f"Could not get stats for {schema_name}.{table_name}.{col['name']}: {e}")
                 
                 columns_data.append(col_data)
             
             # Get primary key
-            pk_constraint = self.inspector.get_pk_constraint(table_name, schema=schema_name)
-            primary_key = pk_constraint.get('constrained_columns', []) if pk_constraint else []
+            try:
+                pk_constraint = self.inspector.get_pk_constraint(table_name, schema=schema_name)
+                primary_key = pk_constraint.get('constrained_columns', []) if pk_constraint else []
+            except:
+                primary_key = []
             
             # Get foreign keys
             foreign_keys_data = []
@@ -719,11 +745,30 @@ class DiscoveryEngine:
             except Exception as e:
                 logger.debug(f"Could not get indexes for {schema_name}.{table_name}: {e}")
             
-            # Get row count sample
-            rowcount_sample = self._get_rowcount_sample(schema_name, table_name)
+            # Get row count sample (optional, can timeout)
+            rowcount_sample = None
+            if getattr(self.discovery_config, 'collect_row_counts', False):
+                try:
+                    rowcount_sample = self._get_rowcount_sample(schema_name, table_name)
+                except Exception as e:
+                    logger.debug(f"Could not get rowcount for {schema_name}.{table_name}: {e}")
             
             # Get sample rows
-            sample_rows = self._get_sample_rows(schema_name, table_name)
+            sample_rows = []
+            if getattr(self.discovery_config, 'collect_samples', True):
+                try:
+                    sample_rows = self._get_sample_rows(schema_name, table_name)
+                except Exception as e:
+                    logger.debug(f"Could not get sample rows for {schema_name}.{table_name}: {e}")
+            
+            elapsed = time.time() - start_time
+            if elapsed > 30:  # Track slow tables
+                self._expensive_objects.append({
+                    'name': f"{schema_name}.{table_name}",
+                    'type': table_type,
+                    'reason': 'slow_discovery',
+                    'duration': elapsed
+                })
             
             return {
                 'name': table_name,
@@ -743,11 +788,14 @@ class DiscoveryEngine:
     
     def _get_column_stats(self, schema: str, table: str, column: str, col_type: str) -> Optional[Dict]:
         """
-        Get statistics for a column
+        Get statistics for a column with timeout protection
         Returns dict with distinct_count, null_rate, min, max, sample_values
+        
+        NOTE: This can be VERY expensive. Consider disabling via config.
         """
-        try:
-            # Build query based on dialect
+        timeout_seconds = 30  # Per-column timeout
+        
+        def _execute_stats_query():
             dialect = self.engine.dialect.name.lower()
             
             if dialect == 'mssql':
@@ -760,33 +808,49 @@ class DiscoveryEngine:
                 quote_char = '"'
                 quote_end = '"'
             
-            # Quoted identifiers
             schema_q = f"{quote_char}{schema}{quote_end}"
             table_q = f"{quote_char}{table}{quote_end}"
             column_q = f"{quote_char}{column}{quote_end}"
             
-            # Stats query with sample limit of 1000
+
+            # Fast stats query - sam`ple rows FIRST, then aggregate (much faster!)
             if dialect == 'mssql':
                 query = text(f"""
-                    SELECT TOP 1000
+                    WITH sample AS (
+                        SELECT TOP 1000 {column_q}
+                        FROM {schema_q}.{table_q} WITH (NOLOCK)
+                    )
+                    SELECT 
                         COUNT(DISTINCT {column_q}) as distinct_count,
-                        SUM(CASE WHEN {column_q} IS NULL THEN 1 ELSE 0 END) * 1.0 / COUNT(*) as null_rate,
+                        SUM(CASE WHEN {column_q} IS NULL THEN 1 ELSE 0 END) * 1.0 / NULLIF(COUNT(*), 0) as null_rate,
                         MIN({column_q}) as min_val,
                         MAX({column_q}) as max_val
-                    FROM {schema_q}.{table_q}
+                    FROM sample
                 """)
             else:
                 query = text(f"""
+                    WITH sample AS (
+                        SELECT {column_q}
+                        FROM {schema_q}.{table_q}
+                        LIMIT 1000
+                    )
                     SELECT
                         COUNT(DISTINCT {column_q}) as distinct_count,
-                        SUM(CASE WHEN {column_q} IS NULL THEN 1 ELSE 0 END)::float / COUNT(*) as null_rate,
+                        CAST(SUM(CASE WHEN {column_q} IS NULL THEN 1 ELSE 0 END) AS FLOAT) / NULLIF(COUNT(*), 0) as null_rate,
                         MIN({column_q}) as min_val,
                         MAX({column_q}) as max_val
-                    FROM {schema_q}.{table_q}
-                    LIMIT 1000
+                    FROM sample
                 """)
+            
             with self.engine.connect() as conn:
                 result = conn.execute(query).fetchone()
+            return result
+        
+        try:
+            # Execute with timeout
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(_execute_stats_query)
+                result = future.result(timeout=timeout_seconds)
             
             stats = {
                 'distinct_count': result[0] if result[0] is not None else 0,
@@ -798,73 +862,108 @@ class DiscoveryEngine:
                 stats['min'] = str(result[2]) if result[2] is not None else None
                 stats['max'] = str(result[3]) if result[3] is not None else None
             
-            # Get sample values (top 5)
+            # Get sample values (top 5) - separate query with timeout
             sample_values = self._get_sample_values(schema, table, column, limit=5)
             if sample_values:
                 stats['sample_values'] = sample_values
             
-            # Detect currency hint for numeric columns
+            # Detect currency hint
             if any(t in col_type.lower() for t in ['decimal', 'numeric', 'money']):
-                if any(kw in column.lower() for kw in ['amount', 'price', 'cost', 'revenue', 'total']):
+                if any(kw in column.lower() for kw in ['amount', 'price', 'cost', 'revenue', 'total', 'discount']):
                     stats['unit_hint'] = 'currency'
-                    stats['currency_hint'] = 'USD'  # Default, could be detected
+                    stats['currency_hint'] = 'USD'
             
             return stats
             
+        except FutureTimeoutError:
+            logger.debug(f"Stats query timed out for {schema}.{table}.{column}")
+            return None
         except Exception as e:
             logger.debug(f"Error getting stats for {schema}.{table}.{column}: {e}")
             return None
     
     def _get_sample_values(self, schema: str, table: str, column: str, limit: int = 5) -> List[str]:
-        """Get sample distinct values from a column"""
-        try:
+        """Get sample distinct values from a column with timeout"""
+        timeout_seconds = 10
+        
+        def _execute_query():
             dialect = self.engine.dialect.name.lower()
             
+            # if dialect == 'mssql':
+            #     query = text(f"""
+            #         SELECT DISTINCT TOP {limit} [{column}]
+            #         FROM [{schema}].[{table}] WITH (NOLOCK)
+            #         WHERE [{column}] IS NOT NULL
+            #         ORDER BY [{column}]
+            #     """)
+            # else:
+            #     query = text(f"""
+            #         SELECT DISTINCT "{column}"
+            #         FROM "{schema}"."{table}"
+            #         WHERE "{column}" IS NOT NULL
+            #         ORDER BY "{column}"
+            #         LIMIT {limit}
+            #     """)
             if dialect == 'mssql':
                 query = text(f"""
-                    SELECT DISTINCT TOP {limit} [{column}]
-                    FROM [{schema}].[{table}]
-                    WHERE [{column}] IS NOT NULL
-                    ORDER BY [{column}]
+                    SELECT TOP {limit} [{column}]
+                    FROM [{schema}].[{table}] WITH (NOLOCK)
                 """)
             else:
                 query = text(f"""
-                    SELECT DISTINCT "{column}"
+                    SELECT "{column}"
                     FROM "{schema}"."{table}"
-                    WHERE "{column}" IS NOT NULL
-                    ORDER BY "{column}"
                     LIMIT {limit}
                 """)
+
             with self.engine.connect() as conn:
                 result = conn.execute(query).fetchall()
-            # result = self.engine.execute(query).fetchall()
+            return result
+        
+        try:
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(_execute_query)
+                result = future.result(timeout=timeout_seconds)
             return [str(row[0]) for row in result]
-            
-        except Exception as e:
-            logger.debug(f"Error getting sample values: {e}")
+        except:
             return []
     
     def _get_rowcount_sample(self, schema: str, table: str) -> int:
-        """Get approximate row count (sample, not exact)"""
-        try:
+        """Get approximate row count with timeout"""
+        timeout_seconds = 30
+        
+        def _execute_query():
             dialect = self.engine.dialect.name.lower()
             
             if dialect == 'mssql':
-                query = text(f"SELECT COUNT(*) FROM [{schema}].[{table}]")
+                # Use sys.partitions for fast estimate
+                query = text(f"""
+                    SELECT SUM(p.rows) 
+                    FROM sys.partitions p
+                    JOIN sys.tables t ON p.object_id = t.object_id
+                    JOIN sys.schemas s ON t.schema_id = s.schema_id
+                    WHERE s.name = :schema AND t.name = :table AND p.index_id IN (0,1)
+                """)
+                with self.engine.connect() as conn:
+                    result = conn.execute(query, {"schema": schema, "table": table}).scalar()
             else:
                 query = text(f'SELECT COUNT(*) FROM "{schema}"."{table}"')
+                with self.engine.connect() as conn:
+                    result = conn.execute(query).scalar()
             
-            with self.engine.connect() as conn:
-                result = conn.execute(query).scalar()
+            return result
+        
+        try:
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(_execute_query)
+                result = future.result(timeout=timeout_seconds)
             return int(result) if result else 0
-            
-        except Exception as e:
-            logger.debug(f"Error getting rowcount for {schema}.{table}: {e}")
+        except:
             return 0
     
     def _get_sample_rows(self, schema: str, table: str, limit: int = 10) -> List[Dict]:
-        """Get sample rows from table/view with timeout protection."""
-        from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+        """Get sample rows from table/view with timeout protection"""
+        timeout_seconds = self.discovery_config.view_sampling_timeout or 60
         
         def _execute_query():
             dialect = self.engine.dialect.name.lower()
@@ -879,61 +978,53 @@ class DiscoveryEngine:
             return result
         
         try:
-            # Use thread-based timeout instead of signal
-            timeout_seconds = self.discovery_config.view_sampling_timeout or 300
-            
             with ThreadPoolExecutor(max_workers=1) as executor:
                 future = executor.submit(_execute_query)
                 result = future.result(timeout=timeout_seconds)
             
             if not result:
-                logger.warning(f"No data returned from {schema}.{table}")
                 return []
             
             rows = []
             for r in result:
                 rows.append({k: (None if v is None else str(v)) for k, v in r.items()})
             
-            logger.info(f"✓ Sampled {len(rows)} rows from {schema}.{table}")
             return rows
             
         except FutureTimeoutError:
-            logger.warning(f"Query execution timed out after {timeout_seconds}s")
+            logger.debug(f"Sample query timed out for {schema}.{table}")
             return []
         except Exception as e:
-            logger.error(f"❌ Error sampling {schema}.{table}: {e}")
+            logger.debug(f"Error sampling {schema}.{table}: {e}")
             return []
-
     
     def _discover_named_assets(self) -> List[Dict]:
         """
         Discover named assets: views, stored procedures, RDL files
         Returns list of asset dictionaries
-        
-        IMPORTANT: Cache results for use in relationship detection
         """
         if hasattr(self, '_named_assets_cache'):
             return self._named_assets_cache
         
         assets = []
         
-        # Discover views (already included in schema discovery, but normalize SQL)
-        # This would extract view definitions and normalize them
-        
-        # Discover stored procedures
-        # This would extract SP definitions and normalize them
-        
         # Discover RDL files
         rdl_path = self.path_config.rdl_path
-        if rdl_path.exists():
+        if rdl_path and rdl_path.exists():
             logger.info(f"Scanning RDL files in {rdl_path}")
-            from .rdl_parser import RDLParser
-            
-            parser = RDLParser(rdl_path)
-            rdl_assets = parser.parse_all()
-            assets.extend(rdl_assets)
-            
-            logger.info(f"Found {len(rdl_assets)} RDL files")
+            try:
+                from src.discovery.rdl_parser import RDLParser
+                
+                parser = RDLParser(rdl_path)
+                rdl_assets = parser.parse_all()
+                assets.extend(rdl_assets)
+                
+                logger.info(f"  ✓ Found {len(rdl_assets)} RDL files")
+            except Exception as e:
+                logger.error(f"Error parsing RDL files: {e}")
+        
+        # TODO: Add view SQL normalization
+        # TODO: Add stored procedure discovery
         
         # Cache for reuse
         self._named_assets_cache = assets
@@ -942,11 +1033,7 @@ class DiscoveryEngine:
     
     def _detect_relationships(self, schemas_data: List[Dict], dialect: str) -> List[Dict]:
         """
-        Detect foreign key relationships using multiple methods:
-        1. Explicit FKs from database metadata
-        2. Implicit FKs from value overlap
-        3. View join analysis (NEW)
-        4. RDL join analysis (NEW)
+        Detect foreign key relationships using multiple methods
         
         Args:
             schemas_data: List of schema dictionaries from discovery
@@ -955,32 +1042,20 @@ class DiscoveryEngine:
         Returns:
             List of unique relationship dictionaries
         """
-        import time
-        
         start_time = time.time()
         all_relationships = []
         
-        # Build discovery data structure for relationship detector
-        # IMPORTANT: Ensure named_assets are already discovered before this call
+        # Build discovery data for relationship detector
         discovery_for_relationships = {
             'database': {'vendor': dialect, 'version': 'unknown'},
             'dialect': dialect,
             'schemas': schemas_data,
-            'named_assets': []  # Will be populated below
+            'named_assets': getattr(self, '_named_assets_cache', [])
         }
-        
-        # Get named assets (views, stored procedures, RDL files)
-        # This should have been called earlier in discover() method
-        # If not available, we need to call it here
-        if hasattr(self, '_named_assets_cache'):
-            discovery_for_relationships['named_assets'] = self._named_assets_cache
-        else:
-            logger.warning("Named assets not cached, discovering now...")
-            discovery_for_relationships['named_assets'] = self._discover_named_assets()
         
         # Method 1 & 2: Standard detection (explicit + implicit FKs)
         try:
-            from .relationship_detector import detect_relationships
+            from src.discovery.relationship_detector import detect_relationships
             
             relationships = detect_relationships(
                 connection_string=self.connection_string,
@@ -988,7 +1063,7 @@ class DiscoveryEngine:
                 config=self.relationship_config
             )
             all_relationships.extend(relationships)
-            logger.info(f"✓ Standard detection: {len(relationships)} relationships")
+            logger.info(f"  ✓ Standard detection: {len(relationships)} relationships")
             
         except Exception as e:
             logger.error(f"Standard relationship detection failed: {e}", exc_info=True)
@@ -996,71 +1071,56 @@ class DiscoveryEngine:
         # Method 3: View join analysis
         if self.relationship_config.detect_views:
             try:
-                from .relationship_detector import detect_relationships_from_views
+                from src.discovery.relationship_detector import detect_relationships_from_views
                 
                 view_relationships = detect_relationships_from_views(
                     discovery_data=discovery_for_relationships,
                     config=self.relationship_config
                 )
                 all_relationships.extend(view_relationships)
-                logger.info(f"✓ View join analysis: {len(view_relationships)} relationships")
+                logger.info(f"  ✓ View join analysis: {len(view_relationships)} relationships")
                 
             except Exception as e:
                 logger.error(f"View relationship detection failed: {e}", exc_info=True)
-        else:
-            logger.info("⊘ View join analysis disabled")
         
         # Method 4: RDL join analysis
         if self.relationship_config.detect_rdl_joins:
             try:
-                from .rdl_parser import extract_relationships_from_rdl
+                from src.discovery.rdl_parser import extract_relationships_from_rdl
                 
                 rdl_relationships = extract_relationships_from_rdl(
                     rdl_assets=discovery_for_relationships['named_assets'],
                     config=self.relationship_config
                 )
                 all_relationships.extend(rdl_relationships)
-                logger.info(f"✓ RDL join analysis: {len(rdl_relationships)} relationships")
+                logger.info(f"  ✓ RDL join analysis: {len(rdl_relationships)} relationships")
                 
             except Exception as e:
                 logger.error(f"RDL relationship detection failed: {e}", exc_info=True)
-        else:
-            logger.info("⊘ RDL join analysis disabled")
         
-        # Deduplicate relationships, preferring higher confidence sources
+        # Deduplicate
         unique_relationships = self._deduplicate_relationships(all_relationships)
         
         elapsed = time.time() - start_time
-        logger.info(f"═══════════════════════════════════════════════════")
-        logger.info(f"RELATIONSHIP DETECTION SUMMARY")
-        logger.info(f"───────────────────────────────────────────────────")
-        logger.info(f"Total found:        {len(all_relationships)}")
-        logger.info(f"After dedup:        {len(unique_relationships)}")
-        logger.info(f"Duration:           {elapsed:.2f}s")
-        logger.info(f"═══════════════════════════════════════════════════")
+        logger.info(f"  ═══════════════════════════════════")
+        logger.info(f"  Relationships: {len(all_relationships)} found, {len(unique_relationships)} unique")
+        logger.info(f"  Duration: {elapsed:.2f}s")
+        logger.info(f"  ═══════════════════════════════════")
         
         return unique_relationships
-
 
     def _deduplicate_relationships(self, relationships: List[Dict]) -> List[Dict]:
         """
         Deduplicate relationships, preferring higher confidence sources
         
-        Priority order (highest to lowest):
+        Priority order:
         1. RDL join analysis (most curated)
         2. View join analysis (curated)
         3. Explicit FKs (database-defined)
         4. Implicit FKs (value overlap)
-        
-        Args:
-            relationships: List of all relationships from various sources
-            
-        Returns:
-            List of unique relationships with highest confidence
         """
         seen = {}
         
-        # Priority mapping
         priority = {
             "rdl_join_analysis": 4,
             "view_join_analysis": 3,
@@ -1070,26 +1130,15 @@ class DiscoveryEngine:
         }
         
         for rel in relationships:
-            # Create unique key from relationship
             key = (rel["from"], rel["to"])
-            
-            # Get priority for this method
             method = rel.get("method", "unknown")
             current_priority = priority.get(method, 0)
             
-            # Keep this relationship if:
-            # 1. We haven't seen this relationship before, OR
-            # 2. This method has higher priority than what we've seen
             if key not in seen:
                 seen[key] = rel
             else:
                 existing_priority = priority.get(seen[key].get("method", ""), 0)
                 if current_priority > existing_priority:
-                    # Replace with higher confidence relationship
-                    logger.debug(
-                        f"Replacing relationship {key}: "
-                        f"{seen[key]['method']} → {method} (higher priority)"
-                    )
                     seen[key] = rel
         
         return list(seen.values())
@@ -1099,9 +1148,11 @@ class DiscoveryEngine:
 # CONVENIENCE FUNCTIONS
 # ============================================================================
 
-def run_discovery(use_cache: bool = True, 
-                 skip_relationships: bool = False,
-                 connection_string: Optional[str] = None) -> Dict:
+def run_discovery(
+    use_cache: bool = True, 
+    skip_relationships: bool = False,
+    connection_string: Optional[str] = None
+) -> Dict:
     """
     Convenience function to run discovery
     
