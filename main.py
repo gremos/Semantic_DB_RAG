@@ -94,15 +94,12 @@ def cmd_model(args):
 
         # Build model
         console.print("[yellow]Loading discovery cache...[/yellow]")
-        builder = SemanticModelBuilder(settings)
+        builder = SemanticModelBuilder()
 
         # Prefer passing discovery data if your builder supports it.
         # If not, keep the no-arg call.
-        try:
-            semantic_model = builder.build(discovery_data=discovery_data)
-        except TypeError:
-            # Fallback for builders that don't accept args
-            semantic_model = builder.build()
+        semantic_model = builder.build(discovery_data=discovery_data, use_cache=not args.no_cache if hasattr(args, 'no_cache') else True)
+        console.print("[green]✓[/green] Semantic model built successfully!")
 
         # Persist to cache
         settings.paths.cache_dir.mkdir(parents=True, exist_ok=True)

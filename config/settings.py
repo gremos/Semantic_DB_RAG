@@ -555,6 +555,9 @@ def get_confidence_config() -> ConfidenceConfig:
     """Get confidence configuration"""
     return get_settings().confidence
 
+def get_llm_config() -> AzureOpenAIConfig:
+    """Get LLM configuration (alias for Azure OpenAI config)"""
+    return get_settings().azure_openai
 
 # ============================================================================
 # INITIALIZATION

@@ -34,11 +34,13 @@ logger = logging.getLogger(__name__)
 # PYDANTIC MODELS FOR VALIDATION (QuadRails - Constraint)
 # ============================================================================
 
+from typing import Union
+
 class ColumnMetadata(BaseModel):
     """Column metadata in semantic model"""
     name: str
-    role: str  # primary_key, label, attribute, foreign_key, measure
-    semantic_type: Optional[str] = None  # id, person_or_org_name, email, date, etc.
+    role: Union[str, List[str]]  # Can be single role or multiple roles
+    semantic_type: Optional[str] = None
     aliases: List[str] = []
     description: Optional[str] = None
 
@@ -237,7 +239,7 @@ class LLMClient:
         self.llm = AzureChatOpenAI(
             deployment_name=llm_config.deployment_name,
             api_version=llm_config.api_version,
-            azure_endpoint=llm_config.azure_endpoint,
+            azure_endpoint=llm_config.endpoint,
             api_key=llm_config.api_key,
             # temperature NOT supported by gpt-5-mini
         )
