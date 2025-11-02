@@ -1,11 +1,11 @@
 {
   "fingerprint": "43ea3afc600fba117dd3ebf091fc368e2344b3f178a9b6ea06f61af4227d4d3f",
-  "timestamp": "2025-11-02T11:05:30.932250",
+  "timestamp": "2025-11-02T11:19:55.527963",
   "sample_mode": true,
   "sample_config": {
-    "tables_per_schema": 5,
-    "views_per_schema": 3,
-    "stored_procedures": 5,
-    "rdl_files": 3
+    "tables_per_schema": 1,
+    "views_per_schema": 1,
+    "stored_procedures": 1,
+    "rdl_files": 1
   }
 }
