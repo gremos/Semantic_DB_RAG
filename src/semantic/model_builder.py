@@ -549,9 +549,15 @@ For each entity, provide:
 - Meaningful name (e.g., "Customer" not "tbl_cust")
 - Column roles: primary_key, label, attribute, foreign_key
 - Semantic types: id, person_or_org_name, email, phone, address, etc.
-- Aliases for each column
-- Descriptions
-- Display configuration (label column, search columns, sort order)
+- Aliases for each column (at least 1-2 per column if applicable)
+- Descriptions (must not be null)
+- Display configuration (ALL fields are REQUIRED - do not use null)
+
+**CRITICAL DISPLAY REQUIREMENTS:**
+1. display_name: MUST be a user-friendly version of the table name
+2. default_label_column: MUST be the most human-readable column (Name, Description, Title, or Code)
+3. default_search_columns: MUST include at least 2-3 searchable text columns
+4. default_sort: MUST specify column and direction (asc/desc)
 
 Respond with valid JSON array:
 [
@@ -575,7 +581,13 @@ Respond with valid JSON array:
       }
     ]
   }
-]"""
+]
+
+RULES:
+- NEVER return null for display fields
+- If no obvious label column exists, use the primary key
+- Always include at least 2 search columns
+- Prefer string/text columns for searching"""
             
             user_prompt = f"""Enrich these entity tables:
 
@@ -629,7 +641,9 @@ For each dimension, provide:
 - Meaningful name
 - Key columns
 - Attributes with semantic types (date, year, month_name, country, etc.)
-- Display configuration (attribute order for drill-down)
+- Display configuration (attribute order for drill-down) - REQUIRED, NOT NULL
+
+**CRITICAL:** The display field MUST be populated with attribute_order showing the logical drill-down hierarchy.
 
 Respond with valid JSON array:
 [
@@ -638,15 +652,24 @@ Respond with valid JSON array:
     "source": "dbo.DimDate",
     "keys": ["DateKey"],
     "attributes": [
-      {"name": "Date", "semantic_type": "date", "role": "attribute"},
-      {"name": "Year", "semantic_type": "year", "role": "attribute"},
-      {"name": "Month", "semantic_type": "month_name", "role": "attribute"}
+      {"name": "Date", "semantic_type": "date", "role": "attribute", "aliases": [], "description": "Calendar date"},
+      {"name": "Year", "semantic_type": "year", "role": "attribute", "aliases": ["FiscalYear"], "description": "Calendar year"},
+      {"name": "Month", "semantic_type": "month_name", "role": "attribute", "aliases": ["MonthName"], "description": "Month name"}
     ],
     "display": {
+      "display_name": "Date",
+      "default_label_column": "Date",
+      "default_search_columns": ["Date", "Year", "Month"],
+      "default_sort": {"column": "Date", "direction": "desc"},
       "attribute_order": ["Year", "Month", "Date"]
     }
   }
-]"""
+]
+
+RULES:
+- Display field is REQUIRED
+- attribute_order MUST show hierarchical drill-down path
+- NEVER use null for display fields"""
             
             user_prompt = f"""Enrich these dimension tables:
 
@@ -771,6 +794,11 @@ Respond with fact definition JSON object."""
         
         inferred_rels = discovery_data.get("inferred_relationships", [])
         
+        # ADD: Log incoming relationships for debugging
+        logger.info(f"      Found {len(inferred_rels)} relationships in discovery data")
+        if len(inferred_rels) > 0:
+            logger.debug(f"      Sample relationship: {inferred_rels[0]}")
+        
         # Build mapping from source table to semantic name
         source_to_semantic = {}
         
@@ -781,7 +809,12 @@ Respond with fact definition JSON object."""
         for fact in facts:
             source_to_semantic[fact["source"]] = fact["name"]
         
+        # ADD: Log source mapping for debugging
+        logger.info(f"      Built source mapping with {len(source_to_semantic)} tables")
+        logger.debug(f"      Sample mappings: {list(source_to_semantic.items())[:3]}")
+        
         relationships = []
+        skipped_count = 0  # ADD: Track skipped relationships
         
         for rel in inferred_rels:
             try:
@@ -789,35 +822,60 @@ Respond with fact definition JSON object."""
                 from_parts = rel["from"].split(".")
                 to_parts = rel["to"].split(".")
                 
-                if len(from_parts) >= 2 and len(to_parts) >= 2:
-                    from_table = f"{from_parts[0]}.{from_parts[1]}"
-                    to_table = f"{to_parts[0]}.{to_parts[1]}"
-                    
-                    # Map to semantic names
-                    from_semantic = source_to_semantic.get(from_table)
-                    to_semantic = source_to_semantic.get(to_table)
-                    
-                    if from_semantic and to_semantic:
-                        # Build semantic relationship
-                        rel_obj = {
-                            "from": f"{from_semantic}.{from_parts[2]}",
-                            "to": f"{to_semantic}.{to_parts[2]}",
-                            "cardinality": rel.get("cardinality", "many_to_one"),
-                            "confidence": rel.get("confidence", "medium")
-                        }
-                        
-                        # Add verification if present
-                        if "overlap_rate" in rel:
-                            rel_obj["verification"] = {
-                                "overlap_rate": rel["overlap_rate"]
-                            }
-                        
-                        relationships.append(rel_obj)
+                # CHANGE: Add validation and better error messages
+                if len(from_parts) < 3:
+                    logger.warning(f"      Invalid 'from' format (need schema.table.column): {rel['from']}")
+                    skipped_count += 1
+                    continue
+                
+                if len(to_parts) < 3:
+                    logger.warning(f"      Invalid 'to' format (need schema.table.column): {rel['to']}")
+                    skipped_count += 1
+                    continue
+                
+                from_table = f"{from_parts[0]}.{from_parts[1]}"
+                to_table = f"{to_parts[0]}.{to_parts[1]}"
+                
+                # Map to semantic names
+                from_semantic = source_to_semantic.get(from_table)
+                to_semantic = source_to_semantic.get(to_table)
+                
+                # CHANGE: Log why relationships are being skipped
+                if not from_semantic:
+                    logger.debug(f"      Skipping - no semantic name for source table: {from_table}")
+                    skipped_count += 1
+                    continue
+                
+                if not to_semantic:
+                    logger.debug(f"      Skipping - no semantic name for target table: {to_table}")
+                    skipped_count += 1
+                    continue
+                
+                # Build semantic relationship
+                rel_obj = {
+                    "from": f"{from_semantic}.{from_parts[2]}",
+                    "to": f"{to_semantic}.{to_parts[2]}",
+                    "cardinality": rel.get("cardinality", "many_to_one"),
+                    "confidence": rel.get("confidence", "medium")
+                }
+                
+                # Add verification if present
+                if "overlap_rate" in rel:
+                    rel_obj["verification"] = {
+                        "overlap_rate": rel["overlap_rate"]
+                    }
+                
+                relationships.append(rel_obj)
             
             except Exception as e:
-                logger.debug(f"Could not map relationship: {rel} - {e}")
+                logger.warning(f"      Failed to map relationship: {rel.get('from', 'unknown')} -> {rel.get('to', 'unknown')}: {e}")
+                skipped_count += 1
         
-        logger.info(f"      ✓ Mapped {len(relationships)} relationships")
+        # CHANGE: Add summary logging
+        logger.info(f"      ✓ Mapped {len(relationships)} relationships ({skipped_count} skipped)")
+        if skipped_count > 0:
+            logger.warning(f"      ⚠ Skipped {skipped_count} relationships - check logs for details")
+        
         return relationships
     
     def _rank_tables(self, discovery_data: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -829,21 +887,43 @@ Respond with fact definition JSON object."""
         
         rankings = []
         
+        # CHANGE: Build index of views and SPs from named_assets
+        curated_assets = {}
+        for asset in discovery_data.get("named_assets", []):
+            asset_name = asset.get("name", "")
+            asset_kind = asset.get("kind", "")
+            if asset_name:
+                curated_assets[asset_name] = asset_kind
+        
+        logger.debug(f"      Found {len(curated_assets)} curated assets (views/SPs)")
+        
         # Collect all tables with their types
         all_tables = []
         
         for schema in discovery_data.get("schemas", []):
             for table in schema.get("tables", []):
                 full_name = f"{schema['name']}.{table['name']}"
+                
+                # CHANGE: Check multiple sources for table type
+                table_type = table.get("type", "table").lower()
+                
+                # Override with curated asset type if available
+                if full_name in curated_assets:
+                    table_type = curated_assets[full_name]
+                    logger.debug(f"      Upgraded {full_name} type to: {table_type}")
+                
                 all_tables.append({
                     "name": full_name,
-                    "type": table["type"]
+                    "type": table_type,
+                    "original_type": table.get("type", "table")  # ADD: Keep original for debugging
                 })
         
         # Assign ranks
         rank_map = {
             "view": 1,
             "stored_procedure": 2,
+            "storedprocedure": 2,  # ADD: Handle different naming
+            "rdl": 3,
             "rdl_dataset": 3,
             "table": 4
         }
@@ -851,14 +931,22 @@ Respond with fact definition JSON object."""
         reason_map = {
             "view": "curated view",
             "stored_procedure": "stored procedure",
+            "storedprocedure": "stored procedure",  # ADD
+            "rdl": "RDL dataset",
             "rdl_dataset": "RDL dataset",
             "table": "raw table"
         }
+        
+        # ADD: Track rank distribution for logging
+        rank_distribution = {}
         
         for table in all_tables:
             table_type = table["type"]
             rank = rank_map.get(table_type, 4)
             reason = reason_map.get(table_type, "raw table")
+            
+            # ADD: Track distribution
+            rank_distribution[rank] = rank_distribution.get(rank, 0) + 1
             
             rankings.append({
                 "table": table["name"],
@@ -870,7 +958,12 @@ Respond with fact definition JSON object."""
         # Sort by rank
         rankings.sort(key=lambda x: x["rank"])
         
+        # ADD: Log rank distribution
         logger.info(f"      ✓ Ranked {len(rankings)} tables")
+        logger.info(f"      Rank distribution: {rank_distribution}")
+        if rank_distribution.get(1, 0) == 0:
+            logger.warning("      ⚠ No views found - all tables ranked as raw tables")
+        
         return rankings
     
     def _get_tables_by_names(
