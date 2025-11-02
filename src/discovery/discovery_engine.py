@@ -262,6 +262,16 @@ class DiscoveryEngine:
                 pool_size=20,  # Increase pool size for concurrent operations
                 max_overflow=10
             )
+
+            from sqlalchemy import types as satypes
+
+            dialect = self._engine.dialect
+            # Add your custom SQL Server UDT aliases here
+            dialect.ischema_names.setdefault("TableID", satypes.INTEGER)
+            dialect.ischema_names.setdefault("MoneyValue", satypes.DECIMAL)
+            dialect.ischema_names.setdefault("PercentageValue", satypes.INTEGER)
+
+            logger.debug("Registered custom SQL types: TableID, MoneyValue")
         return self._engine
     
     @property
@@ -1103,27 +1113,40 @@ class DiscoveryEngine:
             logger.info(f"Scanning RDL files in {rdl_path}")
             try:
                 from src.discovery.rdl_parser import RDLParser
-                
+
                 parser = RDLParser(self.settings)
                 all_rdl_files = parser.find_rdl_files()
-                
+
                 logger.info(f"  Found {len(all_rdl_files)} RDL files")
-                
                 for rdl_file in all_rdl_files:
-                    # Check sample limit
                     if rdl_limit and rdl_count >= rdl_limit:
                         logger.info(f"  📉 Reached RDL file limit ({rdl_limit})")
                         break
-                    
+
                     try:
                         rdl_asset = parser.parse_rdl_file(rdl_file)
-                        if rdl_asset:
-                            assets.append(rdl_asset)
-                            rdl_count += 1
+                        if not rdl_asset:
+                            continue
+
+                        # 1) Keep the file-level asset (optional but useful for context)
+                        assets.append(rdl_asset)
+                        rdl_count += 1
+
+                        # 2) Emit one named asset per dataset with normalized SQL, fields, params
+                        for ds in rdl_asset.get("datasets", []):
+                            assets.append({
+                                "kind": "rdl_dataset",
+                                "name": f"{rdl_asset['name']}.{ds.get('name')}",
+                                "source_file": rdl_asset["path"],
+                                "sql_raw": ds.get("query"),
+                                "sql_normalized": ds.get("sql_normalized"),
+                                "fields": ds.get("fields", []),
+                                "parameters": rdl_asset.get("parameters", []),
+                                "data_sources": rdl_asset.get("data_sources", [])
+                            })
+
                     except Exception as e:
                         logger.warning(f"  Failed to parse RDL file {rdl_file}: {e}")
-                
-                logger.info(f"  ✓ Parsed {rdl_count} RDL files")
                 
             except Exception as e:
                 logger.error(f"Error parsing RDL files: {e}")
