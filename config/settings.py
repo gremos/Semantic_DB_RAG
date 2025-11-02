@@ -45,13 +45,15 @@ def get_env_bool(key: str, default: bool = False) -> bool:
     return value in ('true', '1', 'yes', 'on')
 
 
-def get_env_int(key: str, default: int) -> int:
-    """Get integer environment variable"""
-    value = os.getenv(key, str(default))
+def get_env_int(key: str, default: Optional[int] = None) -> Optional[int]:
+    """Get environment variable as integer"""
+    value = os.getenv(key)
+    if value is None:
+        return default
     try:
         return int(value)
-    except ValueError:
-        logger.warning(f"Invalid integer for {key}={value}, using default {default}")
+    except (ValueError, TypeError):
+        logger.warning(f"Invalid integer for {key}: {value}, using default: {default}")
         return default
 
 
@@ -190,26 +192,40 @@ class DiscoveryConfig:
     
     @classmethod
     def from_env(cls) -> 'DiscoveryConfig':
+        # Helper to safely get optional int
+        def get_optional_int(key: str) -> Optional[int]:
+            value = get_env(key)
+            if value is None or value == '':
+                return None
+            try:
+                return int(value)
+            except (ValueError, TypeError):
+                logger.warning(f"Invalid value for {key}: {value}, ignoring")
+                return None
+        
         return cls(
             timeout=get_env_int('DISCOVERY_TIMEOUT', 300),
             cache_hours=get_env_int('DISCOVERY_CACHE_HOURS', 168),
             utf8_encoding=get_env_bool('UTF8_ENCODING', True),
             schema_exclusions=get_env_list('SCHEMA_EXCLUSIONS', 
-                                          ['sys', 'information_schema', 'guest', 'INFORMATION_SCHEMA']),
+                                        ['sys', 'information_schema', 'guest', 'INFORMATION_SCHEMA']),
             table_exclusions=get_env_list('TABLE_EXCLUSIONS',
-                                         ['temp_', 'test_', 'backup_', 'old_', 'archive_', 'copy_']),
+                                        ['temp_', 'test_', 'backup_', 'old_', 'archive_', 'copy_']),
             table_exclusion_patterns=get_env_list('TABLE_EXCLUSION_PATTERNS',
-                                                  ['.*_\\d{8}$', '.*_\\d{6}$', '.*_backup.*', 
-                                                   '.*_archive.*', '.*_copy.*', '.*_old.*']),
-            max_workers=get_env_int('CONCURRENCY_MAX_WORKERS', 10),
+                                                ['.*_\\d{8}$', '.*_\\d{6}$', '.*_backup.*', 
+                                                '.*_archive.*', '.*_copy.*', '.*_old.*']),
+            max_workers=get_env_int('DISCOVERY_MAX_WORKERS', 20),
+            view_sampling_timeout=get_env_int('VIEW_SAMPLING_TIMEOUT', 300),
+            concurrency_max_workers=get_env_int('CONCURRENCY_MAX_WORKERS', 10),
+            
+            # Sample Mode (with safe parsing)
+            sample_mode_enabled=get_env_bool('SAMPLE_MODE_ENABLED', False),
+            sample_max_tables_per_schema=get_optional_int('SAMPLE_MAX_TABLES_PER_SCHEMA'),
+            sample_max_views_per_schema=get_optional_int('SAMPLE_MAX_VIEWS_PER_SCHEMA'),
+            sample_max_stored_procedures=get_optional_int('SAMPLE_MAX_STORED_PROCEDURES'),
+            sample_max_rdl_files=get_optional_int('SAMPLE_MAX_RDL_FILES'),
+            sample_output_filename=get_env('SAMPLE_OUTPUT_FILENAME', 'discovery-sample.json'),
         )
-    
-    sample_mode_enabled=get_env_bool('SAMPLE_MODE_ENABLED', False),
-    sample_max_tables_per_schema=get_env_int('SAMPLE_MAX_TABLES_PER_SCHEMA', None) if get_env('SAMPLE_MAX_TABLES_PER_SCHEMA') else None,
-    sample_max_views_per_schema=get_env_int('SAMPLE_MAX_VIEWS_PER_SCHEMA', None) if get_env('SAMPLE_MAX_VIEWS_PER_SCHEMA') else None,
-    sample_max_stored_procedures=get_env_int('SAMPLE_MAX_STORED_PROCEDURES', None) if get_env('SAMPLE_MAX_STORED_PROCEDURES') else None,
-    sample_max_rdl_files=get_env_int('SAMPLE_MAX_RDL_FILES', None) if get_env('SAMPLE_MAX_RDL_FILES') else None,
-    sample_output_filename=get_env('SAMPLE_OUTPUT_FILENAME', 'discovery-sample.json'),
 
 
 # ============================================================================

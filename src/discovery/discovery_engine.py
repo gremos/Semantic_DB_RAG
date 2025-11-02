@@ -43,8 +43,24 @@ class DiscoveryCache:
     def __init__(self, cache_dir: Path, cache_hours: int = 168):
         self.cache_dir = cache_dir
         self.cache_hours = cache_hours
-        discovery_config = get_discovery_config()
-        filename = discovery_config.sample_output_filename if discovery_config.sample_mode_enabled else 'discovery.json'
+        
+        # Determine cache filename based on sample mode
+        try:
+            from config.settings import get_discovery_config
+            discovery_config = get_discovery_config()
+            
+            # Ensure we get a string, not a tuple
+            if discovery_config.sample_mode_enabled:
+                filename = str(getattr(discovery_config, 'sample_output_filename', 'discovery-sample.json'))
+            else:
+                filename = 'discovery.json'
+        except Exception as e:
+            # Fallback if config not available or has issues
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.debug(f"Could not determine sample mode filename: {e}")
+            filename = 'discovery.json'
+        
         self.cache_file = cache_dir / filename
         self.fingerprint_file = cache_dir / 'discovery_fingerprint.json'
         
@@ -486,16 +502,18 @@ class DiscoveryEngine:
         if self.discovery_config.sample_mode_enabled:
             logger.info(f"  📊 SAMPLE MODE ACTIVE for schema '{schema_name}'")
             
-            # Sample tables
-            if self.discovery_config.sample_max_tables_per_schema:
+            # Sample tables (with type safety)
+            max_tables = self.discovery_config.sample_max_tables_per_schema
+            if max_tables is not None and isinstance(max_tables, int) and max_tables > 0:
                 original_count = len(table_names)
-                table_names = table_names[:self.discovery_config.sample_max_tables_per_schema]
+                table_names = table_names[:max_tables]
                 logger.info(f"  📉 Tables: {len(table_names)}/{original_count} (sampled)")
             
-            # Sample views
-            if self.discovery_config.sample_max_views_per_schema:
+            # Sample views (with type safety)
+            max_views = self.discovery_config.sample_max_views_per_schema
+            if max_views is not None and isinstance(max_views, int) and max_views > 0:
                 original_count = len(view_names)
-                view_names = view_names[:self.discovery_config.sample_max_views_per_schema]
+                view_names = view_names[:max_views]
                 logger.info(f"  📉 Views: {len(view_names)}/{original_count} (sampled)")
         
         # Process tables
