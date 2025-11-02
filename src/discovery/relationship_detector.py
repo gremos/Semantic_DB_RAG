@@ -194,6 +194,32 @@ class RelationshipDetector:
         Main entry point for relationship detection
         Returns list of detected relationships sorted by confidence
         """
+
+        logger.info("=" * 80)
+        logger.info("FK DETECTION DIAGNOSTICS")
+        logger.info("=" * 80)
+
+        # Count total potential FK candidates
+        total_columns = len(self.all_columns)
+        pk_columns = len(self.pk_columns)
+        logger.info(f"Total columns in database: {total_columns}")
+        logger.info(f"Primary key columns: {pk_columns}")
+        logger.info(f"Theoretical max comparisons: {total_columns * pk_columns:,}")
+        logger.info(f"Config min_overlap_rate: {self.config.min_overlap_rate}")
+        logger.info(f"Config sample_size: {self.config.sample_size}")
+
+        # Type distribution
+        type_dist = {}
+        for col in self.all_columns:
+            type_key = col.data_type.lower()
+            type_dist[type_key] = type_dist.get(type_key, 0) + 1
+
+        logger.info(f"Column type distribution:")
+        for col_type, count in sorted(type_dist.items(), key=lambda x: -x[1])[:10]:
+            logger.info(f"  • {col_type}: {count}")
+
+        logger.info("=" * 80)
+
         if not self.config.enabled:
             logger.info("Relationship detection disabled")
             return []
@@ -831,29 +857,3 @@ class RelationshipDetector:
             logger.info(f"  Overall reduction: {reduction:.1f}%")
 
 
-def detect_relationships(
-    connection_string: str,
-    discovery_data: Dict,
-    config: Optional[RelationshipDetectionConfig] = None,
-) -> List[Dict]:
-    """
-    Convenience function for relationship detection
-    Returns list of relationships as dictionaries (for JSON serialization)
-    """
-    detector = OptimizedRelationshipDetector(connection_string, discovery_data, config)
-    relationships = detector.detect_relationships()
-
-    # Convert to dict format
-    return [
-        {
-            "from": rel.from_column,
-            "to": rel.to_column,
-            "overlap_rate": rel.overlap_rate,
-            "cardinality": rel.cardinality,
-            "method": rel.method,
-            "confidence": rel.confidence,
-            "name_score": rel.name_score,
-            "verification": rel.verification,
-        }
-        for rel in relationships
-    ]

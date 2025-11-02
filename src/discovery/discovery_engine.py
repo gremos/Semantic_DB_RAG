@@ -351,6 +351,8 @@ class DiscoveryEngine:
             logger.info("=" * 80)
             logger.info(f"DISCOVERY COMPLETE in {elapsed:.1f}s")
             logger.info("=" * 80)
+
+            # AFTER LINE ~350 (after introspection stage):
             
             # Log expensive objects summary
             if self._expensive_objects:

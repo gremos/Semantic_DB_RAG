@@ -14,8 +14,8 @@ class RelationshipDetectionConfig:
     # Core detection settings
     enabled: bool = True
     strategy: str = "smart_filter"  # Options: full, smart_filter, name_only
-    min_overlap_rate: float = 0.80
-    sample_size: int = 100  # Reduced from 1000 for speed
+    min_overlap_rate: float = 0.75  # Lowered from 0.80 to catch more candidates
+    sample_size: int = 500  # Increased from 100 for better accuracy
     
     # Performance tuning
     max_workers: int = 10
@@ -39,14 +39,17 @@ class RelationshipDetectionConfig:
         """Initialize default patterns if not provided"""
         if self.compatible_type_groups is None:
             self.compatible_type_groups = [
-                # Integer types
-                {'int', 'integer', 'bigint', 'smallint', 'tinyint', 'number'},
-                # String types
-                {'varchar', 'char', 'nvarchar', 'nchar', 'text', 'ntext', 'string'},
+                # Integer types (expanded)
+                {'int', 'integer', 'bigint', 'smallint', 'tinyint', 'number', 'numeric', 'decimal'},
+                # String types (expanded)
+                {'varchar', 'char', 'nvarchar', 'nchar', 'text', 'ntext', 'string', 
+                'character', 'character varying', 'varchar2'},
                 # UUID/GUID types
                 {'uuid', 'uniqueidentifier', 'guid'},
-                # Date types (rarely used as FKs, but possible)
-                {'date', 'datetime', 'datetime2', 'timestamp'},
+                # Date types
+                {'date', 'datetime', 'datetime2', 'timestamp', 'smalldatetime', 'datetimeoffset'},
+                # Binary types (sometimes used for IDs)
+                {'binary', 'varbinary', 'image'},
             ]
         
         if self.fk_suffix_patterns is None:

@@ -36,20 +36,25 @@ class RDLParser:
         
         return list(self.rdl_path.rglob('*.rdl'))
     
+
     def parse_rdl_file(self, file_path: Path) -> Optional[Dict[str, Any]]:
         """
         Parse a single RDL file and extract datasets, queries, etc.
         Returns asset dictionary or None if parsing fails.
         """
         try:
+            logger.debug(f"Parsing RDL file: {file_path}")
             tree = ET.parse(file_path)
             root = tree.getroot()
             
             # Try to determine namespace
             ns = self._detect_namespace(root)
+            logger.debug(f"Using namespace: {ns} for file {file_path.name}")
             
             # Extract datasets
             datasets = self._extract_datasets(root, ns)
+            if not datasets:
+                logger.warning(f"No datasets found in RDL file: {file_path}")
             
             # Extract data sources
             data_sources = self._extract_data_sources(root, ns)
@@ -66,10 +71,14 @@ class RDLParser:
                 'parameters': parameters
             }
             
+            logger.info(f"✓ Parsed RDL: {file_path.name} - {len(datasets)} datasets, {len(parameters)} parameters")
             return asset
             
+        except ET.ParseError as e:
+            logger.error(f"XML parse error in {file_path}: {e}")
+            return None
         except Exception as e:
-            # Log error but don't fail
+            logger.error(f"Failed to parse RDL file {file_path}: {e}", exc_info=True)
             return None
     
     def _detect_namespace(self, root: ET.Element) -> str:
@@ -80,9 +89,15 @@ class RDLParser:
             # Map to prefix
             for prefix, uri in self.NAMESPACES.items():
                 if uri == ns:
+                    logger.debug(f"Detected RDL namespace: {prefix} ({ns})")
                     return prefix
-        return 'rd'  # Default
+            # Log if namespace is unknown
+            logger.warning(f"Unknown RDL namespace: {ns}, falling back to 'rd2008'")
+        
+        # Default to rd2008 (most common)
+        return 'rd2008'
     
+
     def _extract_datasets(self, root: ET.Element, ns: str) -> List[Dict[str, Any]]:
         """Extract dataset definitions from RDL."""
         datasets = []
@@ -90,6 +105,7 @@ class RDLParser:
         # Find DataSets element
         datasets_elem = root.find(f'.//{{{self.NAMESPACES[ns]}}}DataSets')
         if datasets_elem is None:
+            logger.debug(f"No DataSets element found with namespace {ns}")
             return datasets
         
         for dataset_elem in datasets_elem.findall(f'{{{self.NAMESPACES[ns]}}}DataSet'):
@@ -97,19 +113,59 @@ class RDLParser:
             query_elem = dataset_elem.find(f'.//{{{self.NAMESPACES[ns]}}}CommandText')
             
             if name_elem is not None:
+                dataset_name = name_elem.text
+                raw_query = query_elem.text if query_elem is not None else None
+                
+                # Normalize SQL using sqlglot if query exists
+                normalized_query = None
+                if raw_query:
+                    try:
+                        # Clean up query (remove comments, extra whitespace)
+                        cleaned_query = self._clean_sql(raw_query)
+                        
+                        # Try to normalize with sqlglot
+                        import sqlglot
+                        parsed = sqlglot.parse_one(cleaned_query, dialect='tsql')
+                        normalized_query = parsed.sql(dialect='tsql', pretty=True)
+                        logger.debug(f"✓ Normalized SQL for dataset '{dataset_name}'")
+                    except Exception as e:
+                        logger.debug(f"Could not normalize SQL for dataset '{dataset_name}': {e}")
+                        # Fall back to cleaned query
+                        normalized_query = cleaned_query if raw_query else raw_query
+                
                 dataset = {
-                    'name': name_elem.text,
-                    'query': query_elem.text if query_elem is not None else None
+                    'name': dataset_name,
+                    'query': raw_query,  # Keep original
+                    'sql_normalized': normalized_query  # Add normalized version
                 }
                 
                 # Extract fields
                 fields = self._extract_fields(dataset_elem, ns)
                 if fields:
                     dataset['fields'] = fields
+                    logger.debug(f"  Dataset '{dataset_name}': {len(fields)} fields")
                 
                 datasets.append(dataset)
         
+        logger.debug(f"Extracted {len(datasets)} datasets")
         return datasets
+
+    def _clean_sql(self, sql: str) -> str:
+        """Clean SQL text - remove RDL-specific artifacts"""
+        if not sql:
+            return sql
+        
+        # Remove XML entities
+        sql = sql.replace('&gt;', '>')
+        sql = sql.replace('&lt;', '<')
+        sql = sql.replace('&amp;', '&')
+        
+        # Remove excess whitespace
+        import re
+        sql = re.sub(r'\s+', ' ', sql)
+        sql = sql.strip()
+        
+        return sql
     
     def _extract_fields(self, dataset_elem: ET.Element, ns: str) -> List[Dict[str, str]]:
         """Extract field definitions from a dataset."""
