@@ -1,10 +1,10 @@
 {
   "database": {
-    "vendor": "mssql",
-    "version": "2022",
-    "dialect": "mssql"
+    "vendor": "tsql",
+    "version": null,
+    "dialect": "tsql"
   },
-  "dialect": "mssql",
+  "dialect": "tsql",
   "schemas": [
     {
       "name": "dbo",
@@ -10482,11 +10482,11 @@
                 "min": "870",
                 "max": "362986",
                 "sample_values": [
-                  "362986",
                   "14190",
-                  "8836",
                   "18461",
-                  "8986"
+                  "7187",
+                  "362986",
+                  "7045"
                 ]
               }
             }
@@ -10496,12 +10496,6 @@
           "indexes": [],
           "rowcount_sample": null,
           "sample_rows": [
-            {
-              "ActiveFlag": "False",
-              "AreaID": "E17",
-              "AreaName": "Ιωαννίνων",
-              "BPcount": "14190"
-            },
             {
               "ActiveFlag": "False",
               "AreaID": "E11",
@@ -10516,15 +10510,15 @@
             },
             {
               "ActiveFlag": "False",
-              "AreaID": "E16",
-              "AreaName": "Μεσσηνίας",
-              "BPcount": "7045"
+              "AreaID": "E10",
+              "AreaName": "Ευβοίας",
+              "BPcount": "14119"
             },
             {
               "ActiveFlag": "False",
-              "AreaID": "E25",
-              "AreaName": "Ημαθίας",
-              "BPcount": "6323"
+              "AreaID": "E16",
+              "AreaName": "Μεσσηνίας",
+              "BPcount": "7045"
             },
             {
               "ActiveFlag": "False",
@@ -10534,27 +10528,33 @@
             },
             {
               "ActiveFlag": "False",
-              "AreaID": "E3",
-              "AreaName": "Θεσσαλονίκης",
-              "BPcount": "88312"
-            },
-            {
-              "ActiveFlag": "False",
               "AreaID": "E1",
               "AreaName": "Αττικής",
               "BPcount": "362986"
             },
             {
               "ActiveFlag": "False",
-              "AreaID": "E39",
-              "AreaName": "Λακωνίας",
-              "BPcount": "102424"
+              "AreaID": "E12",
+              "AreaName": "Σερρών",
+              "BPcount": "9505"
+            },
+            {
+              "ActiveFlag": "False",
+              "AreaID": "E3",
+              "AreaName": "Θεσσαλονίκης",
+              "BPcount": "88312"
             },
             {
               "ActiveFlag": "False",
               "AreaID": "E33",
               "AreaName": "Λέσβου",
               "BPcount": "6103"
+            },
+            {
+              "ActiveFlag": "False",
+              "AreaID": "E14",
+              "AreaName": "Δωδεκανήσου",
+              "BPcount": "19308"
             }
           ],
           "source_assets": []
@@ -22986,8 +22986,8 @@
   ],
   "inferred_relationships": [],
   "metadata": {
-    "discovered_at": "2025-11-02T14:05:46.282421",
-    "discovery_duration_seconds": 77.52926421165466,
+    "discovered_at": "2025-11-02T14:44:55.369300",
+    "discovery_duration_seconds": 61.530696868896484,
     "total_tables": 52,
     "total_columns": 446,
     "expensive_objects": [
@@ -22995,7 +22995,7 @@
         "name": "HEADQUARTERS\\spitsaris.ViewPrefectureBPs",
         "type": "view",
         "reason": "slow_discovery",
-        "duration": 61.58552622795105
+        "duration": 51.525328159332275
       }
     ]
   }

@@ -388,7 +388,7 @@ class DiscoveryEngine:
             
             # Map to standardized names
             dialect_map = {
-                'mssql': 'mssql',
+                'mssql': 'tsql',
                 'postgresql': 'postgres',
                 'mysql': 'mysql',
                 'mariadb': 'mysql',
@@ -1429,9 +1429,15 @@ class DiscoveryEngine:
         # Method 4: RDL join analysis
         if self.relationship_config.detect_rdl_joins:
             try:
-                from src.discovery.rdl_parser import extract_relationships_from_rdl
+                from src.discovery.rdl_parser import RDLParser
+                from config.settings import get_settings
                 
-                rdl_relationships = extract_relationships_from_rdl(
+                # Instantiate RDLParser with settings
+                settings = get_settings()
+                rdl_parser = RDLParser(settings)
+                
+                # Call the instance method
+                rdl_relationships = rdl_parser.extract_relationships_from_rdl(
                     rdl_assets=discovery_for_relationships['named_assets'],
                     config=self.relationship_config
                 )

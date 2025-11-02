@@ -289,6 +289,38 @@ class RelationshipDetectionConfig:
             raise ValueError(f"Invalid min_overlap_rate: {self.min_overlap_rate}")
         if not 0.0 <= self.confidence_threshold <= 1.0:
             raise ValueError(f"Invalid confidence_threshold: {self.confidence_threshold}")
+        
+    def get_type_group(self, sql_type: str) -> int:
+        """
+        Get the type group index for a SQL type
+        Returns -1 if no compatible group found
+        """
+        # Define compatible type groups (same as in relationship_config.py)
+        compatible_type_groups = [
+            # Integer types
+            {'int', 'integer', 'bigint', 'smallint', 'tinyint', 'number', 'numeric', 'decimal'},
+            # String types
+            {'varchar', 'char', 'nvarchar', 'nchar', 'text', 'ntext', 'string', 
+             'character', 'character varying', 'varchar2'},
+            # UUID/GUID types
+            {'uuid', 'uniqueidentifier', 'guid'},
+            # Date types
+            {'date', 'datetime', 'datetime2', 'timestamp', 'smalldatetime', 'datetimeoffset'},
+            # Binary types
+            {'binary', 'varbinary', 'image'},
+        ]
+        
+        sql_type_lower = sql_type.lower().split('(')[0]  # Strip precision/scale
+        for idx, group in enumerate(compatible_type_groups):
+            if any(t in sql_type_lower for t in group):
+                return idx
+        return -1  # No group found
+    
+    def types_compatible(self, type1: str, type2: str) -> bool:
+        """Check if two SQL types can be used in a foreign key relationship"""
+        group1 = self.get_type_group(type1)
+        group2 = self.get_type_group(type2)
+        return group1 >= 0 and group1 == group2
 
 
 # ============================================================================

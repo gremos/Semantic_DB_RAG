@@ -201,7 +201,7 @@ class RelationshipDetector:
 
         # Count total potential FK candidates
         total_columns = len(self.all_columns)
-        pk_columns = len(self.pk_columns)
+        pk_columns = self.stats["pk_columns"]
         logger.info(f"Total columns in database: {total_columns}")
         logger.info(f"Primary key columns: {pk_columns}")
         logger.info(f"Theoretical max comparisons: {total_columns * pk_columns:,}")
