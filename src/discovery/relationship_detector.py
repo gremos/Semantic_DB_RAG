@@ -857,3 +857,150 @@ class RelationshipDetector:
             logger.info(f"  Overall reduction: {reduction:.1f}%")
 
 
+# ============================================================================
+# STANDALONE WRAPPER FUNCTIONS (for external imports)
+# ============================================================================
+
+def detect_relationships(
+    connection_string: str,
+    discovery_data: Dict[str, Any],
+    config: Optional[RelationshipDetectionConfig] = None
+) -> List[Dict[str, Any]]:
+    """
+    Standalone function to detect relationships using RelationshipDetector class.
+    
+    Args:
+        connection_string: Database connection string
+        discovery_data: Discovery JSON data
+        config: Relationship detection configuration
+        
+    Returns:
+        List of detected relationship dictionaries
+    """
+    detector = RelationshipDetector(
+        connection_string=connection_string,
+        discovery_data=discovery_data,
+        config=config
+    )
+    
+    # Convert DetectedRelationship objects to dictionaries
+    relationships = detector.detect_relationships()
+    
+    return [
+        {
+            "from": rel.from_column,
+            "to": rel.to_column,
+            "overlap_rate": rel.overlap_rate,
+            "cardinality": rel.cardinality,
+            "method": rel.method,
+            "confidence": rel.confidence,
+            "name_score": rel.name_score,
+            "verification": rel.verification
+        }
+        for rel in relationships
+    ]
+
+
+def detect_relationships_from_views(
+    discovery_data: Dict[str, Any],
+    config: Any
+) -> List[Dict[str, Any]]:
+    """
+    Detect relationships by analyzing JOIN clauses in view definitions.
+    
+    This is a standalone function that can be imported directly.
+    
+    Process:
+    1. Extract view SQL from named_assets
+    2. Parse SQL with sqlglot
+    3. Identify JOIN conditions
+    4. Map to discovery tables
+    5. Create high-confidence relationships
+    
+    Args:
+        discovery_data: Discovery JSON with named_assets
+        config: Relationship detection configuration
+        
+    Returns:
+        List of relationship dictionaries
+    """
+    import time
+    import sqlglot
+    from sqlglot import exp
+    
+    if not config.detect_views:
+        logger.info("View relationship detection disabled")
+        return []
+    
+    logger.info("Starting view relationship detection...")
+    relationships = []
+    views_analyzed = 0
+    max_views = config.max_views
+    start_time = time.time()
+    
+    for asset in discovery_data.get("named_assets", []):
+        if asset.get("kind") != "view":
+            continue
+        
+        if views_analyzed >= max_views:
+            logger.warning(
+                f"Reached max views limit ({max_views}), stopping analysis"
+            )
+            break
+        
+        view_name = asset.get("name", "unknown")
+        sql = asset.get("sql_normalized", "")
+        
+        if not sql:
+            logger.debug(f"Skipping view {view_name}: no SQL definition")
+            continue
+        
+        try:
+            # Parse SQL with timeout protection
+            parsed = sqlglot.parse_one(
+                sql, dialect=discovery_data.get("dialect", "")
+            )
+            
+            # Extract joins
+            for join in parsed.find_all(sqlglot.exp.Join):
+                # Get join condition
+                on_clause = join.args.get("on")
+                if not on_clause:
+                    continue
+                
+                # Extract left and right columns using helper function
+                left_table, left_col, right_table, right_col = (
+                    _parse_join_condition(on_clause)
+                )
+                
+                if all([left_table, left_col, right_table, right_col]):
+                    # Normalize table names (add schema if missing)
+                    left_table = _normalize_table_name(left_table, discovery_data)
+                    right_table = _normalize_table_name(right_table, discovery_data)
+                    
+                    relationships.append(
+                        {
+                            "from": f"{left_table}.{left_col}",
+                            "to": f"{right_table}.{right_col}",
+                            "method": "view_join_analysis",
+                            "cardinality": "unknown",  # Would need value analysis
+                            "confidence": "high",  # Views are curated
+                            "source_view": view_name,
+                            "detection_timestamp": time.time(),
+                        }
+                    )
+            
+            views_analyzed += 1
+        
+        except sqlglot.errors.ParseError as e:
+            logger.warning(f"Failed to parse view {view_name}: {e}")
+        except Exception as e:
+            logger.error(f"Error analyzing view {view_name}: {e}")
+    
+    elapsed = time.time() - start_time
+    logger.info(
+        f"View relationship detection complete: analyzed {views_analyzed} views, "
+        f"found {len(relationships)} relationships in {elapsed:.2f}s"
+    )
+    
+    return relationships
