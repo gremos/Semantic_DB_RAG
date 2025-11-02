@@ -10483,10 +10483,10 @@
                 "max": "362986",
                 "sample_values": [
                   "14190",
-                  "18461",
-                  "7187",
                   "362986",
-                  "7045"
+                  "18461",
+                  "8836",
+                  "7187"
                 ]
               }
             }
@@ -10498,15 +10498,51 @@
           "sample_rows": [
             {
               "ActiveFlag": "False",
+              "AreaID": "E1",
+              "AreaName": "Αττικής",
+              "BPcount": "362986"
+            },
+            {
+              "ActiveFlag": "False",
+              "AreaID": "E15",
+              "AreaName": "Φθιώτιδας",
+              "BPcount": "8836"
+            },
+            {
+              "ActiveFlag": "False",
               "AreaID": "E11",
               "AreaName": "Μαγνησίας",
               "BPcount": "18461"
             },
             {
               "ActiveFlag": "False",
+              "AreaID": "E17",
+              "AreaName": "Ιωαννίνων",
+              "BPcount": "14190"
+            },
+            {
+              "ActiveFlag": "False",
+              "AreaID": "E18",
+              "AreaName": "Κοζάνης",
+              "BPcount": "8986"
+            },
+            {
+              "ActiveFlag": "False",
               "AreaID": "E13",
               "AreaName": "Ηλείας",
               "BPcount": "7187"
+            },
+            {
+              "ActiveFlag": "False",
+              "AreaID": "E19",
+              "AreaName": "Κορινθίας",
+              "BPcount": "9306"
+            },
+            {
+              "ActiveFlag": "False",
+              "AreaID": "E25",
+              "AreaName": "Ημαθίας",
+              "BPcount": "6323"
             },
             {
               "ActiveFlag": "False",
@@ -10519,42 +10555,6 @@
               "AreaID": "E16",
               "AreaName": "Μεσσηνίας",
               "BPcount": "7045"
-            },
-            {
-              "ActiveFlag": "False",
-              "AreaID": "E28",
-              "AreaName": "Πιερίας",
-              "BPcount": "6602"
-            },
-            {
-              "ActiveFlag": "False",
-              "AreaID": "E1",
-              "AreaName": "Αττικής",
-              "BPcount": "362986"
-            },
-            {
-              "ActiveFlag": "False",
-              "AreaID": "E12",
-              "AreaName": "Σερρών",
-              "BPcount": "9505"
-            },
-            {
-              "ActiveFlag": "False",
-              "AreaID": "E3",
-              "AreaName": "Θεσσαλονίκης",
-              "BPcount": "88312"
-            },
-            {
-              "ActiveFlag": "False",
-              "AreaID": "E33",
-              "AreaName": "Λέσβου",
-              "BPcount": "6103"
-            },
-            {
-              "ActiveFlag": "False",
-              "AreaID": "E14",
-              "AreaName": "Δωδεκανήσου",
-              "BPcount": "19308"
             }
           ],
           "source_assets": []
@@ -22984,10 +22984,4085 @@
       "sql_raw": "\r\n\r\nCREATE PROCEDURE [dbo].[CampaignASM_CreateCases]\r\n(\t\r\n\t @PerformerID\t\t\t\t\t\tINT\r\n\t,@CampaignID\t\t\t\t\t\tINT\r\n    ,@ProcessName\t\t\t\t\t\tNVARCHAR(50)\r\n\t,@BatchID\t\t\t\t\t\t\tUNIQUEIDENTIFIER\r\n    ,@TGIVs\t\t\t\t\t\t\t\tCampaignASM_TGIV readonly\r\n)\r\nAS \r\nBEGIN\r\n\r\nBEGIN Try\t\t\r\n\t\tdeclare\t@ProcessID nvarchar(50) SET @ProcessID = CONVERT(NVARCHAR(50), @BatchID)\r\n\t\tdeclare @msg nvarchar(200)\r\n\t\tSET @msg = 'CampaignASM_CreateCases start - ' + @ProcessName\r\n\t\tEXEC usp_timelogger @msg , @ProcessID\r\n\r\n\t\tSET @msg = 'PerformerID  = ' + CONVERT(NVARCHAR(20),@PerformerID)\r\n\t\tEXEC usp_timelogger @msg , @ProcessID\r\n\t\tSET @msg = 'CampaignID  = ' + CONVERT(NVARCHAR(20),@CampaignID)\r\n\t\tEXEC usp_timelogger @msg , @ProcessID\r\n\t\t\r\n\r\n\t IF NOT EXISTS(SELECT NULL FROM @TGIVs)\r\n\t BEGIN\r\n\t\tEXEC usp_timelogger 'NO TGIVS FOUND TO CREATE CASES' , @ProcessID\r\n\t END\r\n\t ELSE\r\n\t BEGIN\r\n\t\t DECLARE @CASE_P003_TYPEID int,\r\n\t\t\t\t\t@CASE_P004_TYPEID int,\r\n\t\t\t\t\t@TASK_P003T03_TYPEID int,\r\n\t\t\t\t\t@TASK_P004T03_TYPEID int,\r\n\t\t\t\t\t@TASK_P003T03_TYPE_DESCRIPTION nvarchar(100),\r\n\t\t\t\t\t@TASK_P004T03_TYPE_DESCRIPTION nvarchar(100),\r\n\t\t\t\t\t@CASE_P003_TYPEID_NAME nvarchar(100) =  'Case.P003.TypeID',\r\n\t\t\t\t\t@CASE_P004_TYPEID_NAME nvarchar(100) = 'Case.P004.TypeID',\r\n\t\t\t\t\t@startedOn datetime = getdate(),\r\n\t\t\t\t\t@performerUserName nvarchar(100) = (SELECT UserName FROM [User] where ID=@performerID)\r\n\r\n\t\t\tDECLARE @TASK_P003T03_TYPEID_NAME nvarchar(100)  SET @TASK_P003T03_TYPEID_NAME =  'Task.P003T03.TypeID'\r\n\t\t\tDECLARE @TASK_P004T03_TYPEID_NAME nvarchar(100)  SET @TASK_P004T03_TYPEID_NAME =  'Task.P004T03.TypeID'\r\n\t\t\t\r\n\t\t\t\r\n\t\t\t\r\n\t\t\tSELECT @CASE_P003_TYPEID = CONVERT(INT, Parameter) \r\n\t\t\t  FROM ConfigurationParameter\r\n\t\t\t WHERE Name = @CASE_P003_TYPEID_NAME \r\n\t\t\tSELECT @CASE_P004_TYPEID = CONVERT(INT, Parameter) \r\n\t\t\t  FROM ConfigurationParameter\r\n\t\t\t WHERE Name = @CASE_P004_TYPEID_NAME \r\n\t\t\t---------------------------------------------------------------------- \r\n\t\t\tSELECT @TASK_P003T03_TYPEID = CONVERT(INT, Parameter) \r\n\t\t\t  FROM ConfigurationParameter\r\n\t\t\t WHERE Name = @TASK_P003T03_TYPEID_NAME  \r\n\t\t\tSELECT @TASK_P004T03_TYPEID = CONVERT(INT, Parameter) \r\n\t\t\t  FROM ConfigurationParameter\r\n\t\t\t WHERE Name = @TASK_P004T03_TYPEID_NAME \r\n\t\t\t--------------------------------------------------------------------\r\n\t\t\tSELECT @TASK_P003T03_TYPE_DESCRIPTION = [DESCRIPTION] \r\n\t\t\t  FROM TaskType\r\n\t\t\t WHERE ID = @TASK_P003T03_TYPEID   \r\n\r\n\t\t\tSELECT @TASK_P004T03_TYPE_DESCRIPTION = [DESCRIPTION] \r\n\t\t\t  FROM TaskType\r\n\t\t\t WHERE ID = @TASK_P004T03_TYPEID \r\n\t-----------------------------------------------------------------------------------------------------------------------------------------------\r\n\t\t\t--Start Create Case, Task, TaskAssignment\r\n\t\t\t--FYI: This is used to disable the trigger from trying to update the MasterCaseID\r\n\t            \r\n\t\t\tSET CONTEXT_INFO 0x11110\r\n\r\n\t\t\tINSERT INTO [Case] (CaseTypeID, [State], CreatedOn, CreatedBy, ContextEntityID, InitiatorID, ContextEntityType, DMKey, DMTable, DMCharKey)\r\n\t\t\tSELECT  CASE WHEN ids.IsTele = 1 THEN @CASE_P004_TYPEID\r\n\t\t\t\t\t\t WHEN ids.IsTele = 0 THEN @CASE_P003_TYPEID\r\n\t\t\t\t\t\t ELSE NULL END, \r\n\t\t\t\t\t0, \r\n\t\t\t\t\t@startedOn,\r\n\t\t\t\t\t@performerUserName,\r\n\t\t\t\t\tids.TGIV_ID, \r\n\t\t\t\t\tids.SalesmanID,  \r\n\t\t\t\t\t'TGIV',\r\n\t\t\t\t\tDMKey = ids.ID,\r\n\t\t\t\t\tDMTable = @ProcessID,\r\n\t\t\t\t\tDMCharKey = @ProcessName\r\n\t\t\t\t\t\r\n\t\t\tFROM @TGIVs as ids\r\n\t\t\t\t\r\n\t\t\tEXEC usp_timelogger 'Case Inserted' , @ProcessID\r\n\t\t\t\r\n\t\t\tSET CONTEXT_INFO 0\r\n            \r\n\t\t\tUPDATE cs SET MasterCaseID = cs.ID  \r\n\t\t\tFROM [Case] as cs\r\n\t\t\tJOIN @TGIVs as ids on cs.ContextEntityID = ids.TGIV_ID and cs.ContextEntityType = 'TGIV'\r\n\t\t\tWHERE cs.DMKey = ids.ID \r\n\t\t\t  AND cs.DMTable = @ProcessID\r\n\t\t\t\r\n\t\t\tEXEC usp_timelogger 'MasterCase Updated' , @ProcessID\r\n\t\t\t\r\n\t\t\tINSERT INTO Task ([Description], CreatedOn, [Status], CaseID, TaskTypeID, ActualOwnerID, ActualOwnerModifiedOn ,DynamicCode, DynamicDescription, SenderID, DMKey, DMTable, DMCharKey,ActualRoleID) \r\n\t\t\tSELECT\r\n\t\t\t\t\t[Description] = CASE WHEN ids.IsTele = 1 THEN @TASK_P004T03_TYPE_DESCRIPTION\r\n\t\t\t\t\t\t\t\t\t\tWHEN ids.IsTele = 0 THEN @TASK_P003T03_TYPE_DESCRIPTION\r\n\t\t\t\t\t\t\t\t\t\tELSE NULL END, \r\n\t\t\t\t\tCreatedOn = @startedOn, \r\n\t\t\t\t\t[Status] = 0, \r\n\t\t\t\t\tCaseID = c.ID, \r\n\t\t\t\t\tTaskTypeID = CASE WHEN c.CaseTypeID = @CASE_P003_TYPEID THEN @TASK_P003T03_TYPEID \r\n\t\t\t\t\t\t\t\t\t\tWHEN c.CaseTypeID = @CASE_P004_TYPEID THEN @TASK_P004T03_TYPEID \r\n\t\t\t\t\t\t\t\t\t\tELSE NULL END,\r\n\t\t\t\t\tActualOwnerID = c.InitiatorID, \r\n\t\t\t\t\tActualOwnerModifiedOn = @startedOn,\r\n\t\t\t\t\tDynamicCode = cmp.Code, \t\t\t\t\t\t\r\n\t\t\t\t\tDynamicDescription = ISNULL(cmp.Name+ ' :','') + bp.Code + ' - ' + ISNULL(bp.Name,'') COLLATE SQL_Latin1_General_CP1_CI_AI, \r\n\t\t\t\t\tSenderID = @performerID,\r\n\t\t\t\t\tDMKey = ids.ID,\r\n\t\t\t\t\tDMTable = @ProcessID,\r\n\t\t\t\t\tDMCharKey = @ProcessName,\r\n\t\t\t\t\ttts.RoleID  ----//BI-1453\r\n\t\t\t FROM @TGIVs as ids\r\n\t\t\t JOIN TargetGroupItemValue as tgiv on ids.TGIV_ID = tgiv.ID\r\n\t\t\t JOIN TargetGroupItem tgi on tgi.ID = tgiv.TargetGroupItemID\r\n\t\t\t Join BusinessPoint as bp on tgi.BusinessPointID = bp.ID\r\n\t\t\t JOIN Campaign cmp on cmp.ID = tgi.CampaignID \r\n\t\t\t JOIN [Case] c on c.ContextEntityID = ids.TGIV_ID AND c.ContextEntityType = 'TGIV'\t\r\n\t\t\t join (\r\n\t\t\t\tselect 0 isTele, ta.TaskTypeID, ta.RoleID \r\n\t\t\t\tfrom TaskTypeAssignment ta\r\n\t\t\t\twhere ta.AssignmentType = 2 and ta.TaskTypeID = 146\r\n\t\t\t\tunion\r\n\t\t\t\tselect 1 isTele, ta.TaskTypeID, ta.RoleID \r\n\t\t\t\tfrom TaskTypeAssignment ta\r\n\t\t\t\twhere ta.AssignmentType = 2 and ta.TaskTypeID = 151\r\n\t\t\t) tts on tts.IsTele = ids.IsTele ----//BI-1453\r\n\t\t\tWHERE c.DMKey = ids.ID and c.DMTable = @ProcessID\r\n\t\t\t \t\t\t\r\n\t\t\tEXEC usp_timelogger 'Task Inserted' , @ProcessID\r\n\t\t\t\r\n\t\t\t  INSERT INTO TaskAssignment (TaskID, AssignmentType, UserID)\r\n\t\t\t  SELECT  TaskID = t.ID, \r\n\t\t\t\t\t  AssignmentType = 1, \r\n\t\t\t\t\t  UserID = tgiv.Supervisor\r\n\t\t\t\tFROM @TGIVs as ids\r\n\t\t\t\tJOIN TargetGroupItemValue as tgiv on ids.TGIV_ID = tgiv.ID\r\n\t\t\t\tJOIN [Case] c on c.ContextEntityID = tgiv.ID AND c.ContextEntityType = 'TGIV'\r\n\t\t\t\tJOIN Task t on t.CaseID = c.ID\r\n\t\t\t\tWHERE t.DMKey = ids.ID and c.DMTable = @ProcessID\r\n\t\t\t\t\r\n\t\t\tEXEC usp_timelogger 'TaskAssignment Inserted' , @ProcessID\r\n\t\t--End Create Case, Task, TaskAssignment\r\n\tEND\r\n\tSET @msg = 'CampaignASM_CreateCases end - ' + @ProcessName\r\n\tEXEC usp_timelogger 'TaskAssignment Inserted' , @ProcessID\r\n\t\t\r\nEND Try\t\r\nBEGIN CATCH\r\n\t\tDECLARE @errMessage NVARCHAR(512)\t\t    \r\n\t\tDECLARE @ErrorSeverity INT = ERROR_SEVERITY();\r\n\t\tDECLARE @ErrorState INT= ERROR_STATE();\r\n\t\tselect @errMessage = 'Failure CampaignASM_CreateCases: Error Message: ' + ERROR_MESSAGE() +\r\n\t\t\t\t\t\t' Error Line: ' + CONVERT(VARCHAR(20),ERROR_LINE()) +\r\n\t\t\t\t\t\t' Error Number: ' + CONVERT(VARCHAR(20),ERROR_NUMBER()) +\r\n\t\t\t\t\t\t' ErrorSeverity: ' + CONVERT(VARCHAR(20),ERROR_SEVERITY()) +\r\n\t\t\t\t\t\t' ErrorState: ' + CONVERT(VARCHAR(20), ERROR_STATE())\r\n\t\tEXEC usp_timelogger @errMessage , @ProcessID\r\n\t\tRAISERROR (@errMessage,@ErrorSeverity,@ErrorState);\r\n\t\treturn -1;\r\n\tEND CATCH;\t\r\n\r\n\r\nEND\r\n\r\n\r\n"
     }
   ],
-  "inferred_relationships": [],
+  "inferred_relationships": [
+    {
+      "from": "dbo.BankDepositDetail.BankID",
+      "to": "dbo.Bank.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "high",
+      "name_score": 0.8500000000000001,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 11,
+        "to_distinct": 66
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod.BankID",
+      "to": "dbo.Bank.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "high",
+      "name_score": 0.8,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 6,
+        "to_distinct": 66
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.BankID",
+      "to": "dbo.Bank.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "high",
+      "name_score": 0.8,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 3,
+        "to_distinct": 66
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod20230517.ID",
+      "to": "dbo.AdvancedPaymentMethod.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "high",
+      "name_score": 0.75,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod20230517.ID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "high",
+      "name_score": 0.75,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.ID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "high",
+      "name_score": 0.75,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1000,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.ActiveCampaignSalesman.CampaignID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 65,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.ActiveCampaignSalesman.CampaignID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 65,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.ActiveCampaignSalesman.CampaignID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 65,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.ActiveCampaignSalesman.CampaignID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 65,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.ActiveCampaignSalesman.CampaignID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 65,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.ActiveCampaignSalesman.SalesmanID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 155,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.ActiveCampaignSalesman.SalesmanID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 155,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.ActiveCampaignSalesman.SalesmanID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 155,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.ActiveCampaignSalesman.SalesmanID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 155,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.Advertisement.ContractProductID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 859,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.Advertisement.ContractProductID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 859,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.Advertisement.ContractProductID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 859,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.Advertisement.ProductID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 74,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.Advertisement.ProductID",
+      "to": "dbo.AdvancedPaymentPolicy.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 74,
+        "to_distinct": 190
+      }
+    },
+    {
+      "from": "dbo.Advertisement.ProductID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 74,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.Advertisement.ProductID",
+      "to": "dbo.AutoExtractCalendar.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 74,
+        "to_distinct": 158
+      }
+    },
+    {
+      "from": "dbo.Advertisement.ProductID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 74,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.Advertisement.ProductID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 74,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.Advertisement.VersionSectionID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.Advertisement.VersionSectionID",
+      "to": "dbo.AdvancedPaymentPolicy.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 190
+      }
+    },
+    {
+      "from": "dbo.Advertisement.VersionSectionID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.Advertisement.VersionSectionID",
+      "to": "dbo.AutoExtractCalendar.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 158
+      }
+    },
+    {
+      "from": "dbo.Advertisement.VersionSectionID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.Advertisement.VersionSectionID",
+      "to": "dbo.Bank.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 66
+      }
+    },
+    {
+      "from": "dbo.Advertisement.VersionSectionID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.ArchivedNumber.CreateById",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 4,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.ArchivedNumber.CreateById",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 4,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.ArchivedNumber.CreateById",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 4,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.ArchivedNumber.CreateById",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 4,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.BankDepositDetail.BankID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 11,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.BankDepositDetail.BankID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 11,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.BankDepositDetail.BankID",
+      "to": "dbo.AutoExtractCalendar.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 11,
+        "to_distinct": 158
+      }
+    },
+    {
+      "from": "dbo.BankDepositDetail.BankID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 11,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.BankDepositDetail.BankID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 11,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV12867ClassificationBackup.BusinessPointID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 9,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV12867ClassificationBackup.ClassifierID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV12867ClassificationBackup.ClassifierID",
+      "to": "dbo.AdvancedPaymentPolicy.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 190
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV12867ClassificationBackup.ClassifierID",
+      "to": "dbo.AdvDiscountPolicy.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 456
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV12867ClassificationBackup.ClassifierID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV12867ClassificationBackup.ClassifierID",
+      "to": "dbo.AdvertisementDeactivationReason.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 5
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV12867ClassificationBackup.ClassifierID",
+      "to": "dbo.AdvertisementSalesType.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 3
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV12867ClassificationBackup.ClassifierID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV12867ClassificationBackup.ClassifierID",
+      "to": "dbo.AutoExtractCalendar.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 158
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV12867ClassificationBackup.ClassifierID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV12867ClassificationBackup.ClassifierID",
+      "to": "dbo.Bank.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 66
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV12867ClassificationBackup.ClassifierID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV12867ClassificationBackup.ClassifierNodeID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 8,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV12867ClassificationBackup.ClassifierNodeID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 8,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV12867ClassificationBackup.ClassifierNodeID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 8,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV12867ClassificationBackup.ClassifierNodeID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 8,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV12867ClassificationBackup.ClassifierNodeID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 8,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV15648ClassificationBackup.BusinessPointID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1000,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV15648ClassificationBackup.BusinessPointID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1000,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV15648ClassificationBackup.BusinessPointID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1000,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV15648ClassificationBackup.ClassifierID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV15648ClassificationBackup.ClassifierID",
+      "to": "dbo.AdvancedPaymentPolicy.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 190
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV15648ClassificationBackup.ClassifierID",
+      "to": "dbo.AdvDiscountPolicy.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 456
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV15648ClassificationBackup.ClassifierID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV15648ClassificationBackup.ClassifierID",
+      "to": "dbo.AdvertisementDeactivationReason.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 5
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV15648ClassificationBackup.ClassifierID",
+      "to": "dbo.AdvertisementSalesType.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 3
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV15648ClassificationBackup.ClassifierID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV15648ClassificationBackup.ClassifierID",
+      "to": "dbo.AutoExtractCalendar.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 158
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV15648ClassificationBackup.ClassifierID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV15648ClassificationBackup.ClassifierID",
+      "to": "dbo.Bank.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 66
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV15648ClassificationBackup.ClassifierID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV15648ClassificationBackup.ClassifierNodeID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 199,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV15648ClassificationBackup.ClassifierNodeID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 199,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV15648ClassificationBackup.ClassifierNodeID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 199,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV15648ClassificationBackup.ClassifierNodeID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 199,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV15648ClassificationBackup.ClassifierNodeID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 199,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.PaymentMethodTypeID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 13,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.PaymentMethodTypeID",
+      "to": "dbo.AdvDiscountPolicy.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 13,
+        "to_distinct": 456
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.PaymentMethodTypeID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 13,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.PaymentMethodTypeID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 13,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.PaymentMethodTypeID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 13,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.PaymentMethodTypeID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 13,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.ViewPrefectureBPDtls.BusinessPointID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1000,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.ViewPrefectureBPDtls.BusinessPointID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1000,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.ViewPrefectureBPDtls.BusinessPointID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1000,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.ViewPrefectureBPDtls.ActivityClassifierNodeID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 15,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.ViewPrefectureBPDtls.ActivityClassifierNodeID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 15,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.ViewPrefectureBPDtls.ActivityClassifierNodeID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 15,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.ViewPrefectureBPDtls.ActivityClassifierNodeID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 15,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31672.BusinessPointID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 21,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31673.BusinessPointID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 8,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeMapping.ActivityID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 969,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeMapping.ActivityID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 969,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeMapping.ActivityID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 969,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeMapping.OldAttributeID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 6,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeMapping.OldAttributeID",
+      "to": "dbo.AdvDiscountPolicy.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 6,
+        "to_distinct": 456
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeMapping.OldAttributeID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 6,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeMapping.OldAttributeID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 6,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeMapping.OldAttributeID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 6,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeMapping.OldAttributeID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 6,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeMapping.NewAttributeID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 536,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeMapping.NewAttributeID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 536,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeMapping.NewAttributeID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 536,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeMapping.NewAttributeID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 536,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeValueMapping.OldAttributeValueId",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 415,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeValueMapping.OldAttributeValueId",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 415,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeValueMapping.OldAttributeValueId",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 415,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeValueMapping.OldAttributeValueId",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 415,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeValueMapping.OldAttributeValueId",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 415,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeValueMapping.NewAttributeValueID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 415,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeValueMapping.NewAttributeValueID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 415,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeValueMapping.NewAttributeValueID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 415,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeValueMapping.NewAttributeValueID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 415,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeValueMapping.NewAttributeValueID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 415,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.KeywordMapping.ActivityID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 225,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.KeywordMapping.ActivityID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 225,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.KeywordMapping.ActivityID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 225,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.KeywordMapping.ActivityID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 225,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.KeywordMapping.ActivityID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 225,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.KeywordMapping.KeywordID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 519,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.KeywordMapping.KeywordID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 519,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.KeywordMapping.KeywordID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 519,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.KeywordMapping.KeywordID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 519,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.KeywordMapping.NewAttributeValueID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 519,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.KeywordMapping.NewAttributeValueID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 519,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.KeywordMapping.NewAttributeValueID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 519,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.MergeMapping.SourceID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 891,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.MergeMapping.SourceID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 891,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.MergeMapping.SourceID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 891,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.MergeMapping.SourceID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 891,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.MergeMapping.TargetID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 408,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.MergeMapping.TargetID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 408,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.MergeMapping.TargetID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 408,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.MergeMapping.TargetID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 408,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.ReplaceAV.Initial_OldAttributeValueId",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 197,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.ReplaceAV.Initial_OldAttributeValueId",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 197,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.ReplaceAV.Initial_OldAttributeValueId",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 197,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.ReplaceAV.Initial_OldAttributeValueId",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 197,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.ReplaceAV.ReplaceWithAttributeValueId",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 126,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.ReplaceAV.ReplaceWithAttributeValueId",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 126,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.ReplaceAV.ReplaceWithAttributeValueId",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 126,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.ReplaceAV.ReplaceWithAttributeValueId",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 126,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.ReplaceKeywords.KeywordID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1000,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.ReplaceKeywords.KeywordID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1000,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.ReplaceKeywords.KeywordID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1000,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.ReplaceKeywords.ReplaceWithKeywordID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 680,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.ReplaceKeywords.ReplaceWithKeywordID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 680,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.ReplaceKeywords.ReplaceWithKeywordID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 680,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.ReplaceKeywords.ReplaceWithKeywordID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 680,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.Step1.ActivityID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 973,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.Step1.ActivityID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 973,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.Step1.ActivityID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 973,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.Step1.AttributeValueID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 187,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.Step1.AttributeValueID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 187,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.Step1.AttributeValueID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 187,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.Step2.Activity_ID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1000,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.Step2.Activity_ID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1000,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.Step2.Activity_ID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1000,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.Step2.Activity_ID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1000,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.Address.CountryID",
+      "to": "dbo.AdvancedPaymentPolicy.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 190
+      }
+    },
+    {
+      "from": "dbo.Address.CountryID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.Address.CountryID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.Address.CountryID",
+      "to": "dbo.AutoExtractCalendar.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 158
+      }
+    },
+    {
+      "from": "dbo.Address.CountryID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.Address.CountryID",
+      "to": "dbo.Bank.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 66
+      }
+    },
+    {
+      "from": "dbo.Address.CountryID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod.PaymentMethodTypeID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 6,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod.PaymentMethodTypeID",
+      "to": "dbo.AdvDiscountPolicy.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 6,
+        "to_distinct": 456
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod.PaymentMethodTypeID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 6,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod.PaymentMethodTypeID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 6,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod.PaymentMethodTypeID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 6,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod.PaymentMethodTypeID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 6,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod.BankID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 6,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod.BankID",
+      "to": "dbo.AdvancedPaymentPolicy.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 6,
+        "to_distinct": 190
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod.BankID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 6,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod.BankID",
+      "to": "dbo.AutoExtractCalendar.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 6,
+        "to_distinct": 158
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod.BankID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 6,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod.BankID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 6,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod.CreditCardTypeID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod.CreditCardTypeID",
+      "to": "dbo.AdvancedPaymentPolicy.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 190
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod.CreditCardTypeID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod.CreditCardTypeID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod.CreditCardTypeID",
+      "to": "dbo.AutoExtractCalendar.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 158
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod.CreditCardTypeID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod.CreditCardTypeID",
+      "to": "dbo.Bank.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 66
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod.CreditCardTypeID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod.SalesCollectionID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 989,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod.SalesCollectionID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 989,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod.SalesCollectionID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 989,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod.SalesCollectionID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 989,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod20230517.PaymentMethodTypeID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod20230517.PaymentMethodTypeID",
+      "to": "dbo.AdvDiscountPolicy.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 456
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod20230517.PaymentMethodTypeID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod20230517.PaymentMethodTypeID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod20230517.PaymentMethodTypeID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod20230517.PaymentMethodTypeID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.Advertisement.GeoAreaID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 30,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.Advertisement.HeadingID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.Advertisement.HeadingID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.Advertisement.HeadingID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.Advertisement.HeadingID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.Advertisement.ProductKitID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.Advertisement.ProductKitID",
+      "to": "dbo.AdvancedPaymentPolicy.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 190
+      }
+    },
+    {
+      "from": "dbo.Advertisement.ProductKitID",
+      "to": "dbo.AutoExtractCalendar.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 158
+      }
+    },
+    {
+      "from": "dbo.Advertisement.ProductKitID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.Advertisement.ProductKitID",
+      "to": "dbo.Bank.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 66
+      }
+    },
+    {
+      "from": "dbo.Advertisement.ProductKitID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.Advertisement.DirProductId",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.Advertisement.DirProductId",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.Advertisement.DirProductId",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.PaymentPhoneID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 649,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.BillingEmailID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 353,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.BillingEmailID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 353,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.BillingEmailID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 353,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.BankID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 3,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.BankID",
+      "to": "dbo.AdvancedPaymentPolicy.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 3,
+        "to_distinct": 190
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.BankID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 3,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.BankID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 3,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.BankID",
+      "to": "dbo.AutoExtractCalendar.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 3,
+        "to_distinct": 158
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.BankID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 3,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.BankID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 3,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.CreditCardTypeID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 2,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.CreditCardTypeID",
+      "to": "dbo.AdvancedPaymentPolicy.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 2,
+        "to_distinct": 190
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.CreditCardTypeID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 2,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.CreditCardTypeID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 2,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.CreditCardTypeID",
+      "to": "dbo.AutoExtractCalendar.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 2,
+        "to_distinct": 158
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.CreditCardTypeID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 2,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.CreditCardTypeID",
+      "to": "dbo.Bank.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 2,
+        "to_distinct": 66
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.CreditCardTypeID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 2,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.SalesCollectionID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 7,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.SalesCollectionID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 7,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.SalesCollectionID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 7,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.InvoicePolicyID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.InvoicePolicyID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.InvoicePolicyID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.InvoicePolicyID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 0,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.ViewPrefectureBPDtls.CustomerSourceID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 4,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.ViewPrefectureBPDtls.CustomerSourceID",
+      "to": "dbo.AdvancedPaymentPolicy.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 4,
+        "to_distinct": 190
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.ViewPrefectureBPDtls.CustomerSourceID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 4,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.ViewPrefectureBPDtls.CustomerSourceID",
+      "to": "dbo.AutoExtractCalendar.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 4,
+        "to_distinct": 158
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.ViewPrefectureBPDtls.CustomerSourceID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 4,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.ViewPrefectureBPDtls.CustomerSourceID",
+      "to": "dbo.Bank.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 4,
+        "to_distinct": 66
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.ViewPrefectureBPDtls.CustomerSourceID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 4,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31672.SubchannelID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31672.SubchannelID",
+      "to": "dbo.AdvancedPaymentPolicy.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 190
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31672.SubchannelID",
+      "to": "dbo.AdvDiscountPolicy.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 456
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31672.SubchannelID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31672.SubchannelID",
+      "to": "dbo.AdvertisementSalesType.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 3
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31672.SubchannelID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31672.SubchannelID",
+      "to": "dbo.AutoExtractCalendar.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 158
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31672.SubchannelID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31672.SubchannelID",
+      "to": "dbo.Bank.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 66
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31672.SubchannelID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31673.SubchannelID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31673.SubchannelID",
+      "to": "dbo.AdvancedPaymentPolicy.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 190
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31673.SubchannelID",
+      "to": "dbo.AdvDiscountPolicy.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 456
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31673.SubchannelID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31673.SubchannelID",
+      "to": "dbo.AdvertisementSalesType.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 3
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31673.SubchannelID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31673.SubchannelID",
+      "to": "dbo.AutoExtractCalendar.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 158
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31673.SubchannelID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31673.SubchannelID",
+      "to": "dbo.Bank.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 66
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31673.SubchannelID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeValueMapping.ActivityID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 89,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeValueMapping.ActivityID",
+      "to": "dbo.Advertisement.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 89,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeValueMapping.ActivityID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 1.0,
+      "cardinality": "one_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 89,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth.PaymentPhoneID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 0.99,
+      "cardinality": "many_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 649,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeMapping.ActivityID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 0.9893617021276596,
+      "cardinality": "many_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 969,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.Step1.ActivityID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 0.989010989010989,
+      "cardinality": "many_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 973,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.Step1.ActivityID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 0.989010989010989,
+      "cardinality": "many_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 973,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.MergeMapping.SourceID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 0.98,
+      "cardinality": "many_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 891,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.Step2.Activity_ID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 0.98,
+      "cardinality": "many_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1000,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.ViewPrefectureBPDtls.ActivityClassifierNodeID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 0.9770114942528736,
+      "cardinality": "many_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 15,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeValueMapping.ActivityID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 0.972972972972973,
+      "cardinality": "many_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 89,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeMapping.ActivityID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 0.9574468085106383,
+      "cardinality": "many_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 969,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.MergeMapping.TargetID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 0.9574468085106383,
+      "cardinality": "many_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 408,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31672.BusinessPointID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 0.9523809523809523,
+      "cardinality": "many_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 21,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV15648ClassificationBackup.BusinessPointID",
+      "to": "dbo.AutoExtractHistory.ID",
+      "overlap_rate": 0.95,
+      "cardinality": "many_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 1000,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeValueMapping.ActivityID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 0.9459459459459459,
+      "cardinality": "many_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 89,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.Advertisement.ContractProductID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 0.9456521739130435,
+      "cardinality": "many_to_one",
+      "method": "value_overlap",
+      "confidence": "medium",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 859,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\cstraitchof.DEV12867ClassificationBackup.BusinessPointID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 0.8888888888888888,
+      "cardinality": "many_to_one",
+      "method": "value_overlap",
+      "confidence": "low",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 9,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.ActiveCampaignSalesman.CampaignID",
+      "to": "dbo.AdvancedPaymentPolicy.ID",
+      "overlap_rate": 0.8857142857142857,
+      "cardinality": "many_to_one",
+      "method": "value_overlap",
+      "confidence": "low",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 65,
+        "to_distinct": 190
+      }
+    },
+    {
+      "from": "dbo.ActiveCampaignSalesman.CampaignID",
+      "to": "dbo.AdvDiscountPolicy.ID",
+      "overlap_rate": 0.8857142857142857,
+      "cardinality": "many_to_one",
+      "method": "value_overlap",
+      "confidence": "low",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 65,
+        "to_distinct": 456
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31673.BusinessPointID",
+      "to": "dbo.Address.ID",
+      "overlap_rate": 0.875,
+      "cardinality": "many_to_one",
+      "method": "value_overlap",
+      "confidence": "low",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 8,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31673.BusinessPointID",
+      "to": "dbo.BatchActionHistory.ID",
+      "overlap_rate": 0.875,
+      "cardinality": "many_to_one",
+      "method": "value_overlap",
+      "confidence": "low",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 8,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.AdvancedPaymentMethod.BankID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 0.8571428571428571,
+      "cardinality": "many_to_one",
+      "method": "value_overlap",
+      "confidence": "low",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 6,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "HEADQUARTERS\\spitsaris.ViewPrefectureBPDtls.CustomerSourceID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 0.8571428571428571,
+      "cardinality": "many_to_one",
+      "method": "value_overlap",
+      "confidence": "low",
+      "name_score": 0.6,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 4,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "dbo.BankDepositDetail.BankID",
+      "to": "dbo.AdvancedPaymentPolicy.ID",
+      "overlap_rate": 0.8333333333333334,
+      "cardinality": "many_to_one",
+      "method": "value_overlap",
+      "confidence": "low",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 11,
+        "to_distinct": 190
+      }
+    },
+    {
+      "from": "dbo.BankDepositDetail.BankID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 0.8333333333333334,
+      "cardinality": "many_to_one",
+      "method": "value_overlap",
+      "confidence": "low",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 11,
+        "to_distinct": 1000
+      }
+    },
+    {
+      "from": "MigrationSteps.AttributeMapping.OldAttributeID",
+      "to": "dbo.AdvancedPaymentPolicy.ID",
+      "overlap_rate": 0.8333333333333334,
+      "cardinality": "many_to_one",
+      "method": "value_overlap",
+      "confidence": "low",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 6,
+        "to_distinct": 190
+      }
+    },
+    {
+      "from": "dbo.ActiveCampaignSalesman.SalesmanID",
+      "to": "dbo.ArchivedNumber.ID",
+      "overlap_rate": 0.8,
+      "cardinality": "many_to_one",
+      "method": "value_overlap",
+      "confidence": "low",
+      "name_score": 0.65,
+      "verification": {
+        "sample_size": 100,
+        "from_distinct": 155,
+        "to_distinct": 1000
+      }
+    }
+  ],
   "metadata": {
-    "discovered_at": "2025-11-02T14:44:55.369300",
-    "discovery_duration_seconds": 61.530696868896484,
+    "discovered_at": "2025-11-02T14:54:53.176854",
+    "discovery_duration_seconds": 77.60190987586975,
     "total_tables": 52,
     "total_columns": 446,
     "expensive_objects": [
@@ -22995,7 +27070,7 @@
         "name": "HEADQUARTERS\\spitsaris.ViewPrefectureBPs",
         "type": "view",
         "reason": "slow_discovery",
-        "duration": 51.525328159332275
+        "duration": 57.45967626571655
       }
     ]
   }

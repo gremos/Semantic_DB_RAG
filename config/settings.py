@@ -5,7 +5,7 @@ Loads all settings from environment variables with validation and defaults
 import os
 import logging
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Set
 from dataclasses import dataclass
 
 from dotenv import load_dotenv
@@ -260,6 +260,39 @@ class RelationshipDetectionConfig:
     detect_rdl_joins: bool
     rdl_trust_level: str  # 'high', 'medium', 'low'
     
+    # 🔧 FIX: Add missing FK naming pattern fields
+    fk_suffix_patterns: List[str] = None
+    fk_infix_patterns: List[str] = None
+    compatible_type_groups: List[Set[str]] = None
+    
+    def __post_init__(self):
+        """Initialize default patterns if not provided"""
+        if self.compatible_type_groups is None:
+            self.compatible_type_groups = [
+                # Integer types (expanded)
+                {'int', 'integer', 'bigint', 'smallint', 'tinyint', 'number', 'numeric', 'decimal'},
+                # String types (expanded)
+                {'varchar', 'char', 'nvarchar', 'nchar', 'text', 'ntext', 'string', 
+                'character', 'character varying', 'varchar2'},
+                # UUID/GUID types
+                {'uuid', 'uniqueidentifier', 'guid'},
+                # Date types
+                {'date', 'datetime', 'datetime2', 'timestamp', 'smalldatetime', 'datetimeoffset'},
+                # Binary types (sometimes used for IDs)
+                {'binary', 'varbinary', 'image'},
+            ]
+        
+        if self.fk_suffix_patterns is None:
+            self.fk_suffix_patterns = [
+                'id', 'key', 'fk', 'code', 'num', 'number', 
+                '_id', '_key', '_fk', '_code', '_num'
+            ]
+        
+        if self.fk_infix_patterns is None:
+            self.fk_infix_patterns = [
+                '_id_', '_key_', '_fk_', 'id_', 'key_', 'fk_'
+            ]
+    
     @classmethod
     def from_env(cls) -> 'RelationshipDetectionConfig':
         return cls(
@@ -279,6 +312,10 @@ class RelationshipDetectionConfig:
             max_views=get_env_int('RELATIONSHIP_MAX_VIEWS', 50),
             detect_rdl_joins=get_env_bool('RELATIONSHIP_DETECT_RDL_JOINS', True),
             rdl_trust_level=get_env('RELATIONSHIP_RDL_TRUST_LEVEL', 'high'),
+            # 🔧 FIX: Initialize pattern fields as None (will be set in __post_init__)
+            fk_suffix_patterns=None,
+            fk_infix_patterns=None,
+            compatible_type_groups=None,
         )
     
     def validate(self):
