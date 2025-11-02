@@ -523,7 +523,8 @@ class DiscoveryEngine:
                 continue
             
             logger.info(f"    [{idx}/{len(table_names)}] Table: {schema_name}.{table_name}")
-            table_data = self._discover_single_table(schema_name, table_name, 'table')
+            table_data = self._discover_table(schema_name, table_name, 'table')
+
             
             if table_data:
                 tables_data.append(table_data)
@@ -535,7 +536,8 @@ class DiscoveryEngine:
                 continue
             
             logger.info(f"    [{idx}/{len(view_names)}] View: {schema_name}.{view_name}")
-            view_data = self._discover_single_table(schema_name, view_name, 'view')
+            view_data = self._discover_table(schema_name, view_name, 'view')
+
             
             if view_data:
                 tables_data.append(view_data)
