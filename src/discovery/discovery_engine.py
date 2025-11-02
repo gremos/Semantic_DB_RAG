@@ -43,7 +43,9 @@ class DiscoveryCache:
     def __init__(self, cache_dir: Path, cache_hours: int = 168):
         self.cache_dir = cache_dir
         self.cache_hours = cache_hours
-        self.cache_file = cache_dir / 'discovery.json'
+        discovery_config = get_discovery_config()
+        filename = discovery_config.sample_output_filename if discovery_config.sample_mode_enabled else 'discovery.json'
+        self.cache_file = cache_dir / filename
         self.fingerprint_file = cache_dir / 'discovery_fingerprint.json'
         
         # Ensure cache directory exists
@@ -144,6 +146,23 @@ class DiscoveryCache:
             # Ensure directory exists
             self.cache_dir.mkdir(parents=True, exist_ok=True)
             
+            # Log sample mode info
+            from config.settings import get_discovery_config
+            discovery_config = get_discovery_config()
+            if discovery_config.sample_mode_enabled:
+                logger.info(f"💾 Saving SAMPLE discovery to {self.cache_file}")
+                logger.info(f"   Sample settings:")
+                if discovery_config.sample_max_tables_per_schema:
+                    logger.info(f"     • Max tables/schema: {discovery_config.sample_max_tables_per_schema}")
+                if discovery_config.sample_max_views_per_schema:
+                    logger.info(f"     • Max views/schema: {discovery_config.sample_max_views_per_schema}")
+                if discovery_config.sample_max_stored_procedures:
+                    logger.info(f"     • Max stored procedures: {discovery_config.sample_max_stored_procedures}")
+                if discovery_config.sample_max_rdl_files:
+                    logger.info(f"     • Max RDL files: {discovery_config.sample_max_rdl_files}")
+            else:
+                logger.info(f"💾 Saving FULL discovery to {self.cache_file}")
+            
             # Save discovery data
             with open(self.cache_file, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
@@ -153,13 +172,26 @@ class DiscoveryCache:
             with open(self.fingerprint_file, 'w', encoding='utf-8') as f:
                 json.dump({
                     'fingerprint': fingerprint,
-                    'timestamp': datetime.now().isoformat()
+                    'timestamp': datetime.now().isoformat(),
+                    'sample_mode': discovery_config.sample_mode_enabled,  # ADD: Track sample mode in fingerprint
+                    'sample_config': {  # ADD: Store sample config for reference
+                        'tables_per_schema': discovery_config.sample_max_tables_per_schema,
+                        'views_per_schema': discovery_config.sample_max_views_per_schema,
+                        'stored_procedures': discovery_config.sample_max_stored_procedures,
+                        'rdl_files': discovery_config.sample_max_rdl_files
+                    } if discovery_config.sample_mode_enabled else None
                 }, f, indent=2, ensure_ascii=False)
             
-            logger.info(f"Saved discovery cache to {self.cache_file}")
+            logger.info(f"✓ Saved discovery cache to {self.cache_file}")
+            logger.info(f"✓ Saved fingerprint to {self.fingerprint_file}")
+            
+            # Log cache file size
+            cache_size_mb = self.cache_file.stat().st_size / (1024 * 1024)
+            logger.info(f"✓ Cache file size: {cache_size_mb:.2f} MB")
             
         except Exception as e:
-            logger.error(f"Failed to save cache: {e}")
+            logger.error(f"Failed to save cache: {e}", exc_info=True)
+            raise  # Re-raise to ensure caller knows save failed
 
 
 class DiscoveryEngine:
@@ -428,46 +460,67 @@ class DiscoveryEngine:
         
         return schemas_data
     
+    # REPLACE ENTIRE METHOD starting at line ~217 with:
+
     def _discover_tables(self, schema_name: str) -> List[Dict]:
         """
-        Discover tables and views in a schema
-        Tables are processed sequentially (usually fast)
-        Views are processed concurrently (can be expensive)
+        Discover all tables and views in a schema with optional sampling
         """
         tables_data = []
         
+        # Get all table names
         try:
             table_names = self.inspector.get_table_names(schema=schema_name)
-            view_names = self.inspector.get_view_names(schema=schema_name)
         except Exception as e:
-            logger.error(f"Error listing tables/views in {schema_name}: {e}")
+            logger.error(f"Failed to get table names for schema {schema_name}: {e}")
             return []
         
-        # Filter excluded objects
-        table_names = [t for t in table_names if not self._should_exclude_table(t)]
-        view_names = [v for v in view_names if not self._should_exclude_table(v)]
+        # Get all view names
+        try:
+            view_names = self.inspector.get_view_names(schema=schema_name)
+        except Exception as e:
+            logger.warning(f"Failed to get view names for schema {schema_name}: {e}")
+            view_names = []
         
-        logger.info(f"  Schema {schema_name}: {len(table_names)} tables, {len(view_names)} views")
+        # Apply sampling limits if enabled
+        if self.discovery_config.sample_mode_enabled:
+            logger.info(f"  📊 SAMPLE MODE ACTIVE for schema '{schema_name}'")
+            
+            # Sample tables
+            if self.discovery_config.sample_max_tables_per_schema:
+                original_count = len(table_names)
+                table_names = table_names[:self.discovery_config.sample_max_tables_per_schema]
+                logger.info(f"  📉 Tables: {len(table_names)}/{original_count} (sampled)")
+            
+            # Sample views
+            if self.discovery_config.sample_max_views_per_schema:
+                original_count = len(view_names)
+                view_names = view_names[:self.discovery_config.sample_max_views_per_schema]
+                logger.info(f"  📉 Views: {len(view_names)}/{original_count} (sampled)")
         
-        # Process tables sequentially
-        if table_names:
-            logger.info(f"  Processing {len(table_names)} tables...")
-            for idx, table_name in enumerate(table_names, 1):
-                if idx % 10 == 0 or idx == len(table_names):
-                    logger.info(f"    Tables progress: {idx}/{len(table_names)}")
-                
-                try:
-                    table_data = self._discover_table(schema_name, table_name, 'table')
-                    if table_data:
-                        tables_data.append(table_data)
-                except Exception as e:
-                    logger.error(f"Error discovering table {schema_name}.{table_name}: {e}")
+        # Process tables
+        for idx, table_name in enumerate(table_names, 1):
+            if self._should_exclude_table(table_name):
+                logger.debug(f"Skipping excluded table: {table_name}")
+                continue
+            
+            logger.info(f"    [{idx}/{len(table_names)}] Table: {schema_name}.{table_name}")
+            table_data = self._discover_single_table(schema_name, table_name, 'table')
+            
+            if table_data:
+                tables_data.append(table_data)
         
-        # Process views CONCURRENTLY
-        if view_names:
-            logger.info(f"  Processing {len(view_names)} views concurrently...")
-            view_data_list = self._discover_views_concurrent(schema_name, view_names)
-            tables_data.extend(view_data_list)
+        # Process views
+        for idx, view_name in enumerate(view_names, 1):
+            if self._should_exclude_table(view_name):
+                logger.debug(f"Skipping excluded view: {view_name}")
+                continue
+            
+            logger.info(f"    [{idx}/{len(view_names)}] View: {schema_name}.{view_name}")
+            view_data = self._discover_single_table(schema_name, view_name, 'view')
+            
+            if view_data:
+                tables_data.append(view_data)
         
         return tables_data
     
@@ -1001,6 +1054,7 @@ class DiscoveryEngine:
     def _discover_named_assets(self) -> List[Dict]:
         """
         Discover named assets: views, stored procedures, RDL files
+        With optional sampling for testing mode
         Returns list of asset dictionaries
         """
         if hasattr(self, '_named_assets_cache'):
@@ -1008,26 +1062,270 @@ class DiscoveryEngine:
         
         assets = []
         
-        # Discover RDL files
+        # Sample mode tracking
+        sp_count = 0
+        sp_limit = None
+        rdl_count = 0
+        rdl_limit = None
+        
+        if self.discovery_config.sample_mode_enabled:
+            sp_limit = self.discovery_config.sample_max_stored_procedures
+            rdl_limit = self.discovery_config.sample_max_rdl_files
+            logger.info(f"📊 SAMPLE MODE: Stored Procedures limit={sp_limit}, RDL limit={rdl_limit}")
+        
+        # ====================
+        # 1. DISCOVER RDL FILES
+        # ====================
         rdl_path = self.path_config.rdl_path
         if rdl_path and rdl_path.exists():
             logger.info(f"Scanning RDL files in {rdl_path}")
             try:
                 from src.discovery.rdl_parser import RDLParser
                 
-                parser = RDLParser(rdl_path)
-                rdl_assets = parser.parse_all()
-                assets.extend(rdl_assets)
+                parser = RDLParser(self.settings)
+                all_rdl_files = parser.find_rdl_files()
                 
-                logger.info(f"  ✓ Found {len(rdl_assets)} RDL files")
+                logger.info(f"  Found {len(all_rdl_files)} RDL files")
+                
+                for rdl_file in all_rdl_files:
+                    # Check sample limit
+                    if rdl_limit and rdl_count >= rdl_limit:
+                        logger.info(f"  📉 Reached RDL file limit ({rdl_limit})")
+                        break
+                    
+                    try:
+                        rdl_asset = parser.parse_rdl_file(rdl_file)
+                        if rdl_asset:
+                            assets.append(rdl_asset)
+                            rdl_count += 1
+                    except Exception as e:
+                        logger.warning(f"  Failed to parse RDL file {rdl_file}: {e}")
+                
+                logger.info(f"  ✓ Parsed {rdl_count} RDL files")
+                
             except Exception as e:
                 logger.error(f"Error parsing RDL files: {e}")
         
-        # TODO: Add view SQL normalization
-        # TODO: Add stored procedure discovery
+        # ====================
+        # 2. DISCOVER VIEWS (SQL NORMALIZATION)
+        # ====================
+        logger.info("Discovering views with SQL normalization...")
+        try:
+            import sqlglot
+            
+            view_count = 0
+            
+            for schema_name in self.inspector.get_schema_names():
+                if self._should_exclude_schema(schema_name):
+                    continue
+                
+                try:
+                    view_names = self.inspector.get_view_names(schema=schema_name)
+                except Exception as e:
+                    logger.debug(f"Could not get views for schema {schema_name}: {e}")
+                    continue
+                
+                for view_name in view_names:
+                    if self._should_exclude_table(view_name):
+                        continue
+                    
+                    try:
+                        # Get view definition
+                        view_def = self.inspector.get_view_definition(view_name, schema=schema_name)
+                        
+                        if not view_def:
+                            continue
+                        
+                        # Normalize SQL with sqlglot
+                        try:
+                            parsed = sqlglot.parse_one(view_def, dialect=self.engine.dialect.name)
+                            normalized_sql = parsed.sql(dialect=self.engine.dialect.name, pretty=True)
+                        except Exception as e:
+                            logger.debug(f"Could not normalize view SQL for {schema_name}.{view_name}: {e}")
+                            normalized_sql = view_def  # Use raw SQL if normalization fails
+                        
+                        # Add view as named asset
+                        assets.append({
+                            'kind': 'view',
+                            'name': f"{schema_name}.{view_name}",
+                            'sql_normalized': normalized_sql,
+                            'sql_raw': view_def
+                        })
+                        
+                        view_count += 1
+                        
+                    except Exception as e:
+                        logger.debug(f"Could not process view {schema_name}.{view_name}: {e}")
+            
+            logger.info(f"  ✓ Found {view_count} views with SQL")
+            
+        except Exception as e:
+            logger.error(f"View discovery failed: {e}")
+        
+        # ====================
+        # 3. DISCOVER STORED PROCEDURES
+        # ====================
+        logger.info("Discovering stored procedures...")
+        
+        try:
+            dialect = self.engine.dialect.name.lower()
+            
+            if dialect == 'mssql':
+                # SQL Server stored procedure discovery
+                query = text("""
+                    SELECT 
+                        SCHEMA_NAME(p.schema_id) as schema_name,
+                        p.name as procedure_name,
+                        m.definition as procedure_definition
+                    FROM sys.procedures p
+                    INNER JOIN sys.sql_modules m ON p.object_id = m.object_id
+                    WHERE p.is_ms_shipped = 0
+                    ORDER BY schema_name, procedure_name
+                """)
+                
+                with self.engine.connect() as conn:
+                    result = conn.execute(query).fetchall()
+                
+                for row in result:
+                    # Check sample limit
+                    if sp_limit and sp_count >= sp_limit:
+                        logger.info(f"  📉 Reached stored procedure limit ({sp_limit})")
+                        break
+                    
+                    schema_name = row[0]
+                    sp_name = row[1]
+                    sp_definition = row[2]
+                    
+                    if self._should_exclude_schema(schema_name):
+                        continue
+                    
+                    if self._should_exclude_table(sp_name):
+                        continue
+                    
+                    try:
+                        # Normalize SQL with sqlglot
+                        import sqlglot
+                        
+                        try:
+                            parsed = sqlglot.parse_one(sp_definition, dialect='tsql')
+                            normalized_sql = parsed.sql(dialect='tsql', pretty=True)
+                        except Exception as e:
+                            logger.debug(f"Could not normalize SP SQL for {schema_name}.{sp_name}: {e}")
+                            normalized_sql = sp_definition
+                        
+                        # Add stored procedure as named asset
+                        assets.append({
+                            'kind': 'stored_procedure',
+                            'name': f"{schema_name}.{sp_name}",
+                            'sql_normalized': normalized_sql,
+                            'sql_raw': sp_definition
+                        })
+                        
+                        sp_count += 1
+                        
+                    except Exception as e:
+                        logger.debug(f"Could not process stored procedure {schema_name}.{sp_name}: {e}")
+                
+                logger.info(f"  ✓ Found {sp_count} stored procedures")
+            
+            elif dialect in ['postgresql', 'postgres']:
+                # PostgreSQL function discovery
+                query = text("""
+                    SELECT 
+                        n.nspname as schema_name,
+                        p.proname as function_name,
+                        pg_get_functiondef(p.oid) as function_definition
+                    FROM pg_proc p
+                    INNER JOIN pg_namespace n ON p.pronamespace = n.oid
+                    WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
+                    ORDER BY schema_name, function_name
+                """)
+                
+                with self.engine.connect() as conn:
+                    result = conn.execute(query).fetchall()
+                
+                for row in result:
+                    # Check sample limit
+                    if sp_limit and sp_count >= sp_limit:
+                        logger.info(f"  📉 Reached stored procedure limit ({sp_limit})")
+                        break
+                    
+                    schema_name = row[0]
+                    func_name = row[1]
+                    func_definition = row[2]
+                    
+                    if self._should_exclude_schema(schema_name):
+                        continue
+                    
+                    assets.append({
+                        'kind': 'stored_procedure',
+                        'name': f"{schema_name}.{func_name}",
+                        'sql_normalized': func_definition,
+                        'sql_raw': func_definition
+                    })
+                    
+                    sp_count += 1
+                
+                logger.info(f"  ✓ Found {sp_count} stored procedures (PostgreSQL)")
+            
+            elif dialect == 'mysql':
+                # MySQL stored procedure discovery
+                query = text("""
+                    SELECT 
+                        ROUTINE_SCHEMA as schema_name,
+                        ROUTINE_NAME as routine_name,
+                        ROUTINE_DEFINITION as routine_definition
+                    FROM information_schema.ROUTINES
+                    WHERE ROUTINE_SCHEMA NOT IN ('mysql', 'information_schema', 'performance_schema', 'sys')
+                    ORDER BY schema_name, routine_name
+                """)
+                
+                with self.engine.connect() as conn:
+                    result = conn.execute(query).fetchall()
+                
+                for row in result:
+                    # Check sample limit
+                    if sp_limit and sp_count >= sp_limit:
+                        logger.info(f"  📉 Reached stored procedure limit ({sp_limit})")
+                        break
+                    
+                    schema_name = row[0]
+                    routine_name = row[1]
+                    routine_definition = row[2]
+                    
+                    if self._should_exclude_schema(schema_name):
+                        continue
+                    
+                    assets.append({
+                        'kind': 'stored_procedure',
+                        'name': f"{schema_name}.{routine_name}",
+                        'sql_normalized': routine_definition,
+                        'sql_raw': routine_definition
+                    })
+                    
+                    sp_count += 1
+                
+                logger.info(f"  ✓ Found {sp_count} stored procedures (MySQL)")
+            
+            else:
+                logger.warning(f"Stored procedure discovery not implemented for dialect: {dialect}")
+        
+        except Exception as e:
+            logger.error(f"Stored procedure discovery failed: {e}", exc_info=True)
         
         # Cache for reuse
         self._named_assets_cache = assets
+        
+        # Summary
+        logger.info("=" * 80)
+        logger.info(f"NAMED ASSETS SUMMARY")
+        logger.info(f"  Views:              {len([a for a in assets if a.get('kind') == 'view'])}")
+        logger.info(f"  Stored Procedures:  {len([a for a in assets if a.get('kind') == 'stored_procedure'])}")
+        logger.info(f"  RDL Files:          {len([a for a in assets if a.get('kind') == 'rdl'])}")
+        logger.info(f"  Total Assets:       {len(assets)}")
+        if self.discovery_config.sample_mode_enabled:
+            logger.info(f"  📊 Sample Mode:     ACTIVE")
+        logger.info("=" * 80)
         
         return assets
     

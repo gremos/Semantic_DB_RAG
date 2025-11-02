@@ -1,0 +1,1318 @@
+{
+          "name": "ViewSalesMarketItemAndOthers",
+          "type": "view",
+          "columns": [
+            {
+              "name": "CampaignID",
+              "type": "NULL",
+              "nullable": false,
+              "default": null,
+              "stats": {
+                "distinct_count": 13,
+                "null_rate": 0.0,
+                "sample_values": [
+                  "187",
+                  "183",
+                  "190",
+                  "186",
+                  "187"
+                ]
+              }
+            },
+            {
+              "name": "ActivityType",
+              "type": "VARCHAR(1) COLLATE \"Greek_CI_AS\"",
+              "nullable": false,
+              "default": null,
+              "stats": {
+                "distinct_count": 1,
+                "null_rate": 0.0,
+                "sample_values": [
+                  "H",
+                  "H",
+                  "H",
+                  "H",
+                  "H"
+                ]
+              }
+            },
+            {
+              "name": "UnitID",
+              "type": "INTEGER",
+              "nullable": true,
+              "default": null,
+              "stats": {
+                "distinct_count": 7,
+                "null_rate": 0.0,
+                "min": "15",
+                "max": "213",
+                "sample_values": [
+                  "42",
+                  "42",
+                  "42",
+                  "42",
+                  "42"
+                ]
+              }
+            },
+            {
+              "name": "TargetGroupValueID",
+              "type": "NULL",
+              "nullable": false,
+              "default": null,
+              "stats": {
+                "distinct_count": 1000,
+                "null_rate": 0.0,
+                "sample_values": [
+                  "28180878",
+                  "27857812",
+                  "28216870",
+                  "28218697",
+                  "28220980"
+                ]
+              }
+            },
+            {
+              "name": "SelectedAllocationPlanID",
+              "type": "NULL",
+              "nullable": false,
+              "default": null,
+              "stats": {
+                "distinct_count": 13,
+                "null_rate": 0.0,
+                "sample_values": [
+                  "256",
+                  "252",
+                  "259",
+                  "255",
+                  "256"
+                ]
+              }
+            },
+            {
+              "name": "TargetGroupItemID",
+              "type": "NULL",
+              "nullable": false,
+              "default": null,
+              "stats": {
+                "distinct_count": 795,
+                "null_rate": 0.0,
+                "sample_values": [
+                  "14053087",
+                  "13923340",
+                  "14137485",
+                  "14139141",
+                  "14138404"
+                ]
+              }
+            },
+            {
+              "name": "CaseID",
+              "type": "NULL",
+              "nullable": false,
+              "default": null,
+              "stats": {
+                "distinct_count": 1000,
+                "null_rate": 0.0,
+                "sample_values": [
+                  "30212943",
+                  "30281763",
+                  "30281766",
+                  "30281772",
+                  "30281829"
+                ]
+              }
+            },
+            {
+              "name": "TaskID",
+              "type": "NULL",
+              "nullable": false,
+              "default": null,
+              "stats": {
+                "distinct_count": 1000,
+                "null_rate": 0.0,
+                "sample_values": [
+                  "41020754",
+                  "41020819",
+                  "41020837",
+                  "41020860",
+                  "41021051"
+                ]
+              }
+            },
+            {
+              "name": "TaskName",
+              "type": "NVARCHAR(100) COLLATE \"Greek_CI_AS\"",
+              "nullable": false,
+              "default": null,
+              "stats": {
+                "distinct_count": 7,
+                "null_rate": 0.0,
+                "sample_values": [
+                  "Έλεγχος πληρότητας",
+                  "Έλεγχος πληρότητας",
+                  "Έλεγχος πληρότητας",
+                  "Έλεγχος πληρότητας",
+                  "Έλεγχος πληρότητας"
+                ]
+              }
+            },
+            {
+              "name": "TaskTypeID",
+              "type": "NULL",
+              "nullable": false,
+              "default": null,
+              "stats": {
+                "distinct_count": 6,
+                "null_rate": 0.0,
+                "sample_values": [
+                  "189",
+                  "189",
+                  "189",
+                  "189",
+                  "189"
+                ]
+              }
+            },
+            {
+              "name": "TaskCreatedOn",
+              "type": "DATETIME",
+              "nullable": true,
+              "default": null,
+              "stats": {
+                "distinct_count": 698,
+                "null_rate": 0.0,
+                "min": "2018-12-28 14:00:38.223000",
+                "max": "2025-07-29 09:37:33.213000",
+                "sample_values": [
+                  "2025-07-29 08:19:30.590000",
+                  "2025-07-29 08:54:19.843000",
+                  "2025-07-29 08:57:36.400000",
+                  "2025-07-29 09:00:35.423000",
+                  "2025-07-29 09:30:30.620000"
+                ]
+              }
+            },
+            {
+              "name": "ActualOwnerID",
+              "type": "NULL",
+              "nullable": true,
+              "default": null,
+              "stats": {
+                "distinct_count": 8,
+                "null_rate": 0.0,
+                "sample_values": [
+                  "115",
+                  "115",
+                  "115",
+                  "115",
+                  "115"
+                ]
+              }
+            },
+            {
+              "name": "ActualOwner",
+              "type": "NVARCHAR(201) COLLATE \"Greek_CI_AS\"",
+              "nullable": true,
+              "default": null,
+              "stats": {
+                "distinct_count": 8,
+                "null_rate": 0.0,
+                "sample_values": [
+                  "ΡΗΓΟΠΟΥΛΟΥ ΒΑΣΙΛΙΚΗ",
+                  "ΡΗΓΟΠΟΥΛΟΥ ΒΑΣΙΛΙΚΗ",
+                  "ΡΗΓΟΠΟΥΛΟΥ ΒΑΣΙΛΙΚΗ",
+                  "ΡΗΓΟΠΟΥΛΟΥ ΒΑΣΙΛΙΚΗ",
+                  "ΡΗΓΟΠΟΥΛΟΥ ΒΑΣΙΛΙΚΗ"
+                ]
+              }
+            },
+            {
+              "name": "SupervisorID",
+              "type": "NULL",
+              "nullable": true,
+              "default": null,
+              "stats": {
+                "distinct_count": 11,
+                "null_rate": 0.0,
+                "sample_values": [
+                  "1228",
+                  "1763",
+                  "1311",
+                  "1763",
+                  "2425"
+                ]
+              }
+            },
+            {
+              "name": "Supervisor",
+              "type": "NVARCHAR(201) COLLATE \"Greek_CI_AS\"",
+              "nullable": true,
+              "default": null,
+              "stats": {
+                "distinct_count": 11,
+                "null_rate": 0.0,
+                "sample_values": [
+                  "ΖΟΥΛΑΣ ΜΙΧΑΛΗΣ",
+                  "ΚΙΛΙΡΓΙΩΤΗΣ ΓΕΩΡΓΙΟΣ",
+                  "ΒΕΡΡΑ ΜΑΡΙΑ",
+                  "ΚΙΛΙΡΓΙΩΤΗΣ ΓΕΩΡΓΙΟΣ",
+                  "ΠΑΠΑΖΟΓΛΟΥ ΙΩΑΝΝΗΣ"
+                ]
+              }
+            },
+            {
+              "name": "PotentialOwnerID",
+              "type": "INTEGER",
+              "nullable": true,
+              "default": null,
+              "stats": {
+                "distinct_count": 8,
+                "null_rate": 0.0,
+                "min": "115",
+                "max": "714",
+                "sample_values": [
+                  "115",
+                  "115",
+                  "115",
+                  "115",
+                  "115"
+                ]
+              }
+            },
+            {
+              "name": "StakeHolderUserID",
+              "type": "INTEGER",
+              "nullable": true,
+              "default": null,
+              "stats": {
+                "distinct_count": 0,
+                "null_rate": 1.0,
+                "min": null,
+                "max": null,
+                "sample_values": [
+                  "None",
+                  "None",
+                  "None",
+                  "None",
+                  "None"
+                ]
+              }
+            },
+            {
+              "name": "AppointmentDateTime",
+              "type": "DATETIME",
+              "nullable": true,
+              "default": null,
+              "stats": {
+                "distinct_count": 419,
+                "null_rate": 0.406,
+                "min": "2019-01-08 10:00:00",
+                "max": "2025-07-31 04:30:00",
+                "sample_values": [
+                  "None",
+                  "2025-02-13 13:30:00",
+                  "2025-07-25 11:30:00",
+                  "2025-07-15 12:00:00",
+                  "None"
+                ]
+              }
+            },
+            {
+              "name": "BusinessPointID",
+              "type": "NULL",
+              "nullable": false,
+              "default": null,
+              "stats": {
+                "distinct_count": 501,
+                "null_rate": 0.0,
+                "sample_values": [
+                  "823236",
+                  "1569460",
+                  "883019",
+                  "1033131",
+                  "1616683"
+                ]
+              }
+            },
+            {
+              "name": "BPIdentityConfirmed",
+              "type": "BIT",
+              "nullable": false,
+              "default": null
+            },
+            {
+              "name": "CustomerName",
+              "type": "NVARCHAR(150) COLLATE \"Greek_CI_AS\"",
+              "nullable": true,
+              "default": null,
+              "stats": {
+                "distinct_count": 520,
+                "null_rate": 0.0,
+                "sample_values": [
+                  "ΙΩΑΝΝΙΔΗΣ Κ. ΠΑΥΛΟΣ - Μελίτη",
+                  "STEREO ΑΚΟΥΣΤΙΚΗ - ΠΑΠΑΚΩΝΣΤΑΝΤΙΝΟΥ",
+                  "ΜΑΤΘΑΙΟΠΟΥΛΟΣ ΑΝΔΡΕΑΣ - ΣΤΑΘΟΠΟΥΛΟΥ ΙΩΑΝΝΑ",
+                  "ΓΙΑΧΝΑΚΗΣ ΓΡΗΓΟΡΗΣ",
+                  "ΜΥΓΙΑΚΗΣ ΧΡΗΣΤΟΣ & ΣΙΑ Ε.Ε."
+                ]
+              }
+            },
+            {
+              "name": "CustomerCode",
+              "type": "NVARCHAR(50) COLLATE \"Greek_CI_AS\"",
+              "nullable": true,
+              "default": null,
+              "stats": {
+                "distinct_count": 501,
+                "null_rate": 0.0,
+                "sample_values": [
+                  "1253168",
+                  "1569460",
+                  "1344846",
+                  "1543851",
+                  "1616683"
+                ]
+              }
+            },
+            {
+              "name": "BrandName",
+              "type": "NVARCHAR(150) COLLATE \"Greek_CI_AS\"",
+              "nullable": true,
+              "default": null,
+              "stats": {
+                "distinct_count": 464,
+                "null_rate": 0.069,
+                "sample_values": [
+                  "ΙΩΑΝΝΙΔΗΣ Κ. ΠΑΥΛΟΣ",
+                  "None",
+                  "ΜΑΤΘΑΙΟΠΟΥΛΟΣ ΑΝΔΡΕΑΣ ΓΕΩΡΓ. ",
+                  "ΓΙΑΧΝΑΚΗΣ ΓΡΗΓΟΡΗΣ",
+                  "ΜΥΓΙΑΚΗΣ ΧΡΗΣΤΟΣ & ΣΙΑ Ε.Ε."
+                ]
+              }
+            },
+            {
+              "name": "EndDate",
+              "type": "DATETIME",
+              "nullable": true,
+              "default": null,
+              "stats": {
+                "distinct_count": 7,
+                "null_rate": 0.0,
+                "min": "2019-12-31 00:00:00",
+                "max": "2025-12-31 00:00:00",
+                "sample_values": [
+                  "2025-12-31 00:00:00",
+                  "2025-12-31 00:00:00",
+                  "2025-12-31 00:00:00",
+                  "2025-12-31 00:00:00",
+                  "2025-12-31 00:00:00"
+                ]
+              }
+            },
+            {
+              "name": "IsReleased",
+              "type": "BIT",
+              "nullable": false,
+              "default": null
+            },
+            {
+              "name": "OfferAmount",
+              "type": "NULL",
+              "nullable": true,
+              "default": null,
+              "stats": {
+                "distinct_count": 351,
+                "null_rate": 0.33,
+                "sample_values": [
+                  "0.000",
+                  "0.000",
+                  "240.000",
+                  "300.000",
+                  "0.000"
+                ]
+              }
+            },
+            {
+              "name": "CRM",
+              "type": "BIT",
+              "nullable": false,
+              "default": null
+            },
+            {
+              "name": "MasterClassification",
+              "type": "NVARCHAR(50) COLLATE \"Greek_CI_AS\"",
+              "nullable": true,
+              "default": null,
+              "stats": {
+                "distinct_count": 270,
+                "null_rate": 0.0,
+                "sample_values": [
+                  "Χωματουργικές Εργασίες",
+                  "Ακουστικά Βαρηκοΐας",
+                  "Ορθοδοντικοί",
+                  "Ασφάλειες - Ασφαλιστές",
+                  "Κατασκευές Αλουμινίου"
+                ]
+              }
+            },
+            {
+              "name": "MasterHeading",
+              "type": "NVARCHAR(50) COLLATE \"Greek_CI_AS\"",
+              "nullable": true,
+              "default": null,
+              "stats": {
+                "distinct_count": 270,
+                "null_rate": 0.0,
+                "sample_values": [
+                  "Χωματουργικές Εργασίες",
+                  "Ακουστικά Βαρηκοΐας",
+                  "Ορθοδοντικοί",
+                  "Ασφάλειες - Ασφαλιστές",
+                  "Κατασκευές Αλουμινίου"
+                ]
+              }
+            },
+            {
+              "name": "ReliabilityStatus",
+              "type": "NVARCHAR(100) COLLATE \"Greek_CI_AS\"",
+              "nullable": true,
+              "default": null,
+              "stats": {
+                "distinct_count": 5,
+                "null_rate": 0.052,
+                "sample_values": [
+                  "GREEN",
+                  "GREEN",
+                  "GREEN",
+                  "GREEN",
+                  "GREEN"
+                ]
+              }
+            },
+            {
+              "name": "ReliabilityID",
+              "type": "NULL",
+              "nullable": false,
+              "default": null,
+              "stats": {
+                "distinct_count": 6,
+                "null_rate": 0.0,
+                "sample_values": [
+                  "1",
+                  "1",
+                  "1",
+                  "1",
+                  "1"
+                ]
+              }
+            },
+            {
+              "name": "LossPrintedNew",
+              "type": "INTEGER",
+              "nullable": false,
+              "default": null,
+              "stats": {
+                "distinct_count": 3,
+                "null_rate": 0.0,
+                "min": "0",
+                "max": "2",
+                "sample_values": [
+                  "0",
+                  "0",
+                  "1",
+                  "1",
+                  "1"
+                ]
+              }
+            },
+            {
+              "name": "Prefecture",
+              "type": "NVARCHAR(50) COLLATE \"Greek_CI_AS\"",
+              "nullable": false,
+              "default": null,
+              "stats": {
+                "distinct_count": 23,
+                "null_rate": 0.0,
+                "sample_values": [
+                  "Φλώρινας",
+                  "Αττικής",
+                  "Ηλείας",
+                  "Ηρακλείου",
+                  "Αττικής"
+                ]
+              }
+            },
+            {
+              "name": "Municipality",
+              "type": "NVARCHAR(50) COLLATE \"Greek_CI_AS\"",
+              "nullable": false,
+              "default": null,
+              "stats": {
+                "distinct_count": 58,
+                "null_rate": 0.0,
+                "sample_values": [
+                  "Φλώρινας",
+                  "Χαλανδρίου Αττικής",
+                  "Πύργου Ηλείας",
+                  "Ηρακλείου Κρήτης",
+                  "Αγίου Δημητρίου Αττικής"
+                ]
+              }
+            },
+            {
+              "name": "City",
+              "type": "NVARCHAR(50) COLLATE \"Greek_CI_AS\"",
+              "nullable": false,
+              "default": null,
+              "stats": {
+                "distinct_count": 259,
+                "null_rate": 0.0,
+                "sample_values": [
+                  "Μελίτη, 53150",
+                  "Άνω Χαλάνδρι, Χαλάνδρι, 15234",
+                  "Πύργος, 27131",
+                  "Βαλιδέ Τζαμί, Ηράκλειο, 71201",
+                  "Άγιος Δημήτριος, 17342"
+                ]
+              }
+            },
+            {
+              "name": "Street",
+              "type": "NVARCHAR(121) COLLATE \"Greek_CI_AS\"",
+              "nullable": false,
+              "default": null,
+              "stats": {
+                "distinct_count": 365,
+                "null_rate": 0.0,
+                "sample_values": [
+                  " ",
+                  "Λεωφόρος Πεντέλης 6",
+                  "28ης Οκτωβρίου ",
+                  "Μπιζανίου 8",
+                  "Τρικάλων 37"
+                ]
+              }
+            },
+            {
+              "name": "ZipCode",
+              "type": "NVARCHAR(10) COLLATE \"Greek_CI_AS\"",
+              "nullable": false,
+              "default": null,
+              "stats": {
+                "distinct_count": 143,
+                "null_rate": 0.0,
+                "sample_values": [
+                  "53150",
+                  "15234",
+                  "27131",
+                  "71201",
+                  "17342"
+                ]
+              }
+            },
+            {
+              "name": "IsSubscription",
+              "type": "INTEGER",
+              "nullable": false,
+              "default": null,
+              "stats": {
+                "distinct_count": 1,
+                "null_rate": 0.0,
+                "min": "0",
+                "max": "0",
+                "sample_values": [
+                  "0",
+                  "0",
+                  "0",
+                  "0",
+                  "0"
+                ]
+              }
+            },
+            {
+              "name": "NoCommReasonID",
+              "type": "NULL",
+              "nullable": true,
+              "default": null,
+              "stats": {
+                "distinct_count": 0,
+                "null_rate": 1.0,
+                "sample_values": [
+                  "None",
+                  "None",
+                  "None",
+                  "None",
+                  "None"
+                ]
+              }
+            },
+            {
+              "name": "PostponeReasonID",
+              "type": "NULL",
+              "nullable": true,
+              "default": null,
+              "stats": {
+                "distinct_count": 2,
+                "null_rate": 0.488,
+                "sample_values": [
+                  "None",
+                  "None",
+                  "None",
+                  "None",
+                  "None"
+                ]
+              }
+            },
+            {
+              "name": "UDFString01",
+              "type": "NVARCHAR(50) COLLATE \"Greek_CI_AS\"",
+              "nullable": false,
+              "default": null,
+              "stats": {
+                "distinct_count": 1,
+                "null_rate": 0.0,
+                "sample_values": [
+                  "",
+                  "",
+                  "",
+                  "",
+                  ""
+                ]
+              }
+            },
+            {
+              "name": "UDFString03",
+              "type": "NVARCHAR(50) COLLATE \"Greek_CI_AS\"",
+              "nullable": false,
+              "default": null,
+              "stats": {
+                "distinct_count": 1,
+                "null_rate": 0.0,
+                "sample_values": [
+                  "",
+                  "",
+                  "",
+                  "",
+                  ""
+                ]
+              }
+            },
+            {
+              "name": "UDFString05",
+              "type": "NVARCHAR(50) COLLATE \"Greek_CI_AS\"",
+              "nullable": false,
+              "default": null,
+              "stats": {
+                "distinct_count": 1,
+                "null_rate": 0.0,
+                "sample_values": [
+                  "",
+                  "",
+                  "",
+                  "",
+                  ""
+                ]
+              }
+            },
+            {
+              "name": "UDFValue01",
+              "type": "NULL",
+              "nullable": false,
+              "default": null,
+              "stats": {
+                "distinct_count": 1,
+                "null_rate": 0.0,
+                "sample_values": [
+                  "0.000",
+                  "0.000",
+                  "0.000",
+                  "0.000",
+                  "0.000"
+                ]
+              }
+            },
+            {
+              "name": "UDFValue02",
+              "type": "NULL",
+              "nullable": false,
+              "default": null,
+              "stats": {
+                "distinct_count": 1,
+                "null_rate": 0.0,
+                "sample_values": [
+                  "0.000",
+                  "0.000",
+                  "0.000",
+                  "0.000",
+                  "0.000"
+                ]
+              }
+            },
+            {
+              "name": "StartDate",
+              "type": "DATETIME",
+              "nullable": true,
+              "default": null,
+              "stats": {
+                "distinct_count": 7,
+                "null_rate": 0.0,
+                "min": "2019-01-01 00:00:00",
+                "max": "2025-01-01 00:00:00",
+                "sample_values": [
+                  "2025-01-01 00:00:00",
+                  "2025-01-01 00:00:00",
+                  "2025-01-01 00:00:00",
+                  "2025-01-01 00:00:00",
+                  "2025-01-01 00:00:00"
+                ]
+              }
+            },
+            {
+              "name": "RecallTime",
+              "type": "DATETIME",
+              "nullable": true,
+              "default": null,
+              "stats": {
+                "distinct_count": 0,
+                "null_rate": 1.0,
+                "min": null,
+                "max": null,
+                "sample_values": [
+                  "None",
+                  "None",
+                  "None",
+                  "None",
+                  "None"
+                ]
+              }
+            },
+            {
+              "name": "LastSignedDate",
+              "type": "DATETIME",
+              "nullable": true,
+              "default": null,
+              "stats": {
+                "distinct_count": 0,
+                "null_rate": 1.0,
+                "min": null,
+                "max": null,
+                "sample_values": [
+                  "None",
+                  "None",
+                  "None",
+                  "None",
+                  "None"
+                ]
+              }
+            }
+          ],
+          "primary_key": [],
+          "foreign_keys": [],
+          "indexes": [],
+          "rowcount_sample": null,
+          "sample_rows": [
+            {
+              "CampaignID": "187",
+              "ActivityType": "H",
+              "UnitID": "42",
+              "TargetGroupValueID": "28218230",
+              "SelectedAllocationPlanID": "256",
+              "TargetGroupItemID": "14138111",
+              "CaseID": "30281835",
+              "TaskID": "41021070",
+              "TaskName": "Έλεγχος πληρότητας",
+              "TaskTypeID": "189",
+              "TaskCreatedOn": "2025-07-29 09:32:44.973000",
+              "ActualOwnerID": "115",
+              "ActualOwner": "ΡΗΓΟΠΟΥΛΟΥ ΒΑΣΙΛΙΚΗ",
+              "SupervisorID": "2425",
+              "Supervisor": "ΠΑΠΑΖΟΓΛΟΥ ΙΩΑΝΝΗΣ",
+              "PotentialOwnerID": "115",
+              "StakeHolderUserID": null,
+              "AppointmentDateTime": null,
+              "BusinessPointID": "264166",
+              "BPIdentityConfirmed": "True",
+              "CustomerName": "ΓΚΙΣΑΚΗΣ ΙΩΑΝΝΗΣ ",
+              "CustomerCode": "334832",
+              "BrandName": "ΓΚΙΣΑΚΗΣ ΙΩΑΝΝΗΣ Γ.",
+              "EndDate": "2025-12-31 00:00:00",
+              "IsReleased": "True",
+              "OfferAmount": "540.001",
+              "CRM": "True",
+              "MasterClassification": "Οδοντίατροι",
+              "MasterHeading": "Οδοντίατροι",
+              "ReliabilityStatus": "GREEN",
+              "ReliabilityID": "1",
+              "LossPrintedNew": "1",
+              "Prefecture": "Λάρισας",
+              "Municipality": "Λαρισαίων",
+              "City": "Παλιά Εβραϊκή Συνοικία, Λάρισα, 41222",
+              "Street": "Μανωλάκη Κυριάκου 6Α",
+              "ZipCode": "41222",
+              "IsSubscription": "0",
+              "NoCommReasonID": null,
+              "PostponeReasonID": null,
+              "UDFString01": "",
+              "UDFString03": "",
+              "UDFString05": "",
+              "UDFValue01": "0.000",
+              "UDFValue02": "0.000",
+              "StartDate": "2025-01-01 00:00:00",
+              "RecallTime": null,
+              "LastSignedDate": null
+            },
+            {
+              "CampaignID": "187",
+              "ActivityType": "H",
+              "UnitID": "42",
+              "TargetGroupValueID": "28220980",
+              "SelectedAllocationPlanID": "256",
+              "TargetGroupItemID": "14138404",
+              "CaseID": "30281829",
+              "TaskID": "41021051",
+              "TaskName": "Έλεγχος πληρότητας",
+              "TaskTypeID": "189",
+              "TaskCreatedOn": "2025-07-29 09:30:30.620000",
+              "ActualOwnerID": "115",
+              "ActualOwner": "ΡΗΓΟΠΟΥΛΟΥ ΒΑΣΙΛΙΚΗ",
+              "SupervisorID": "2425",
+              "Supervisor": "ΠΑΠΑΖΟΓΛΟΥ ΙΩΑΝΝΗΣ",
+              "PotentialOwnerID": "115",
+              "StakeHolderUserID": null,
+              "AppointmentDateTime": null,
+              "BusinessPointID": "1616683",
+              "BPIdentityConfirmed": "True",
+              "CustomerName": "ΜΥΓΙΑΚΗΣ ΧΡΗΣΤΟΣ & ΣΙΑ Ε.Ε.",
+              "CustomerCode": "1616683",
+              "BrandName": "ΜΥΓΙΑΚΗΣ ΧΡΗΣΤΟΣ & ΣΙΑ Ε.Ε.",
+              "EndDate": "2025-12-31 00:00:00",
+              "IsReleased": "True",
+              "OfferAmount": "0.000",
+              "CRM": "True",
+              "MasterClassification": "Κατασκευές Αλουμινίου",
+              "MasterHeading": "Κατασκευές Αλουμινίου",
+              "ReliabilityStatus": "GREEN",
+              "ReliabilityID": "1",
+              "LossPrintedNew": "1",
+              "Prefecture": "Αττικής",
+              "Municipality": "Αγίου Δημητρίου Αττικής",
+              "City": "Άγιος Δημήτριος, 17342",
+              "Street": "Τρικάλων 37",
+              "ZipCode": "17342",
+              "IsSubscription": "0",
+              "NoCommReasonID": null,
+              "PostponeReasonID": null,
+              "UDFString01": "",
+              "UDFString03": "",
+              "UDFString05": "",
+              "UDFValue01": "0.000",
+              "UDFValue02": "0.000",
+              "StartDate": "2025-01-01 00:00:00",
+              "RecallTime": null,
+              "LastSignedDate": null
+            },
+            {
+              "CampaignID": "186",
+              "ActivityType": "H",
+              "UnitID": "42",
+              "TargetGroupValueID": "28218697",
+              "SelectedAllocationPlanID": "255",
+              "TargetGroupItemID": "14139141",
+              "CaseID": "30281772",
+              "TaskID": "41020860",
+              "TaskName": "Έλεγχος πληρότητας",
+              "TaskTypeID": "189",
+              "TaskCreatedOn": "2025-07-29 09:00:35.423000",
+              "ActualOwnerID": "115",
+              "ActualOwner": "ΡΗΓΟΠΟΥΛΟΥ ΒΑΣΙΛΙΚΗ",
+              "SupervisorID": "1763",
+              "Supervisor": "ΚΙΛΙΡΓΙΩΤΗΣ ΓΕΩΡΓΙΟΣ",
+              "PotentialOwnerID": "115",
+              "StakeHolderUserID": null,
+              "AppointmentDateTime": "2025-07-15 12:00:00",
+              "BusinessPointID": "1033131",
+              "BPIdentityConfirmed": "True",
+              "CustomerName": "ΓΙΑΧΝΑΚΗΣ ΓΡΗΓΟΡΗΣ",
+              "CustomerCode": "1543851",
+              "BrandName": "ΓΙΑΧΝΑΚΗΣ ΓΡΗΓΟΡΗΣ",
+              "EndDate": "2025-12-31 00:00:00",
+              "IsReleased": "True",
+              "OfferAmount": "300.000",
+              "CRM": "True",
+              "MasterClassification": "Ασφάλειες - Ασφαλιστές",
+              "MasterHeading": "Ασφάλειες - Ασφαλιστές",
+              "ReliabilityStatus": "GREEN",
+              "ReliabilityID": "1",
+              "LossPrintedNew": "1",
+              "Prefecture": "Ηρακλείου",
+              "Municipality": "Ηρακλείου Κρήτης",
+              "City": "Βαλιδέ Τζαμί, Ηράκλειο, 71201",
+              "Street": "Μπιζανίου 8",
+              "ZipCode": "71201",
+              "IsSubscription": "0",
+              "NoCommReasonID": null,
+              "PostponeReasonID": null,
+              "UDFString01": "",
+              "UDFString03": "",
+              "UDFString05": "",
+              "UDFValue01": "0.000",
+              "UDFValue02": "0.000",
+              "StartDate": "2025-01-01 00:00:00",
+              "RecallTime": null,
+              "LastSignedDate": null
+            },
+            {
+              "CampaignID": "190",
+              "ActivityType": "H",
+              "UnitID": "42",
+              "TargetGroupValueID": "28216870",
+              "SelectedAllocationPlanID": "259",
+              "TargetGroupItemID": "14137485",
+              "CaseID": "30281766",
+              "TaskID": "41020837",
+              "TaskName": "Έλεγχος πληρότητας",
+              "TaskTypeID": "189",
+              "TaskCreatedOn": "2025-07-29 08:57:36.400000",
+              "ActualOwnerID": "115",
+              "ActualOwner": "ΡΗΓΟΠΟΥΛΟΥ ΒΑΣΙΛΙΚΗ",
+              "SupervisorID": "1311",
+              "Supervisor": "ΒΕΡΡΑ ΜΑΡΙΑ",
+              "PotentialOwnerID": "115",
+              "StakeHolderUserID": null,
+              "AppointmentDateTime": "2025-07-25 11:30:00",
+              "BusinessPointID": "883019",
+              "BPIdentityConfirmed": "True",
+              "CustomerName": "ΜΑΤΘΑΙΟΠΟΥΛΟΣ ΑΝΔΡΕΑΣ - ΣΤΑΘΟΠΟΥΛΟΥ ΙΩΑΝΝΑ",
+              "CustomerCode": "1344846",
+              "BrandName": "ΜΑΤΘΑΙΟΠΟΥΛΟΣ ΑΝΔΡΕΑΣ ΓΕΩΡΓ. ",
+              "EndDate": "2025-12-31 00:00:00",
+              "IsReleased": "True",
+              "OfferAmount": "240.000",
+              "CRM": "True",
+              "MasterClassification": "Ορθοδοντικοί",
+              "MasterHeading": "Ορθοδοντικοί",
+              "ReliabilityStatus": "GREEN",
+              "ReliabilityID": "1",
+              "LossPrintedNew": "1",
+              "Prefecture": "Ηλείας",
+              "Municipality": "Πύργου Ηλείας",
+              "City": "Πύργος, 27131",
+              "Street": "28ης Οκτωβρίου ",
+              "ZipCode": "27131",
+              "IsSubscription": "0",
+              "NoCommReasonID": null,
+              "PostponeReasonID": null,
+              "UDFString01": "",
+              "UDFString03": "",
+              "UDFString05": "",
+              "UDFValue01": "0.000",
+              "UDFValue02": "0.000",
+              "StartDate": "2025-01-01 00:00:00",
+              "RecallTime": null,
+              "LastSignedDate": null
+            },
+            {
+              "CampaignID": "183",
+              "ActivityType": "H",
+              "UnitID": "42",
+              "TargetGroupValueID": "27857812",
+              "SelectedAllocationPlanID": "252",
+              "TargetGroupItemID": "13923340",
+              "CaseID": "30281763",
+              "TaskID": "41020819",
+              "TaskName": "Έλεγχος πληρότητας",
+              "TaskTypeID": "189",
+              "TaskCreatedOn": "2025-07-29 08:54:19.843000",
+              "ActualOwnerID": "115",
+              "ActualOwner": "ΡΗΓΟΠΟΥΛΟΥ ΒΑΣΙΛΙΚΗ",
+              "SupervisorID": "1763",
+              "Supervisor": "ΚΙΛΙΡΓΙΩΤΗΣ ΓΕΩΡΓΙΟΣ",
+              "PotentialOwnerID": "115",
+              "StakeHolderUserID": null,
+              "AppointmentDateTime": "2025-02-13 13:30:00",
+              "BusinessPointID": "1569460",
+              "BPIdentityConfirmed": "True",
+              "CustomerName": "STEREO ΑΚΟΥΣΤΙΚΗ - ΠΑΠΑΚΩΝΣΤΑΝΤΙΝΟΥ",
+              "CustomerCode": "1569460",
+              "BrandName": null,
+              "EndDate": "2025-12-31 00:00:00",
+              "IsReleased": "True",
+              "OfferAmount": "0.000",
+              "CRM": "False",
+              "MasterClassification": "Ακουστικά Βαρηκοΐας",
+              "MasterHeading": "Ακουστικά Βαρηκοΐας",
+              "ReliabilityStatus": "GREEN",
+              "ReliabilityID": "1",
+              "LossPrintedNew": "0",
+              "Prefecture": "Αττικής",
+              "Municipality": "Χαλανδρίου Αττικής",
+              "City": "Άνω Χαλάνδρι, Χαλάνδρι, 15234",
+              "Street": "Λεωφόρος Πεντέλης 6",
+              "ZipCode": "15234",
+              "IsSubscription": "0",
+              "NoCommReasonID": null,
+              "PostponeReasonID": null,
+              "UDFString01": "",
+              "UDFString03": "",
+              "UDFString05": "",
+              "UDFValue01": "0.000",
+              "UDFValue02": "0.000",
+              "StartDate": "2025-01-01 00:00:00",
+              "RecallTime": null,
+              "LastSignedDate": null
+            },
+            {
+              "CampaignID": "187",
+              "ActivityType": "H",
+              "UnitID": "42",
+              "TargetGroupValueID": "28180878",
+              "SelectedAllocationPlanID": "256",
+              "TargetGroupItemID": "14053087",
+              "CaseID": "30212943",
+              "TaskID": "41020754",
+              "TaskName": "Έλεγχος πληρότητας",
+              "TaskTypeID": "189",
+              "TaskCreatedOn": "2025-07-29 08:19:30.590000",
+              "ActualOwnerID": "115",
+              "ActualOwner": "ΡΗΓΟΠΟΥΛΟΥ ΒΑΣΙΛΙΚΗ",
+              "SupervisorID": "1228",
+              "Supervisor": "ΖΟΥΛΑΣ ΜΙΧΑΛΗΣ",
+              "PotentialOwnerID": "115",
+              "StakeHolderUserID": null,
+              "AppointmentDateTime": null,
+              "BusinessPointID": "823236",
+              "BPIdentityConfirmed": "True",
+              "CustomerName": "ΙΩΑΝΝΙΔΗΣ Κ. ΠΑΥΛΟΣ - Μελίτη",
+              "CustomerCode": "1253168",
+              "BrandName": "ΙΩΑΝΝΙΔΗΣ Κ. ΠΑΥΛΟΣ",
+              "EndDate": "2025-12-31 00:00:00",
+              "IsReleased": "True",
+              "OfferAmount": "0.000",
+              "CRM": "False",
+              "MasterClassification": "Χωματουργικές Εργασίες",
+              "MasterHeading": "Χωματουργικές Εργασίες",
+              "ReliabilityStatus": "GREEN",
+              "ReliabilityID": "1",
+              "LossPrintedNew": "0",
+              "Prefecture": "Φλώρινας",
+              "Municipality": "Φλώρινας",
+              "City": "Μελίτη, 53150",
+              "Street": " ",
+              "ZipCode": "53150",
+              "IsSubscription": "0",
+              "NoCommReasonID": null,
+              "PostponeReasonID": null,
+              "UDFString01": "",
+              "UDFString03": "",
+              "UDFString05": "",
+              "UDFValue01": "0.000",
+              "UDFValue02": "0.000",
+              "StartDate": "2025-01-01 00:00:00",
+              "RecallTime": null,
+              "LastSignedDate": null
+            },
+            {
+              "CampaignID": "187",
+              "ActivityType": "H",
+              "UnitID": "42",
+              "TargetGroupValueID": "28220743",
+              "SelectedAllocationPlanID": "256",
+              "TargetGroupItemID": "14140252",
+              "CaseID": "30281842",
+              "TaskID": "41021086",
+              "TaskName": "Έλεγχος πληρότητας",
+              "TaskTypeID": "189",
+              "TaskCreatedOn": "2025-07-29 09:34:04.140000",
+              "ActualOwnerID": "115",
+              "ActualOwner": "ΡΗΓΟΠΟΥΛΟΥ ΒΑΣΙΛΙΚΗ",
+              "SupervisorID": "1228",
+              "Supervisor": "ΖΟΥΛΑΣ ΜΙΧΑΛΗΣ",
+              "PotentialOwnerID": "115",
+              "StakeHolderUserID": null,
+              "AppointmentDateTime": null,
+              "BusinessPointID": "2363048",
+              "BPIdentityConfirmed": "True",
+              "CustomerName": "THE GROOM ROOM",
+              "CustomerCode": "2363048",
+              "BrandName": null,
+              "EndDate": "2025-12-31 00:00:00",
+              "IsReleased": "True",
+              "OfferAmount": "0.000",
+              "CRM": "True",
+              "MasterClassification": "Κομμωτήρια Μικρών Ζώων",
+              "MasterHeading": "Κομμωτήρια Μικρών Ζώων",
+              "ReliabilityStatus": "GREEN",
+              "ReliabilityID": "1",
+              "LossPrintedNew": "0",
+              "Prefecture": "Κερκύρας",
+              "Municipality": "Κέρκυρας",
+              "City": "Ρόδα, 49081",
+              "Street": " ",
+              "ZipCode": "49081",
+              "IsSubscription": "0",
+              "NoCommReasonID": null,
+              "PostponeReasonID": null,
+              "UDFString01": "",
+              "UDFString03": "",
+              "UDFString05": "",
+              "UDFValue01": "0.000",
+              "UDFValue02": "0.000",
+              "StartDate": "2025-01-01 00:00:00",
+              "RecallTime": null,
+              "LastSignedDate": null
+            },
+            {
+              "CampaignID": "187",
+              "ActivityType": "H",
+              "UnitID": "42",
+              "TargetGroupValueID": "28217700",
+              "SelectedAllocationPlanID": "256",
+              "TargetGroupItemID": "14138602",
+              "CaseID": "30281844",
+              "TaskID": "41021089",
+              "TaskName": "Έλεγχος πληρότητας",
+              "TaskTypeID": "189",
+              "TaskCreatedOn": "2025-07-29 09:34:05.900000",
+              "ActualOwnerID": "115",
+              "ActualOwner": "ΡΗΓΟΠΟΥΛΟΥ ΒΑΣΙΛΙΚΗ",
+              "SupervisorID": "1228",
+              "Supervisor": "ΖΟΥΛΑΣ ΜΙΧΑΛΗΣ",
+              "PotentialOwnerID": "115",
+              "StakeHolderUserID": null,
+              "AppointmentDateTime": null,
+              "BusinessPointID": "2059994",
+              "BPIdentityConfirmed": "True",
+              "CustomerName": "Ο ΚΑΡΟΥΖΟΣ",
+              "CustomerCode": "2059994",
+              "BrandName": "ΖΑΓΙΑΝΝΑΚΗ ΓΕΩΡ. ΕΥΘΑΛΙΑ",
+              "EndDate": "2025-12-31 00:00:00",
+              "IsReleased": "True",
+              "OfferAmount": "153.000",
+              "CRM": "True",
+              "MasterClassification": "Εκκενώσεις Βόθρων",
+              "MasterHeading": "Εκκενώσεις Βόθρων",
+              "ReliabilityStatus": "GREEN",
+              "ReliabilityID": "1",
+              "LossPrintedNew": "1",
+              "Prefecture": "Λασιθίου",
+              "Municipality": "Αγίου Νικολάου Λασιθίου Κρήτης",
+              "City": "Ξηρόκαμπος, 72150",
+              "Street": " ",
+              "ZipCode": "72150",
+              "IsSubscription": "0",
+              "NoCommReasonID": null,
+              "PostponeReasonID": null,
+              "UDFString01": "",
+              "UDFString03": "",
+              "UDFString05": "",
+              "UDFValue01": "0.000",
+              "UDFValue02": "0.000",
+              "StartDate": "2025-01-01 00:00:00",
+              "RecallTime": null,
+              "LastSignedDate": null
+            },
+            {
+              "CampaignID": "187",
+              "ActivityType": "H",
+              "UnitID": "42",
+              "TargetGroupValueID": "28220737",
+              "SelectedAllocationPlanID": "256",
+              "TargetGroupItemID": "14140252",
+              "CaseID": "30281846",
+              "TaskID": "41021096",
+              "TaskName": "Έλεγχος πληρότητας",
+              "TaskTypeID": "189",
+              "TaskCreatedOn": "2025-07-29 09:34:53.543000",
+              "ActualOwnerID": "115",
+              "ActualOwner": "ΡΗΓΟΠΟΥΛΟΥ ΒΑΣΙΛΙΚΗ",
+              "SupervisorID": "1228",
+              "Supervisor": "ΖΟΥΛΑΣ ΜΙΧΑΛΗΣ",
+              "PotentialOwnerID": "115",
+              "StakeHolderUserID": null,
+              "AppointmentDateTime": null,
+              "BusinessPointID": "2363048",
+              "BPIdentityConfirmed": "True",
+              "CustomerName": "THE GROOM ROOM",
+              "CustomerCode": "2363048",
+              "BrandName": null,
+              "EndDate": "2025-12-31 00:00:00",
+              "IsReleased": "True",
+              "OfferAmount": "0.000",
+              "CRM": "True",
+              "MasterClassification": "Κομμωτήρια Μικρών Ζώων",
+              "MasterHeading": "Κομμωτήρια Μικρών Ζώων",
+              "ReliabilityStatus": "GREEN",
+              "ReliabilityID": "1",
+              "LossPrintedNew": "0",
+              "Prefecture": "Κερκύρας",
+              "Municipality": "Κέρκυρας",
+              "City": "Ρόδα, 49081",
+              "Street": " ",
+              "ZipCode": "49081",
+              "IsSubscription": "0",
+              "NoCommReasonID": null,
+              "PostponeReasonID": null,
+              "UDFString01": "",
+              "UDFString03": "",
+              "UDFString05": "",
+              "UDFValue01": "0.000",
+              "UDFValue02": "0.000",
+              "StartDate": "2025-01-01 00:00:00",
+              "RecallTime": null,
+              "LastSignedDate": null
+            },
+            {
+              "CampaignID": "187",
+              "ActivityType": "H",
+              "UnitID": "42",
+              "TargetGroupValueID": "28217663",
+              "SelectedAllocationPlanID": "256",
+              "TargetGroupItemID": "14138644",
+              "CaseID": "30281849",
+              "TaskID": "41021104",
+              "TaskName": "Έλεγχος πληρότητας",
+              "TaskTypeID": "189",
+              "TaskCreatedOn": "2025-07-29 09:36:13.837000",
+              "ActualOwnerID": "115",
+              "ActualOwner": "ΡΗΓΟΠΟΥΛΟΥ ΒΑΣΙΛΙΚΗ",
+              "SupervisorID": "1228",
+              "Supervisor": "ΖΟΥΛΑΣ ΜΙΧΑΛΗΣ",
+              "PotentialOwnerID": "115",
+              "StakeHolderUserID": null,
+              "AppointmentDateTime": "2025-07-21 01:30:00",
+              "BusinessPointID": "2100341",
+              "BPIdentityConfirmed": "True",
+              "CustomerName": "ΜΑΚΙΓΙΑΖ ΟΛΥΜΠΙΑ",
+              "CustomerCode": "2100341",
+              "BrandName": "ΜΑΡΗΣ ΙΩΑΝΝΗΣ Χ.",
+              "EndDate": "2025-12-31 00:00:00",
+              "IsReleased": "True",
+              "OfferAmount": "280.000",
+              "CRM": "True",
+              "MasterClassification": "Καλλυντικά",
+              "MasterHeading": "Καλλυντικά",
+              "ReliabilityStatus": "GREEN",
+              "ReliabilityID": "1",
+              "LossPrintedNew": "1",
+              "Prefecture": "Λέσβου",
+              "Municipality": "Λήμνου",
+              "City": "Λήμνος (ή Μύρινα), 81400",
+              "Street": "Κύδα Π. 128",
+              "ZipCode": "81400",
+              "IsSubscription": "0",
+              "NoCommReasonID": null,
+              "PostponeReasonID": null,
+              "UDFString01": "",
+              "UDFString03": "",
+              "UDFString05": "",
+              "UDFValue01": "0.000",
+              "UDFValue02": "0.000",
+              "StartDate": "2025-01-01 00:00:00",
+              "RecallTime": null,
+              "LastSignedDate": null
+            }
+          ],
+          "source_assets": []
+        }

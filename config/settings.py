@@ -179,6 +179,14 @@ class DiscoveryConfig:
     view_sampling_metadata_fallback: bool = True
     view_sampling_log_failures: bool = True
     concurrency_max_workers: int = 10
+
+    # Sample Mode for Testing
+    sample_mode_enabled: bool = False
+    sample_max_tables_per_schema: Optional[int] = None
+    sample_max_views_per_schema: Optional[int] = None  
+    sample_max_stored_procedures: Optional[int] = None
+    sample_max_rdl_files: Optional[int] = None
+    sample_output_filename: str = "discovery-sample.json"
     
     @classmethod
     def from_env(cls) -> 'DiscoveryConfig':
@@ -195,6 +203,13 @@ class DiscoveryConfig:
                                                    '.*_archive.*', '.*_copy.*', '.*_old.*']),
             max_workers=get_env_int('CONCURRENCY_MAX_WORKERS', 10),
         )
+    
+    sample_mode_enabled=get_env_bool('SAMPLE_MODE_ENABLED', False),
+    sample_max_tables_per_schema=get_env_int('SAMPLE_MAX_TABLES_PER_SCHEMA', None) if get_env('SAMPLE_MAX_TABLES_PER_SCHEMA') else None,
+    sample_max_views_per_schema=get_env_int('SAMPLE_MAX_VIEWS_PER_SCHEMA', None) if get_env('SAMPLE_MAX_VIEWS_PER_SCHEMA') else None,
+    sample_max_stored_procedures=get_env_int('SAMPLE_MAX_STORED_PROCEDURES', None) if get_env('SAMPLE_MAX_STORED_PROCEDURES') else None,
+    sample_max_rdl_files=get_env_int('SAMPLE_MAX_RDL_FILES', None) if get_env('SAMPLE_MAX_RDL_FILES') else None,
+    sample_output_filename=get_env('SAMPLE_OUTPUT_FILENAME', 'discovery-sample.json'),
 
 
 # ============================================================================
