@@ -1,0 +1,5780 @@
+{
+  "entities": [
+    {
+      "name": "Active Campaign Salesperson Assignment",
+      "source": "dbo.ActiveCampaignSalesman",
+      "primary_key": [
+        "ID"
+      ],
+      "display": {
+        "display_name": "Active Campaign Salesperson Assignment",
+        "default_label_column": "ID",
+        "default_search_columns": [
+          "ID",
+          "CampaignID",
+          "SalesmanID"
+        ],
+        "default_sort": {
+          "column": "ID",
+          "direction": "asc"
+        },
+        "attribute_order": []
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "role": "primary_key",
+          "semantic_type": "id",
+          "aliases": [
+            "ActiveCampaignSalesmanID",
+            "RecordID"
+          ],
+          "description": "Primary key: unique identifier for the ActiveCampaignSalesman record."
+        },
+        {
+          "name": "CampaignID",
+          "role": "attribute",
+          "semantic_type": "id",
+          "aliases": [
+            "CampID",
+            "MarketingCampaignID"
+          ],
+          "description": "Identifier of the marketing campaign associated with this salesperson assignment."
+        },
+        {
+          "name": "SalesmanID",
+          "role": "attribute",
+          "semantic_type": "id",
+          "aliases": [
+            "SalespersonID",
+            "RepID"
+          ],
+          "description": "Internal identifier of the salesman / sales representative assigned to the campaign."
+        },
+        {
+          "name": "CreatedOn",
+          "role": "attribute",
+          "semantic_type": "date",
+          "aliases": [
+            "CreatedDate",
+            "DateCreated"
+          ],
+          "description": "Date the assignment record was created (stored as MM/DD/YYYY text in this source)."
+        }
+      ]
+    },
+    {
+      "name": "Address",
+      "source": "dbo.Address",
+      "primary_key": [
+        "ID"
+      ],
+      "display": {
+        "display_name": "Address",
+        "default_label_column": "Line1En",
+        "default_search_columns": [
+          "Line1En",
+          "Line3En",
+          "GeoModelQueryString"
+        ],
+        "default_sort": {
+          "column": "ID",
+          "direction": "asc"
+        },
+        "attribute_order": []
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "role": "primary_key",
+          "semantic_type": "id",
+          "aliases": [
+            "AddressID",
+            "AddrID"
+          ],
+          "description": "Primary key: unique address identifier."
+        },
+        {
+          "name": "Line1",
+          "role": "attribute",
+          "semantic_type": "address_line",
+          "aliases": [
+            "AddressLine1",
+            "StreetLine1"
+          ],
+          "description": "First line of the address in the native/local language (street and number)."
+        },
+        {
+          "name": "Line2",
+          "role": "attribute",
+          "semantic_type": "address_line",
+          "aliases": [
+            "AddressLine2",
+            "StreetLine2"
+          ],
+          "description": "Second line of the address (suite, building, or additional details) in the native/local language."
+        },
+        {
+          "name": "Line3",
+          "role": "attribute",
+          "semantic_type": "address_line",
+          "aliases": [
+            "AddressLine3",
+            "LocalityLine"
+          ],
+          "description": "Third line of the address (often city, region, postal code) in the native/local language."
+        },
+        {
+          "name": "Line4",
+          "role": "attribute",
+          "semantic_type": "country",
+          "aliases": [
+            "AddressLine4",
+            "CountryLine"
+          ],
+          "description": "Fourth line of the address, typically the country name in the native/local language."
+        },
+        {
+          "name": "Longitude",
+          "role": "attribute",
+          "semantic_type": "longitude",
+          "aliases": [
+            "Lon",
+            "Lng"
+          ],
+          "description": "Longitude coordinate value for the address (floating point)."
+        },
+        {
+          "name": "Latitude",
+          "role": "attribute",
+          "semantic_type": "latitude",
+          "aliases": [
+            "Lat",
+            "LatitudeCoord"
+          ],
+          "description": "Latitude coordinate value for the address (floating point)."
+        },
+        {
+          "name": "GeoModelType",
+          "role": "attribute",
+          "semantic_type": "geocode_type",
+          "aliases": [
+            "GeoType",
+            "GeocodeType"
+          ],
+          "description": "Indicator of the geocoding model/type used (categorical numeric code)."
+        },
+        {
+          "name": "GeoModelVersion",
+          "role": "attribute",
+          "semantic_type": "version",
+          "aliases": [
+            "GeoVersion",
+            "GeocodeVersion"
+          ],
+          "description": "Version of the geocoding model that produced the geocode results."
+        },
+        {
+          "name": "GeoModelSearchDate",
+          "role": "attribute",
+          "semantic_type": "datetime",
+          "aliases": [
+            "GeoSearchDate",
+            "GeocodeLookupDate"
+          ],
+          "description": "Timestamp when the geocoding lookup/search was performed."
+        },
+        {
+          "name": "GeoModelScore",
+          "role": "attribute",
+          "semantic_type": "geocode_score",
+          "aliases": [
+            "GeoScore",
+            "GeocodeConfidence"
+          ],
+          "description": "Quality/confidence score returned by the geocoding service (higher is better)."
+        },
+        {
+          "name": "GeoModelStreet1ID",
+          "role": "attribute",
+          "semantic_type": "id",
+          "aliases": [
+            "GeoStreet1ID",
+            "GeocodeStreet1ID"
+          ],
+          "description": "Identifier for the matched primary street from the geocode reference (often empty)."
+        },
+        {
+          "name": "GeoModelStreet2ID",
+          "role": "attribute",
+          "semantic_type": "id",
+          "aliases": [
+            "GeoStreet2ID",
+            "GeocodeStreet2ID"
+          ],
+          "description": "Identifier for the matched secondary street from the geocode reference (often empty)."
+        },
+        {
+          "name": "GeoModelLocID",
+          "role": "attribute",
+          "semantic_type": "id",
+          "aliases": [
+            "GeoLocationID",
+            "GeocodeLocID"
+          ],
+          "description": "Identifier of the matched location/place from the geocode reference."
+        },
+        {
+          "name": "GeoModelZip",
+          "role": "attribute",
+          "semantic_type": "postal_code",
+          "aliases": [
+            "GeocodeZip",
+            "GeoZip"
+          ],
+          "description": "Postal/ZIP code as returned by the geocoding model (text)."
+        },
+        {
+          "name": "CountryID",
+          "role": "foreign_key",
+          "semantic_type": "country_id",
+          "aliases": [
+            "CountryCodeID",
+            "CountryRefID"
+          ],
+          "description": "Foreign key referencing the Country table (dbo.Country.ID); identifies the country for the address."
+        },
+        {
+          "name": "GeoModelQueryString",
+          "role": "attribute",
+          "semantic_type": "geocode_query",
+          "aliases": [
+            "GeoQuery",
+            "GeocodeQueryString"
+          ],
+          "description": "Original query string used for geocoding (free-text version of the address used in lookup)."
+        },
+        {
+          "name": "GeoModelStreet1Text",
+          "role": "attribute",
+          "semantic_type": "address_line",
+          "aliases": [
+            "GeoStreet1Text",
+            "GeocodeStreet1Text"
+          ],
+          "description": "Street name text as returned by the geocoder for the primary street (native/local language)."
+        },
+        {
+          "name": "GeoModelStreet1Num",
+          "role": "attribute",
+          "semantic_type": "address_number",
+          "aliases": [
+            "GeoStreet1Number",
+            "GeocodeStreet1Num"
+          ],
+          "description": "House/building number for the matched primary street (as returned by geocoder)."
+        },
+        {
+          "name": "GeoModelStreet2Text",
+          "role": "attribute",
+          "semantic_type": "address_line",
+          "aliases": [
+            "GeoStreet2Text",
+            "GeocodeStreet2Text"
+          ],
+          "description": "Street name text for a secondary street returned by the geocoder (if present)."
+        },
+        {
+          "name": "GeoModelStreet2Num",
+          "role": "attribute",
+          "semantic_type": "address_number",
+          "aliases": [
+            "GeoStreet2Number",
+            "GeocodeStreet2Num"
+          ],
+          "description": "House/building number for the matched secondary street from geocoder (if present)."
+        },
+        {
+          "name": "GeoModelLocText",
+          "role": "attribute",
+          "semantic_type": "city",
+          "aliases": [
+            "GeoLocationText",
+            "GeocodeLocality"
+          ],
+          "description": "Location/place text (city, town or locality) as returned by the geocoder in native/local language."
+        },
+        {
+          "name": "GeoModelLongitude",
+          "role": "attribute",
+          "semantic_type": "longitude",
+          "aliases": [
+            "GeoLon",
+            "GeocodeLongitude"
+          ],
+          "description": "Longitude value as returned or normalized by the geocoding model (text field)."
+        },
+        {
+          "name": "GeoModelLatitude",
+          "role": "attribute",
+          "semantic_type": "latitude",
+          "aliases": [
+            "GeoLat",
+            "GeocodeLatitude"
+          ],
+          "description": "Latitude value as returned or normalized by the geocoding model (text field)."
+        },
+        {
+          "name": "GeoBroaderAreas",
+          "role": "attribute",
+          "semantic_type": "text",
+          "aliases": [
+            "BroaderAreas",
+            "GeocodeAreaCodes"
+          ],
+          "description": "Concatenated area codes or broader area identifiers returned by the geocoding system."
+        },
+        {
+          "name": "NumericZip",
+          "role": "attribute",
+          "semantic_type": "postal_code",
+          "aliases": [
+            "ZipNumeric",
+            "PostalCodeNumeric"
+          ],
+          "description": "Numeric representation of the postal/ZIP code for the address (integer form)."
+        },
+        {
+          "name": "GeoModelDistrict",
+          "role": "attribute",
+          "semantic_type": "region",
+          "aliases": [
+            "GeoDistrict",
+            "GeocodeDistrict"
+          ],
+          "description": "District or administrative area as returned by the geocoder (native/local language)."
+        },
+        {
+          "name": "GeoModelArea",
+          "role": "attribute",
+          "semantic_type": "subregion",
+          "aliases": [
+            "GeoArea",
+            "GeocodeArea"
+          ],
+          "description": "Named area or neighborhood returned by the geocoder (native/local language)."
+        },
+        {
+          "name": "DMKey",
+          "role": "attribute",
+          "semantic_type": "id",
+          "aliases": [
+            "DataMergeKey",
+            "DM_Key"
+          ],
+          "description": "Data management key used for matching/merging with other data sets (DM system identifier)."
+        },
+        {
+          "name": "DMTable",
+          "role": "attribute",
+          "semantic_type": "text",
+          "aliases": [
+            "DM_Table",
+            "DataMergeTable"
+          ],
+          "description": "Name of the source table or dataset used by the data management process that produced this address."
+        },
+        {
+          "name": "DMCharKey",
+          "role": "attribute",
+          "semantic_type": "text",
+          "aliases": [
+            "DM_CharKey",
+            "DataMergeCharKey"
+          ],
+          "description": "Optional character-based key used in the data management/merge process (often empty)."
+        },
+        {
+          "name": "GeoModelGC_Type",
+          "role": "attribute",
+          "semantic_type": "text",
+          "aliases": [
+            "GeocodeGCType",
+            "GeoGCType"
+          ],
+          "description": "Geocode classification/type code returned by the geocoding system (single-character code)."
+        },
+        {
+          "name": "UserOverrideLine1",
+          "role": "attribute",
+          "semantic_type": "boolean",
+          "aliases": [
+            "OverrideLine1",
+            "IsLine1Overridden"
+          ],
+          "description": "Flag (boolean) indicating whether the user has manually overridden Line1 (true/false)."
+        },
+        {
+          "name": "Line1En",
+          "role": "attribute",
+          "semantic_type": "address_line",
+          "aliases": [
+            "AddressLine1En",
+            "StreetLine1En"
+          ],
+          "description": "First line of the address in English or latinized representation (street and number)."
+        },
+        {
+          "name": "Line2En",
+          "role": "attribute",
+          "semantic_type": "address_line",
+          "aliases": [
+            "AddressLine2En",
+            "StreetLine2En"
+          ],
+          "description": "Second line of the address in English (suite, building, or additional details)."
+        },
+        {
+          "name": "Line3En",
+          "role": "attribute",
+          "semantic_type": "address_line",
+          "aliases": [
+            "AddressLine3En",
+            "LocalityLineEn"
+          ],
+          "description": "Third line of the address in English (city, region, postal code)."
+        },
+        {
+          "name": "Line4En",
+          "role": "attribute",
+          "semantic_type": "country",
+          "aliases": [
+            "AddressLine4En",
+            "CountryLineEn"
+          ],
+          "description": "Fourth line of the address, typically the country name in English."
+        },
+        {
+          "name": "GeoModelStreet1TextEn",
+          "role": "attribute",
+          "semantic_type": "address_line",
+          "aliases": [
+            "GeoStreet1TextEn",
+            "GeocodeStreet1TextEn"
+          ],
+          "description": "Primary street name returned by the geocoder in English or latinized form."
+        },
+        {
+          "name": "GeoModelStreet2TextEn",
+          "role": "attribute",
+          "semantic_type": "address_line",
+          "aliases": [
+            "GeoStreet2TextEn",
+            "GeocodeStreet2TextEn"
+          ],
+          "description": "Secondary street name returned by the geocoder in English (if present)."
+        },
+        {
+          "name": "GeoModelLocTextEn",
+          "role": "attribute",
+          "semantic_type": "city",
+          "aliases": [
+            "GeoLocTextEn",
+            "GeocodeLocalityEn"
+          ],
+          "description": "Location/place text (city or locality) as returned by the geocoder in English."
+        },
+        {
+          "name": "GeoModelDistrictEn",
+          "role": "attribute",
+          "semantic_type": "region",
+          "aliases": [
+            "GeoDistrictEn",
+            "GeocodeDistrictEn"
+          ],
+          "description": "District or administrative area returned by geocoder in English."
+        },
+        {
+          "name": "GeoModelAreaEn",
+          "role": "attribute",
+          "semantic_type": "subregion",
+          "aliases": [
+            "GeoAreaEn",
+            "GeocodeAreaEn"
+          ],
+          "description": "Named area or neighborhood returned by geocoder in English."
+        },
+        {
+          "name": "UserOverrideLine1En",
+          "role": "attribute",
+          "semantic_type": "boolean",
+          "aliases": [
+            "OverrideLine1En",
+            "IsLine1OverriddenEn"
+          ],
+          "description": "Flag (boolean) indicating whether the user has manually overridden Line1En (true/false)."
+        },
+        {
+          "name": "GeoModelStreet1NumEn",
+          "role": "attribute",
+          "semantic_type": "address_number",
+          "aliases": [
+            "GeoStreet1NumEn",
+            "GeocodeStreet1NumEn"
+          ],
+          "description": "House/building number for the primary street returned by the geocoder in English."
+        },
+        {
+          "name": "GeoModelStreet2NumEn",
+          "role": "attribute",
+          "semantic_type": "address_number",
+          "aliases": [
+            "GeoStreet2NumEn",
+            "GeocodeStreet2NumEn"
+          ],
+          "description": "House/building number for the secondary street returned by the geocoder in English (if present)."
+        }
+      ]
+    },
+    {
+      "name": "Advanced Payment Policy",
+      "source": "dbo.AdvancedPaymentPolicy",
+      "primary_key": [
+        "ID"
+      ],
+      "display": {
+        "display_name": "Advanced Payment Policy",
+        "default_label_column": "Name",
+        "default_search_columns": [
+          "Name",
+          "Description",
+          "RuleExpression"
+        ],
+        "default_sort": {
+          "column": "Name",
+          "direction": "asc"
+        },
+        "attribute_order": []
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "role": "primary_key",
+          "semantic_type": "id",
+          "aliases": [
+            "PolicyID",
+            "AdvancedPaymentPolicyID"
+          ],
+          "description": "Surrogate primary key for the advanced payment policy record (unique identifier)."
+        },
+        {
+          "name": "Name",
+          "role": "label",
+          "semantic_type": "text",
+          "aliases": [
+            "PolicyName",
+            "Title"
+          ],
+          "description": "Human-readable name/title of the advanced payment policy (used for selection and display)."
+        },
+        {
+          "name": "Description",
+          "role": "attribute",
+          "semantic_type": "text",
+          "aliases": [
+            "PolicyDescription",
+            "Notes"
+          ],
+          "description": "Longer description or notes that explain the purpose or details of the policy."
+        },
+        {
+          "name": "CreatedOn",
+          "role": "attribute",
+          "semantic_type": "datetime",
+          "aliases": [
+            "DateCreated",
+            "CreatedDate"
+          ],
+          "description": "Date and time when the policy record was created."
+        },
+        {
+          "name": "CreatedBy",
+          "role": "attribute",
+          "semantic_type": "user_name",
+          "aliases": [
+            "Author",
+            "CreatedByUser"
+          ],
+          "description": "User account or system user that created the policy record."
+        },
+        {
+          "name": "ModifiedOn",
+          "role": "attribute",
+          "semantic_type": "datetime",
+          "aliases": [
+            "DateModified",
+            "LastModifiedOn"
+          ],
+          "description": "Date and time of the last modification to the policy record."
+        },
+        {
+          "name": "ModifiedBy",
+          "role": "attribute",
+          "semantic_type": "user_name",
+          "aliases": [
+            "UpdatedBy",
+            "ModifiedByUser"
+          ],
+          "description": "User account or system user that last updated the policy record."
+        },
+        {
+          "name": "Percentage",
+          "role": "attribute",
+          "semantic_type": "percentage",
+          "aliases": [
+            "Percent",
+            "Rate"
+          ],
+          "description": "Percentage value applied by the policy (expressed in percent units). May be null if policy uses fixed amount or formula."
+        },
+        {
+          "name": "Plafon",
+          "role": "attribute",
+          "semantic_type": "currency",
+          "aliases": [
+            "Ceiling",
+            "Plafond"
+          ],
+          "description": "Monetary ceiling (maximum allowed amount) for the policy. Stored as decimal currency (may be null)."
+        },
+        {
+          "name": "RuleExpression",
+          "role": "attribute",
+          "semantic_type": "xml",
+          "aliases": [
+            "Rule",
+            "ConditionExpression"
+          ],
+          "description": "Serialized rule/condition expression (XML/XAML) that defines when the policy applies. Typically contains workflow or rule engine logic."
+        },
+        {
+          "name": "IsActive",
+          "role": "attribute",
+          "semantic_type": "boolean",
+          "aliases": [
+            "Active",
+            "Enabled"
+          ],
+          "description": "Indicates whether the policy is active and should be considered by the application."
+        },
+        {
+          "name": "AdvanceAmountCalculator",
+          "role": "attribute",
+          "semantic_type": "text",
+          "aliases": [
+            "Calculator",
+            "AdvanceCalculator"
+          ],
+          "description": "Optional textual or code expression describing how the advance amount should be calculated (e.g., script, formula or reference)."
+        },
+        {
+          "name": "Amount",
+          "role": "attribute",
+          "semantic_type": "currency",
+          "aliases": [
+            "FixedAmount",
+            "AdvanceAmount"
+          ],
+          "description": "Optional fixed monetary amount associated with the policy. Stored as decimal currency (may be null)."
+        }
+      ]
+    },
+    {
+      "name": "Advanced Discount Policy",
+      "source": "dbo.AdvDiscountPolicy",
+      "primary_key": [
+        "ID"
+      ],
+      "display": {
+        "display_name": "Advanced Discount Policy",
+        "default_label_column": "Name",
+        "default_search_columns": [
+          "Name",
+          "Description",
+          "ID"
+        ],
+        "default_sort": {
+          "column": "Name",
+          "direction": "asc"
+        },
+        "attribute_order": []
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "role": "primary_key",
+          "semantic_type": "id",
+          "aliases": [
+            "PolicyID",
+            "AdvDiscountPolicyID"
+          ],
+          "description": "Surrogate primary key for the discount policy (unique identifier)."
+        },
+        {
+          "name": "DiscountType",
+          "role": "attribute",
+          "semantic_type": "enum_code",
+          "aliases": [
+            "Type",
+            "DiscountCategory"
+          ],
+          "description": "Numeric code indicating the discount type or category (application-specific enumeration)."
+        },
+        {
+          "name": "Name",
+          "role": "label",
+          "semantic_type": "text",
+          "aliases": [
+            "PolicyName",
+            "Title"
+          ],
+          "description": "Human-readable name/title of the discount policy (primary label shown to users)."
+        },
+        {
+          "name": "Description",
+          "role": "attribute",
+          "semantic_type": "text",
+          "aliases": [
+            "PolicyDescription",
+            "Notes"
+          ],
+          "description": "Long description explaining the discount policy, business intent and details."
+        },
+        {
+          "name": "IsActive",
+          "role": "attribute",
+          "semantic_type": "boolean",
+          "aliases": [
+            "Active",
+            "Enabled"
+          ],
+          "description": "Flag that indicates whether the discount policy is active and should be evaluated."
+        },
+        {
+          "name": "CreatedOn",
+          "role": "attribute",
+          "semantic_type": "datetime",
+          "aliases": [
+            "DateCreated",
+            "CreatedDate"
+          ],
+          "description": "Date and time when the discount policy was created (may be null for legacy records)."
+        },
+        {
+          "name": "CreatedBy",
+          "role": "attribute",
+          "semantic_type": "user_name",
+          "aliases": [
+            "Author",
+            "CreatedByUser"
+          ],
+          "description": "User account that created the discount policy (may be null)."
+        },
+        {
+          "name": "ModifiedOn",
+          "role": "attribute",
+          "semantic_type": "datetime",
+          "aliases": [
+            "DateModified",
+            "LastModifiedOn"
+          ],
+          "description": "Date and time of the last modification to the discount policy (may be null)."
+        },
+        {
+          "name": "ModifiedBy",
+          "role": "attribute",
+          "semantic_type": "user_name",
+          "aliases": [
+            "UpdatedBy",
+            "ModifiedByUser"
+          ],
+          "description": "User account that last modified the discount policy (may be null)."
+        },
+        {
+          "name": "Percentage",
+          "role": "attribute",
+          "semantic_type": "percentage",
+          "aliases": [
+            "Percent",
+            "DiscountPercent"
+          ],
+          "description": "Discount percentage applied by the policy. May be null if amount- or rule-based."
+        },
+        {
+          "name": "Amount",
+          "role": "attribute",
+          "semantic_type": "currency",
+          "aliases": [
+            "FixedAmount",
+            "DiscountAmount"
+          ],
+          "description": "Fixed discount amount configured by the policy (currency). May be null if percentage-based or rule-driven."
+        },
+        {
+          "name": "RuleExpression",
+          "role": "attribute",
+          "semantic_type": "text",
+          "aliases": [
+            "Rule",
+            "ConditionExpression"
+          ],
+          "description": "Optional serialized expression or rule that determines when and how the discount applies (free text or XML)."
+        },
+        {
+          "name": "ApplyToUnit",
+          "role": "attribute",
+          "semantic_type": "boolean",
+          "aliases": [
+            "UnitScope",
+            "ApplyPerUnit"
+          ],
+          "description": "Flag indicating whether the discount should be applied per unit (True) or to the overall line/transaction (False)."
+        },
+        {
+          "name": "Bundle1Discount",
+          "role": "attribute",
+          "semantic_type": "integer",
+          "aliases": [
+            "Bundle1",
+            "BundleOneDiscount"
+          ],
+          "description": "Discount percentage or code for bundle size 1 (may be null)."
+        },
+        {
+          "name": "Bundle2Discount",
+          "role": "attribute",
+          "semantic_type": "integer",
+          "aliases": [
+            "Bundle2",
+            "BundleTwoDiscount"
+          ],
+          "description": "Discount percentage or code for bundle size 2 (may be null)."
+        },
+        {
+          "name": "Bundle3Discount",
+          "role": "attribute",
+          "semantic_type": "integer",
+          "aliases": [
+            "Bundle3",
+            "BundleThreeDiscount"
+          ],
+          "description": "Discount percentage or code for bundle size 3 (may be null)."
+        },
+        {
+          "name": "Bundle4Discount",
+          "role": "attribute",
+          "semantic_type": "integer",
+          "aliases": [
+            "Bundle4",
+            "BundleFourDiscount"
+          ],
+          "description": "Discount percentage or code for bundle size 4 (may be null)."
+        },
+        {
+          "name": "BundleOtherDiscount",
+          "role": "attribute",
+          "semantic_type": "integer",
+          "aliases": [
+            "BundleOther",
+            "BundleOtherPct"
+          ],
+          "description": "Discount for other bundle sizes not specifically enumerated (may be null)."
+        },
+        {
+          "name": "MaxApplicableDiscount",
+          "role": "attribute",
+          "semantic_type": "percentage",
+          "aliases": [
+            "MaxApplicable",
+            "MaxAllowedDiscount"
+          ],
+          "description": "Maximum discount percentage that can be applied automatically by the system for this policy (may be null)."
+        },
+        {
+          "name": "MaxSupervisorDiscount",
+          "role": "attribute",
+          "semantic_type": "percentage",
+          "aliases": [
+            "SupervisorMax",
+            "MaxSupervisor"
+          ],
+          "description": "Maximum discount percentage a supervisor can approve for this policy (may be null)."
+        },
+        {
+          "name": "MaxAreaManagerDiscount",
+          "role": "attribute",
+          "semantic_type": "percentage",
+          "aliases": [
+            "AreaManagerMax",
+            "MaxAreaMgr"
+          ],
+          "description": "Maximum discount percentage an area manager can approve for this policy (may be null)."
+        },
+        {
+          "name": "MaxSalesManagerDiscount",
+          "role": "attribute",
+          "semantic_type": "percentage",
+          "aliases": [
+            "SalesManagerMax",
+            "MaxSalesMgr"
+          ],
+          "description": "Maximum discount percentage a sales manager can approve for this policy (may be null)."
+        },
+        {
+          "name": "MaxSalesmanDiscount",
+          "role": "attribute",
+          "semantic_type": "percentage",
+          "aliases": [
+            "SalesmanMax",
+            "MaxSalesRep"
+          ],
+          "description": "Maximum discount percentage a salesperson can apply (may be null)."
+        },
+        {
+          "name": "DMKey",
+          "role": "attribute",
+          "semantic_type": "integer",
+          "aliases": [
+            "DimensionKey",
+            "AnalyticsKey"
+          ],
+          "description": "Data Mart surrogate key used for analytics or downstream reporting (often null)."
+        },
+        {
+          "name": "DMTable",
+          "role": "attribute",
+          "semantic_type": "text",
+          "aliases": [
+            "AnalyticsTable",
+            "DMTableName"
+          ],
+          "description": "Reference to the data mart table name used for analytics (often null)."
+        },
+        {
+          "name": "DMCharKey",
+          "role": "attribute",
+          "semantic_type": "text",
+          "aliases": [
+            "AnalyticsCharKey",
+            "DMChar"
+          ],
+          "description": "Character-based key used for reporting or data-mart joins (often null)."
+        },
+        {
+          "name": "Product1Discount",
+          "role": "attribute",
+          "semantic_type": "integer",
+          "aliases": [
+            "Prod1Discount",
+            "ProductOneDiscount"
+          ],
+          "description": "Product-specific discount for product slot 1 (may be null)."
+        },
+        {
+          "name": "Product2Discount",
+          "role": "attribute",
+          "semantic_type": "integer",
+          "aliases": [
+            "Prod2Discount",
+            "ProductTwoDiscount"
+          ],
+          "description": "Product-specific discount for product slot 2 (may be null)."
+        },
+        {
+          "name": "Product3Discount",
+          "role": "attribute",
+          "semantic_type": "integer",
+          "aliases": [
+            "Prod3Discount",
+            "ProductThreeDiscount"
+          ],
+          "description": "Product-specific discount for product slot 3 (may be null)."
+        },
+        {
+          "name": "Product4Discount",
+          "role": "attribute",
+          "semantic_type": "integer",
+          "aliases": [
+            "Prod4Discount",
+            "ProductFourDiscount"
+          ],
+          "description": "Product-specific discount for product slot 4 (may be null)."
+        },
+        {
+          "name": "ProductOtherDiscount",
+          "role": "attribute",
+          "semantic_type": "integer",
+          "aliases": [
+            "ProdOtherDiscount",
+            "OtherProductDiscount"
+          ],
+          "description": "Product-specific discount applied to other/unlisted products (may be null)."
+        }
+      ]
+    },
+    {
+      "name": "Advertisement Deactivation Reason",
+      "source": "dbo.AdvertisementDeactivationReason",
+      "primary_key": [
+        "ID"
+      ],
+      "display": {
+        "display_name": "Advertisement Deactivation Reason",
+        "default_label_column": "Description",
+        "default_search_columns": [
+          "Description",
+          "ID"
+        ],
+        "default_sort": {
+          "column": "Description",
+          "direction": "asc"
+        },
+        "attribute_order": []
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "role": "primary_key",
+          "semantic_type": "id",
+          "aliases": [
+            "AdvDeactReasonID",
+            "ReasonID"
+          ],
+          "description": "Unique numeric identifier for the advertisement deactivation reason."
+        },
+        {
+          "name": "Description",
+          "role": "label",
+          "semantic_type": "text",
+          "aliases": [
+            "ReasonDescription",
+            "DeactivationReason"
+          ],
+          "description": "Human-readable description (Greek) explaining why an advertisement was deactivated."
+        }
+      ]
+    },
+    {
+      "name": "Advertisement Sales Type",
+      "source": "dbo.AdvertisementSalesType",
+      "primary_key": [
+        "ID"
+      ],
+      "display": {
+        "display_name": "Advertisement Sales Type",
+        "default_label_column": "Description",
+        "default_search_columns": [
+          "Description",
+          "ID",
+          "DMTable"
+        ],
+        "default_sort": {
+          "column": "Description",
+          "direction": "asc"
+        },
+        "attribute_order": []
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "role": "primary_key",
+          "semantic_type": "id",
+          "aliases": [
+            "SalesTypeID",
+            "AdvSalesTypeID"
+          ],
+          "description": "Unique numeric identifier for the advertisement sales type."
+        },
+        {
+          "name": "Description",
+          "role": "label",
+          "semantic_type": "text",
+          "aliases": [
+            "SalesTypeDescription",
+            "TypeDescription"
+          ],
+          "description": "Short code or descriptive name for the sales type (stored with Greek collation)."
+        },
+        {
+          "name": "DMKey",
+          "role": "attribute",
+          "semantic_type": "id",
+          "aliases": [
+            "DataMartKey",
+            "DM_ID"
+          ],
+          "description": "Optional integer key referencing a record in an external data mart or legacy system; often null in this dataset."
+        },
+        {
+          "name": "DMTable",
+          "role": "attribute",
+          "semantic_type": "text",
+          "aliases": [
+            "DataMartTable",
+            "DMTableName"
+          ],
+          "description": "Optional name of the external data mart table associated with DMKey; typically null in this dataset."
+        },
+        {
+          "name": "DMCharKey",
+          "role": "attribute",
+          "semantic_type": "text",
+          "aliases": [
+            "DataMartCharKey",
+            "DMCharKey"
+          ],
+          "description": "Optional character key used to link to external systems or data marts; frequently null."
+        }
+      ]
+    },
+    {
+      "name": "ArchivedNumber",
+      "source": "dbo.ArchivedNumber",
+      "primary_key": [
+        "ID"
+      ],
+      "display": {
+        "display_name": "Archived Number",
+        "default_label_column": "Code",
+        "default_search_columns": [
+          "Code",
+          "CreateByUser",
+          "ID"
+        ],
+        "default_sort": {
+          "column": "Code",
+          "direction": "asc"
+        },
+        "attribute_order": []
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "role": "primary_key",
+          "semantic_type": "id",
+          "aliases": [
+            "ArchivedNumberID",
+            "ID"
+          ],
+          "description": "Unique identifier for the archived number record."
+        },
+        {
+          "name": "Code",
+          "role": "label",
+          "semantic_type": "code",
+          "aliases": [
+            "NumberCode",
+            "ArchivedCode"
+          ],
+          "description": "Numeric code value assigned to the archived number; chosen as the primary human-readable label."
+        },
+        {
+          "name": "IsActive",
+          "role": "attribute",
+          "semantic_type": "boolean",
+          "aliases": [
+            "Active",
+            "IsActiveFlag"
+          ],
+          "description": "Flag indicating whether the archived number is active (True) or inactive (False)."
+        },
+        {
+          "name": "CreatedOn",
+          "role": "attribute",
+          "semantic_type": "datetime",
+          "aliases": [
+            "CreationDate",
+            "CreatedOn"
+          ],
+          "description": "Timestamp when the archived number record was created."
+        },
+        {
+          "name": "CreateById",
+          "role": "foreign_key",
+          "semantic_type": "id",
+          "aliases": [
+            "CreatedByID",
+            "CreatorID"
+          ],
+          "description": "Identifier of the user who created the record; foreign key reference to dbo.User.ID."
+        },
+        {
+          "name": "CreateByUser",
+          "role": "attribute",
+          "semantic_type": "username",
+          "aliases": [
+            "CreatedByUsername",
+            "CreatorUser"
+          ],
+          "description": "Username of the user who created the archived number (human-friendly creator name)."
+        }
+      ]
+    },
+    {
+      "name": "Attribute Repository",
+      "source": "dbo.AttrRepository",
+      "primary_key": [],
+      "display": {
+        "display_name": "Attribute Repository",
+        "default_label_column": "AttributeName",
+        "default_search_columns": [
+          "AttributeName",
+          "AttributeValue",
+          "AttributeId"
+        ],
+        "default_sort": {
+          "column": "AttributeName",
+          "direction": "asc"
+        },
+        "attribute_order": []
+      },
+      "columns": [
+        {
+          "name": "AttributeId",
+          "role": "attribute",
+          "semantic_type": "id",
+          "aliases": [
+            "AttrID",
+            "Attribute_ID"
+          ],
+          "description": "Identifier for the attribute group or definition (stored as text)."
+        },
+        {
+          "name": "AttributeType",
+          "role": "attribute",
+          "semantic_type": "code",
+          "aliases": [
+            "AttrType",
+            "Type"
+          ],
+          "description": "Code that categorizes the attribute (e.g., lookup/type code)."
+        },
+        {
+          "name": "AttributeName",
+          "role": "label",
+          "semantic_type": "text",
+          "aliases": [
+            "Name",
+            "AttrName"
+          ],
+          "description": "Human-readable name of the attribute; may be localized and is the primary label for this repository entry."
+        },
+        {
+          "name": "AttributeLanguageId",
+          "role": "attribute",
+          "semantic_type": "language_code",
+          "aliases": [
+            "LangID",
+            "AttributeLangID"
+          ],
+          "description": "Language identifier for the attribute name (e.g., locale code indicating the language of AttributeName)."
+        },
+        {
+          "name": "AttributeValueId",
+          "role": "attribute",
+          "semantic_type": "id",
+          "aliases": [
+            "AttrValueID",
+            "ValueId"
+          ],
+          "description": "Identifier for a specific attribute value (string-coded id for the value)."
+        },
+        {
+          "name": "AttributeValue",
+          "role": "attribute",
+          "semantic_type": "text",
+          "aliases": [
+            "Value",
+            "AttrValue"
+          ],
+          "description": "Localized text value or label for the attribute value (detailed, human-readable content)."
+        },
+        {
+          "name": "AttributeValueLanguageId",
+          "role": "attribute",
+          "semantic_type": "language_code",
+          "aliases": [
+            "ValueLangID",
+            "AttrValueLangID"
+          ],
+          "description": "Language identifier for the AttributeValue (indicates localization of the value text)."
+        },
+        {
+          "name": "ActiveUdacPartDefinitionCodes",
+          "role": "attribute",
+          "semantic_type": "text",
+          "aliases": [
+            "ActiveCodes",
+            "UdacPartCodes"
+          ],
+          "description": "Comma-separated list of UDAC part definition codes where this attribute value is active; may be 'None' or null when not restricted."
+        }
+      ]
+    },
+    {
+      "name": "AvailableConditionOperands",
+      "source": "dbo.AvailableConditionOperands",
+      "primary_key": [
+        "RuleConditionDefinitionID",
+        "RuleConditionOperandID"
+      ],
+      "display": {
+        "display_name": "Available Condition Operands",
+        "default_label_column": "RuleConditionDefinitionID",
+        "default_search_columns": [
+          "RuleConditionDefinitionID",
+          "RuleConditionOperandID"
+        ],
+        "default_sort": {
+          "column": "RuleConditionDefinitionID",
+          "direction": "asc"
+        },
+        "attribute_order": []
+      },
+      "columns": [
+        {
+          "name": "RuleConditionDefinitionID",
+          "role": [
+            "primary_key",
+            "foreign_key"
+          ],
+          "semantic_type": "id",
+          "aliases": [
+            "RuleConditionDefID",
+            "RuleConditionID",
+            "DefinitionID"
+          ],
+          "description": "Identifier of the rule condition definition (references dbo.RuleConditionDefinition.ID)"
+        },
+        {
+          "name": "RuleConditionOperandID",
+          "role": [
+            "primary_key",
+            "foreign_key"
+          ],
+          "semantic_type": "id",
+          "aliases": [
+            "OperandID",
+            "RuleConditionOperandID",
+            "CondOperandID"
+          ],
+          "description": "Identifier of the operand available for the rule condition (references dbo.RuleConditionOperand.ID)"
+        }
+      ]
+    },
+    {
+      "name": "Bank",
+      "source": "dbo.Bank",
+      "primary_key": [
+        "ID"
+      ],
+      "display": {
+        "display_name": "Bank",
+        "default_label_column": "Description",
+        "default_search_columns": [
+          "Description",
+          "ID",
+          "IsActive"
+        ],
+        "default_sort": {
+          "column": "Description",
+          "direction": "asc"
+        },
+        "attribute_order": []
+      },
+      "columns": [
+        {
+          "name": "ID",
+          "role": [
+            "primary_key"
+          ],
+          "semantic_type": "id",
+          "aliases": [
+            "BankID",
+            "ID"
+          ],
+          "description": "Unique identifier for the bank"
+        },
+        {
+          "name": "Description",
+          "role": [
+            "label",
+            "attribute"
+          ],
+          "semantic_type": "organization_name",
+          "aliases": [
+            "BankName",
+            "Name",
+            "Description"
+          ],
+          "description": "Human-readable bank name or description (may include localized text)"
+        },
+        {
+          "name": "IsActive",
+          "role": [
+            "attribute"
+          ],
+          "semantic_type": "boolean",
+          "aliases": [
+            "Active",
+            "IsActiveFlag",
+            "Enabled"
+          ],
+          "description": "Flag indicating whether the bank is active (True = active, False = inactive)"
+        }
+      ]
+    },
+    {
+      "name": "AttributeMapping",
+      "source": "MigrationSteps.AttributeMapping",
+      "primary_key": [
+        "ActivityID",
+        "OldAttributeID"
+      ],
+      "display": {
+        "display_name": "Attribute Mapping",
+        "default_label_column": "ActivityID",
+        "default_search_columns": [
+          "ActivityID",
+          "OldAttributeID",
+          "NewAttributeID"
+        ],
+        "default_sort": {
+          "column": "ActivityID",
+          "direction": "asc"
+        },
+        "attribute_order": []
+      },
+      "columns": [
+        {
+          "name": "ActivityID",
+          "role": "primary_key",
+          "semantic_type": "id",
+          "aliases": [
+            "Activity_Id",
+            "ActID"
+          ],
+          "description": "Identifier for the migration activity or step to which this attribute mapping applies; groups mappings by migration activity."
+        },
+        {
+          "name": "OldAttributeID",
+          "role": "primary_key",
+          "semantic_type": "id",
+          "aliases": [
+            "OldAttrID",
+            "SourceAttributeID"
+          ],
+          "description": "Identifier of the source (old) attribute being mapped; represents the attribute value in the legacy system."
+        },
+        {
+          "name": "NewAttributeID",
+          "role": "attribute",
+          "semantic_type": "id",
+          "aliases": [
+            "NewAttrID",
+            "TargetAttributeID"
+          ],
+          "description": "Identifier of the target (new) attribute in the destination system to which the old attribute is mapped."
+        }
+      ]
+    },
+    {
+      "name": "AttributeValueMapping",
+      "source": "MigrationSteps.AttributeValueMapping",
+      "primary_key": [
+        "OldAttributeValueId"
+      ],
+      "display": {
+        "display_name": "Attribute Value Mapping",
+        "default_label_column": "OldAttributeValueId",
+        "default_search_columns": [
+          "OldAttributeValueId",
+          "NewAttributeValueID",
+          "ActivityID"
+        ],
+        "default_sort": {
+          "column": "OldAttributeValueId",
+          "direction": "asc"
+        },
+        "attribute_order": []
+      },
+      "columns": [
+        {
+          "name": "ActivityID",
+          "role": "attribute",
+          "semantic_type": "id",
+          "aliases": [
+            "Activity_Id",
+            "ActID"
+          ],
+          "description": "Optional identifier of the migration activity or step; when present, the value mapping is scoped to this activity."
+        },
+        {
+          "name": "OldAttributeValueId",
+          "role": "primary_key",
+          "semantic_type": "id",
+          "aliases": [
+            "OldAttrValueID",
+            "SourceAttributeValueId"
+          ],
+          "description": "Identifier of the source (old) attribute value that is being mapped; unique key for this mapping record."
+        },
+        {
+          "name": "NewAttributeValueID",
+          "role": "attribute",
+          "semantic_type": "id",
+          "aliases": [
+            "NewAttrValueID",
+            "TargetAttributeValueId"
+          ],
+          "description": "Identifier of the target (new) attribute value in the destination system that corresponds to the old attribute value."
+        }
+      ]
+    },
+    {
+      "name": "Keyword Mapping",
+      "source": "MigrationSteps.KeywordMapping",
+      "primary_key": [
+        "ActivityID",
+        "KeywordID",
+        "NewAttributeValueID"
+      ],
+      "display": {
+        "display_name": "Keyword Mapping",
+        "default_label_column": "ActivityID",
+        "default_search_columns": [
+          "ActivityID",
+          "KeywordID",
+          "NewAttributeValueID"
+        ],
+        "default_sort": {
+          "column": "ActivityID",
+          "direction": "asc"
+        },
+        "attribute_order": []
+      },
+      "columns": [
+        {
+          "name": "ActivityID",
+          "role": "primary_key",
+          "semantic_type": "id",
+          "aliases": [
+            "Activity_Id",
+            "ActID"
+          ],
+          "description": "Identifier for the activity to which the keyword mapping applies; part of the composite primary key and typically references an Activity record."
+        },
+        {
+          "name": "KeywordID",
+          "role": "primary_key",
+          "semantic_type": "id",
+          "aliases": [
+            "Keyword_Id",
+            "KWID"
+          ],
+          "description": "Identifier for the source keyword being mapped; part of the composite primary key and typically references a Keyword entity."
+        },
+        {
+          "name": "NewAttributeValueID",
+          "role": "primary_key",
+          "semantic_type": "id",
+          "aliases": [
+            "NewAttrValID",
+            "NewAttributeValue_Id"
+          ],
+          "description": "Identifier of the new attribute value assigned for this keyword mapping; part of the composite primary key and represents the target/new value after migration."
+        }
+      ]
+    },
+    {
+      "name": "Merge Mapping",
+      "source": "MigrationSteps.MergeMapping",
+      "primary_key": [
+        "SourceID",
+        "TargetID"
+      ],
+      "display": {
+        "display_name": "Merge Mapping",
+        "default_label_column": "SourceID",
+        "default_search_columns": [
+          "SourceID",
+          "TargetID"
+        ],
+        "default_sort": {
+          "column": "SourceID",
+          "direction": "asc"
+        },
+        "attribute_order": []
+      },
+      "columns": [
+        {
+          "name": "SourceID",
+          "role": "primary_key",
+          "semantic_type": "id",
+          "aliases": [
+            "SrcID",
+            "Source_Id"
+          ],
+          "description": "Identifier of the source record that is being merged; part of the composite primary key and typically maps to the original record before merge."
+        },
+        {
+          "name": "TargetID",
+          "role": "primary_key",
+          "semantic_type": "id",
+          "aliases": [
+            "TgtID",
+            "Target_Id"
+          ],
+          "description": "Identifier of the target record that receives merged data; part of the composite primary key and usually represents the surviving record after merge."
+        }
+      ]
+    },
+    {
+      "name": "Attribute Value Replacement",
+      "source": "MigrationSteps.ReplaceAV",
+      "primary_key": [],
+      "display": {
+        "display_name": "Attribute Value Replacement",
+        "default_label_column": "Initial_OldAttributeValueId",
+        "default_search_columns": [
+          "Initial_OldAttributeValueId",
+          "ReplaceWithAttributeValueId"
+        ],
+        "default_sort": {
+          "column": "Initial_OldAttributeValueId",
+          "direction": "asc"
+        },
+        "attribute_order": []
+      },
+      "columns": [
+        {
+          "name": "Initial_OldAttributeValueId",
+          "role": "foreign_key",
+          "semantic_type": "id",
+          "aliases": [
+            "OldAttributeValueId",
+            "InitialOldAVId"
+          ],
+          "description": "Identifier of the original attribute value that will be replaced. Typically references the attribute value master/entity in the source system."
+        },
+        {
+          "name": "ReplaceWithAttributeValueId",
+          "role": "foreign_key",
+          "semantic_type": "id",
+          "aliases": [
+            "NewAttributeValueId",
+            "ReplacementAttributeValueId"
+          ],
+          "description": "Identifier of the attribute value that should replace the original value. Typically references the attribute value master/entity in the target or updated mapping."
+        }
+      ]
+    },
+    {
+      "name": "Keyword Replacement",
+      "source": "MigrationSteps.ReplaceKeywords",
+      "primary_key": [],
+      "display": {
+        "display_name": "Keyword Replacement",
+        "default_label_column": "KeywordID",
+        "default_search_columns": [
+          "KeywordID",
+          "ReplaceWithKeywordID"
+        ],
+        "default_sort": {
+          "column": "KeywordID",
+          "direction": "asc"
+        },
+        "attribute_order": []
+      },
+      "columns": [
+        {
+          "name": "KeywordID",
+          "role": "foreign_key",
+          "semantic_type": "id",
+          "aliases": [
+            "OriginalKeywordId",
+            "KWID"
+          ],
+          "description": "Identifier of the original keyword that is being replaced. References the keyword master/entity in the originating dataset."
+        },
+        {
+          "name": "ReplaceWithKeywordID",
+          "role": "foreign_key",
+          "semantic_type": "id",
+          "aliases": [
+            "ReplacementKeywordId",
+            "NewKeywordId"
+          ],
+          "description": "Identifier of the keyword that should replace the original keyword. References the keyword master/entity used after migration or normalization."
+        }
+      ]
+    },
+    {
+      "name": "Step1",
+      "source": "MigrationSteps.Step1",
+      "primary_key": [
+        "ActivityID",
+        "AttributeValueID"
+      ],
+      "display": {
+        "display_name": "Step1 - Activity Attribute Links",
+        "default_label_column": "ActivityID",
+        "default_search_columns": [
+          "ActivityID",
+          "AttributeValueID"
+        ],
+        "default_sort": {
+          "column": "ActivityID",
+          "direction": "asc"
+        },
+        "attribute_order": []
+      },
+      "columns": [
+        {
+          "name": "ActivityID",
+          "role": "primary_key",
+          "semantic_type": "id",
+          "aliases": [
+            "ActivityId",
+            "ActID"
+          ],
+          "description": "Identifier of the activity. Part of the composite primary key linking this record to an activity (acts like a foreign reference to an activity entity). Integer values drawn from the activity domain."
+        },
+        {
+          "name": "AttributeValueID",
+          "role": "primary_key",
+          "semantic_type": "id",
+          "aliases": [
+            "AttrValueID",
+            "AttributeValueId"
+          ],
+          "description": "Identifier of the attribute value associated with the activity. Second column of the composite primary key; represents a specific attribute value applied to the activity."
+        }
+      ]
+    },
+    {
+      "name": "Step2",
+      "source": "MigrationSteps.Step2",
+      "primary_key": [
+        "Activity_ID"
+      ],
+      "display": {
+        "display_name": "Step2 - Activities (Localized Names)",
+        "default_label_column": "NameEn",
+        "default_search_columns": [
+          "NameEn",
+          "NameGr",
+          "Activity_ID"
+        ],
+        "default_sort": {
+          "column": "NameEn",
+          "direction": "asc"
+        },
+        "attribute_order": []
+      },
+      "columns": [
+        {
+          "name": "Activity_ID",
+          "role": "primary_key",
+          "semantic_type": "id",
+          "aliases": [
+            "ActivityID",
+            "ActivityId"
+          ],
+          "description": "Unique identifier for the activity. Serves as the primary key for the activity record and is used to join localized names to the activity."
+        },
+        {
+          "name": "NameGr",
+          "role": "attribute",
+          "semantic_type": "localized_name",
+          "aliases": [
+            "GreekName",
+            "Name_GR"
+          ],
+          "description": "Greek-language name for the activity (NVARCHAR, Greek collation). Human-readable label in Greek for display and searching in Greek-language contexts."
+        },
+        {
+          "name": "NameEn",
+          "role": "label",
+          "semantic_type": "name",
+          "aliases": [
+            "EnglishName",
+            "Name_EN"
+          ],
+          "description": "English-language name for the activity. Preferred human-readable label for UI display and default search/sort in English contexts."
+        }
+      ]
+    }
+  ],
+  "dimensions": [
+    {
+      "name": "Geographic Area",
+      "source": "dbo.AllGeoAreas",
+      "keys": [
+        "GeoAreaId"
+      ],
+      "attributes": [
+        {
+          "name": "GeoAreaId",
+          "role": "attribute",
+          "semantic_type": "geo_id",
+          "aliases": [],
+          "description": "Stable identifier for the geographic area (source key)."
+        },
+        {
+          "name": "Name_ΟΝΟΜΑΣΤΙΚΗ",
+          "role": "attribute",
+          "semantic_type": "place_name",
+          "aliases": [
+            "Name_ONOMASTIKI"
+          ],
+          "description": "Primary (nominative) name of the geographic area in Greek."
+        },
+        {
+          "name": "Name_ΓΕΝΙΚΗ",
+          "role": "attribute",
+          "semantic_type": "place_name",
+          "aliases": [
+            "Name_GENIKI"
+          ],
+          "description": "Alternative (genitive) form of the geographic area name (often empty in this dataset)."
+        },
+        {
+          "name": "specifiers",
+          "role": "attribute",
+          "semantic_type": "text",
+          "aliases": [],
+          "description": "Additional qualifiers or disambiguation text for the area (e.g., district, neighborhood)."
+        },
+        {
+          "name": "Concatenate Name",
+          "role": "attribute",
+          "semantic_type": "display_name",
+          "aliases": [
+            "DisplayName",
+            "FullName"
+          ],
+          "description": "Pre-built human-friendly combined name used for display (concatenation of name fields/specifiers)."
+        }
+      ],
+      "display": {
+        "display_name": "Geo Area",
+        "default_label_column": "Concatenate Name",
+        "default_search_columns": [
+          "Concatenate Name",
+          "Name_ΟΝΟΜΑΣΤΙΚΗ",
+          "Name_ΓΕΝΙΚΗ",
+          "GeoAreaId"
+        ],
+        "default_sort": {
+          "column": "Concatenate Name",
+          "direction": "asc"
+        },
+        "attribute_order": [
+          "Name_ΟΝΟΜΑΣΤΙΚΗ",
+          "specifiers",
+          "Concatenate Name",
+          "GeoAreaId"
+        ]
+      }
+    },
+    {
+      "name": "Auto Extract Calendar",
+      "source": "dbo.AutoExtractCalendar",
+      "keys": [
+        "ID"
+      ],
+      "attributes": [
+        {
+          "name": "ID",
+          "role": "attribute",
+          "semantic_type": "surrogate_key",
+          "aliases": [],
+          "description": "Surrogate integer key for the calendar row."
+        },
+        {
+          "name": "CalendarDate",
+          "role": "attribute",
+          "semantic_type": "date",
+          "aliases": [
+            "Calendar Date",
+            "Date"
+          ],
+          "description": "Full calendar date (datetime) for the calendar entry."
+        },
+        {
+          "name": "Year",
+          "role": "attribute",
+          "semantic_type": "year",
+          "aliases": [],
+          "description": "Calendar year derived from CalendarDate."
+        },
+        {
+          "name": "MonthName",
+          "role": "attribute",
+          "semantic_type": "month_name",
+          "aliases": [
+            "Month"
+          ],
+          "description": "Month name (e.g., January, Φεβρουάριος) derived from CalendarDate; suitable for month-level grouping."
+        },
+        {
+          "name": "DayOfWeek",
+          "role": "attribute",
+          "semantic_type": "weekday",
+          "aliases": [
+            "Weekday"
+          ],
+          "description": "Name of the day of week derived from CalendarDate (e.g., Monday)."
+        },
+        {
+          "name": "Description",
+          "role": "attribute",
+          "semantic_type": "text",
+          "aliases": [
+            "HolidayDescription"
+          ],
+          "description": "Optional textual description for the date (e.g., holiday or special event), in Greek where available."
+        }
+      ],
+      "display": {
+        "display_name": "Calendar Date",
+        "default_label_column": "CalendarDate",
+        "default_search_columns": [
+          "CalendarDate",
+          "Description",
+          "Year",
+          "MonthName"
+        ],
+        "default_sort": {
+          "column": "CalendarDate",
+          "direction": "desc"
+        },
+        "attribute_order": [
+          "Year",
+          "MonthName",
+          "CalendarDate",
+          "DayOfWeek"
+        ]
+      }
+    },
+    {
+      "name": "Star Rating (EN)",
+      "source": "dbo.Attr105StarsEN",
+      "keys": [
+        "AttributeValueId"
+      ],
+      "attributes": [
+        {
+          "name": "AttributeValueId",
+          "role": "attribute",
+          "semantic_type": "id",
+          "aliases": [
+            "AttrValId"
+          ],
+          "description": "Surrogate identifier for the attribute value (string)."
+        },
+        {
+          "name": "AttributeValue",
+          "role": "attribute",
+          "semantic_type": "text",
+          "aliases": [
+            "RatingLabel",
+            "StarLabelEN"
+          ],
+          "description": "Label of the star rating in English (e.g., '1 star', '2 stars')."
+        },
+        {
+          "name": "Stars",
+          "role": "attribute",
+          "semantic_type": "integer",
+          "aliases": [
+            "StarCount",
+            "Rating"
+          ],
+          "description": "Numeric star count (1-5) extracted from AttributeValue for numeric analysis and sorting."
+        }
+      ],
+      "display": {
+        "display_name": "Star Rating (EN)",
+        "default_label_column": "AttributeValue",
+        "default_search_columns": [
+          "AttributeValue",
+          "Stars",
+          "AttributeValueId"
+        ],
+        "default_sort": {
+          "column": "Stars",
+          "direction": "desc"
+        },
+        "attribute_order": [
+          "Stars",
+          "AttributeValue"
+        ]
+      }
+    },
+    {
+      "name": "Star Rating (GR)",
+      "source": "dbo.Attr105StarsGR",
+      "keys": [
+        "AttributeValueId"
+      ],
+      "attributes": [
+        {
+          "name": "AttributeValueId",
+          "role": "attribute",
+          "semantic_type": "id",
+          "aliases": [
+            "AttrValId"
+          ],
+          "description": "Surrogate identifier for the attribute value (string)."
+        },
+        {
+          "name": "AttributeValue",
+          "role": "attribute",
+          "semantic_type": "text",
+          "aliases": [
+            "RatingLabel",
+            "StarLabelGR"
+          ],
+          "description": "Label of the star rating in Greek (e.g., '1 αστέρι', '2 αστέρια')."
+        },
+        {
+          "name": "Stars",
+          "role": "attribute",
+          "semantic_type": "integer",
+          "aliases": [
+            "StarCount",
+            "Rating"
+          ],
+          "description": "Numeric star count (1-5) extracted from AttributeValue for numeric analysis and sorting."
+        }
+      ],
+      "display": {
+        "display_name": "Star Rating (GR)",
+        "default_label_column": "AttributeValue",
+        "default_search_columns": [
+          "AttributeValue",
+          "Stars",
+          "AttributeValueId"
+        ],
+        "default_sort": {
+          "column": "Stars",
+          "direction": "desc"
+        },
+        "attribute_order": [
+          "Stars",
+          "AttributeValue"
+        ]
+      }
+    },
+    {
+      "name": "Transaction Type (GR)",
+      "source": "dbo.Attr107TransactionsGR",
+      "keys": [
+        "AttributeValueId"
+      ],
+      "attributes": [
+        {
+          "name": "AttributeValueId",
+          "role": "attribute",
+          "semantic_type": "identifier",
+          "aliases": [],
+          "description": "Surrogate/string identifier for the transaction type value"
+        },
+        {
+          "name": "AttributeValue",
+          "role": "attribute",
+          "semantic_type": "category",
+          "aliases": [
+            "TransactionNameGR"
+          ],
+          "description": "Transaction type label in Greek (e.g., Κάντε κράτηση, Κλείστε ραντεβού, Online Παραγγελία)"
+        }
+      ],
+      "display": {
+        "display_name": "Transaction Type (GR)",
+        "default_label_column": "AttributeValue",
+        "default_search_columns": [
+          "AttributeValue",
+          "AttributeValueId"
+        ],
+        "default_sort": {
+          "column": "AttributeValue",
+          "direction": "asc"
+        },
+        "attribute_order": [
+          "AttributeValue",
+          "AttributeValueId"
+        ]
+      }
+    },
+    {
+      "name": "Unit Type (EN)",
+      "source": "dbo.Attr111UnitTypeEN",
+      "keys": [
+        "AttributeValueId"
+      ],
+      "attributes": [
+        {
+          "name": "AttributeValueId",
+          "role": "attribute",
+          "semantic_type": "identifier",
+          "aliases": [],
+          "description": "String identifier for the unit/accommodation type"
+        },
+        {
+          "name": "AttributeValue",
+          "role": "attribute",
+          "semantic_type": "category",
+          "aliases": [
+            "UnitTypeNameEN"
+          ],
+          "description": "Accommodation/unit type label in English (e.g., Hotel, Hotel Boutique, Resort-Club)"
+        }
+      ],
+      "display": {
+        "display_name": "Unit Type (EN)",
+        "default_label_column": "AttributeValue",
+        "default_search_columns": [
+          "AttributeValue",
+          "AttributeValueId"
+        ],
+        "default_sort": {
+          "column": "AttributeValue",
+          "direction": "asc"
+        },
+        "attribute_order": [
+          "AttributeValue",
+          "AttributeValueId"
+        ]
+      }
+    },
+    {
+      "name": "Unit Type (Greek)",
+      "source": "dbo.Attr111UnitTypeGR",
+      "keys": [
+        "AttributeValueId"
+      ],
+      "attributes": [
+        {
+          "name": "AttributeValueId",
+          "role": "attribute",
+          "semantic_type": "id",
+          "aliases": [
+            "UnitTypeId",
+            "AttrValueId"
+          ],
+          "description": "Surrogate identifier for the unit type (string)."
+        },
+        {
+          "name": "AttributeValue",
+          "role": "attribute",
+          "semantic_type": "category",
+          "aliases": [
+            "UnitTypeName_GR",
+            "UnitTypeDescription"
+          ],
+          "description": "Unit type name/description in Greek (e.g., Ξενoδoχείο, Ξενoδoχείο Boutique)."
+        }
+      ],
+      "display": {
+        "display_name": "Unit Type (GR)",
+        "default_label_column": "AttributeValue",
+        "default_search_columns": [
+          "AttributeValue",
+          "AttributeValueId"
+        ],
+        "default_sort": {
+          "column": "AttributeValue",
+          "direction": "asc"
+        },
+        "attribute_order": [
+          "AttributeValue"
+        ]
+      }
+    },
+    {
+      "name": "Functional Months (EN)",
+      "source": "dbo.Attr112FunctionalMonthsEN",
+      "keys": [
+        "AttributeValueId"
+      ],
+      "attributes": [
+        {
+          "name": "AttributeValueId",
+          "role": "attribute",
+          "semantic_type": "id",
+          "aliases": [
+            "MonthId",
+            "AttrValueId"
+          ],
+          "description": "Surrogate identifier for the functional month (string)."
+        },
+        {
+          "name": "AttributeValue",
+          "role": "attribute",
+          "semantic_type": "month_name",
+          "aliases": [
+            "MonthName_EN",
+            "FunctionalMonth"
+          ],
+          "description": "English month name indicating functional month (sample values like 'June||', 'July||')."
+        }
+      ],
+      "display": {
+        "display_name": "Functional Months (EN)",
+        "default_label_column": "AttributeValue",
+        "default_search_columns": [
+          "AttributeValue",
+          "AttributeValueId"
+        ],
+        "default_sort": {
+          "column": "AttributeValueId",
+          "direction": "asc"
+        },
+        "attribute_order": [
+          "AttributeValue"
+        ]
+      }
+    },
+    {
+      "name": "Functional Month (GR)",
+      "source": "dbo.Attr112FunctionalMonthsGR",
+      "keys": [
+        "AttributeValueId"
+      ],
+      "attributes": [
+        {
+          "name": "MonthNumber",
+          "role": "attribute",
+          "semantic_type": "month_number",
+          "aliases": [
+            "AttributeValueId",
+            "MonthId"
+          ],
+          "description": "Numeric identifier for the functional month (stored as text). Values range across 12 distinct month identifiers."
+        },
+        {
+          "name": "MonthName",
+          "role": "attribute",
+          "semantic_type": "month_name",
+          "aliases": [
+            "AttributeValue",
+            "Month"
+          ],
+          "description": "Month name in Greek (sample values show Greek month names). Some values include trailing delimiters '||' in the source."
+        }
+      ],
+      "display": {
+        "display_name": "Functional Months (Greek)",
+        "default_label_column": "MonthName",
+        "default_search_columns": [
+          "MonthName",
+          "MonthNumber"
+        ],
+        "default_sort": {
+          "column": "MonthNumber",
+          "direction": "asc"
+        },
+        "attribute_order": [
+          "MonthNumber",
+          "MonthName"
+        ]
+      }
+    },
+    {
+      "name": "Payment Ways (EN)",
+      "source": "dbo.Attr113PaymentWaysEN",
+      "keys": [
+        "AttributeValueId"
+      ],
+      "attributes": [
+        {
+          "name": "PaymentMethodId",
+          "role": "attribute",
+          "semantic_type": "identifier",
+          "aliases": [
+            "AttributeValueId",
+            "PaymentId"
+          ],
+          "description": "Internal identifier for the payment method (stored as text)."
+        },
+        {
+          "name": "PaymentMethod",
+          "role": "attribute",
+          "semantic_type": "category",
+          "aliases": [
+            "AttributeValue",
+            "PaymentWay",
+            "PaymentMethodName"
+          ],
+          "description": "Payment method description in English (examples: 'By credit card Visa', 'By deposit on bank account'). Source values may include trailing delimiters '||'."
+        }
+      ],
+      "display": {
+        "display_name": "Payment Methods (English)",
+        "default_label_column": "PaymentMethod",
+        "default_search_columns": [
+          "PaymentMethod",
+          "PaymentMethodId"
+        ],
+        "default_sort": {
+          "column": "PaymentMethod",
+          "direction": "asc"
+        },
+        "attribute_order": [
+          "PaymentMethod"
+        ]
+      }
+    },
+    {
+      "name": "Payment Method (GR)",
+      "source": "dbo.Attr113PaymentWaysGR",
+      "keys": [
+        "AttributeValueId"
+      ],
+      "attributes": [
+        {
+          "name": "AttributeValueId",
+          "role": "attribute",
+          "semantic_type": "identifier",
+          "aliases": [
+            "PaymentMethodId",
+            "AttrValueId"
+          ],
+          "description": "Surrogate identifier / code for the payment method (string key stored as NVARCHAR)."
+        },
+        {
+          "name": "AttributeValue",
+          "role": "attribute",
+          "semantic_type": "payment_method",
+          "aliases": [
+            "PaymentMethodGR",
+            "MethodName"
+          ],
+          "description": "Human-readable payment method description in Greek (examples: Visa, Mastercard, Amex, cash descriptions)."
+        }
+      ],
+      "display": {
+        "display_name": "Payment Method (GR)",
+        "default_label_column": "AttributeValue",
+        "default_search_columns": [
+          "AttributeValue",
+          "AttributeValueId"
+        ],
+        "default_sort": {
+          "column": "AttributeValue",
+          "direction": "asc"
+        },
+        "attribute_order": [
+          "AttributeValue",
+          "AttributeValueId"
+        ]
+      }
+    },
+    {
+      "name": "Room Keys (EN)",
+      "source": "dbo.Attr115RoomKeysEN",
+      "keys": [
+        "AttributeValueId"
+      ],
+      "attributes": [
+        {
+          "name": "AttributeValueId",
+          "role": "attribute",
+          "semantic_type": "identifier",
+          "aliases": [
+            "RoomKeysId",
+            "AttrValueId"
+          ],
+          "description": "Identifier / code for the room-keys attribute (string key stored as NVARCHAR)."
+        },
+        {
+          "name": "AttributeValue",
+          "role": "attribute",
+          "semantic_type": "count",
+          "aliases": [
+            "RoomKeys",
+            "KeysCount"
+          ],
+          "description": "Number of keys for the room expressed as text (e.g. '1 key', '2 keys'). Stored as NVARCHAR; semantic meaning is a small integer count of keys."
+        }
+      ],
+      "display": {
+        "display_name": "Room Keys (EN)",
+        "default_label_column": "AttributeValue",
+        "default_search_columns": [
+          "AttributeValue",
+          "AttributeValueId"
+        ],
+        "default_sort": {
+          "column": "AttributeValue",
+          "direction": "asc"
+        },
+        "attribute_order": [
+          "AttributeValue",
+          "AttributeValueId"
+        ]
+      }
+    },
+    {
+      "name": "RoomKeys_GR",
+      "source": "dbo.Attr115RoomKeysGR",
+      "keys": [
+        "AttributeValueId"
+      ],
+      "attributes": [
+        {
+          "name": "AttributeValueId",
+          "role": "attribute",
+          "semantic_type": "id",
+          "aliases": [
+            "RoomKeyId",
+            "Id"
+          ],
+          "description": "Surrogate identifier for the room keys attribute value (string-coded id)"
+        },
+        {
+          "name": "AttributeValue",
+          "role": "attribute",
+          "semantic_type": "text",
+          "aliases": [
+            "RoomKeysLabel",
+            "RoomKeyDescription"
+          ],
+          "description": "Label for number of room keys in Greek (e.g. '1 κλειδί', '2 κλειδιά')"
+        }
+      ],
+      "display": {
+        "display_name": "Room Keys (GR)",
+        "default_label_column": "AttributeValue",
+        "default_search_columns": [
+          "AttributeValue",
+          "AttributeValueId"
+        ],
+        "default_sort": {
+          "column": "AttributeValueId",
+          "direction": "asc"
+        },
+        "attribute_order": [
+          "AttributeValue"
+        ]
+      }
+    },
+    {
+      "name": "ArrivalTime_EN",
+      "source": "dbo.Attr116ArrivalTimeEN",
+      "keys": [
+        "AttributeValueId"
+      ],
+      "attributes": [
+        {
+          "name": "AttributeValueId",
+          "role": "attribute",
+          "semantic_type": "id",
+          "aliases": [
+            "ArrivalTimeId",
+            "Id"
+          ],
+          "description": "Identifier for the arrival time value (string-coded id)"
+        },
+        {
+          "name": "AttributeValue",
+          "role": "attribute",
+          "semantic_type": "time",
+          "aliases": [
+            "ArrivalTime",
+            "TimeOfDay"
+          ],
+          "description": "Arrival time value (formatted as HH:MM), English labels"
+        }
+      ],
+      "display": {
+        "display_name": "Arrival Time (EN)",
+        "default_label_column": "AttributeValue",
+        "default_search_columns": [
+          "AttributeValue",
+          "AttributeValueId"
+        ],
+        "default_sort": {
+          "column": "AttributeValue",
+          "direction": "asc"
+        },
+        "attribute_order": [
+          "AttributeValue"
+        ]
+      }
+    },
+    {
+      "name": "Arrival Time (GR)",
+      "source": "dbo.Attr116ArrivalTimeGR",
+      "keys": [
+        "AttributeValueId"
+      ],
+      "attributes": [
+        {
+          "name": "AttributeValueId",
+          "role": "attribute",
+          "semantic_type": "id",
+          "aliases": [
+            "ArrivalTimeId"
+          ],
+          "description": "Surrogate / lookup identifier for the arrival time value (string ID)"
+        },
+        {
+          "name": "AttributeValue",
+          "role": "attribute",
+          "semantic_type": "time",
+          "aliases": [
+            "Time",
+            "ArrivalTime"
+          ],
+          "description": "Time of day value formatted as HH:MM (24-hour)"
+        },
+        {
+          "name": "Hour",
+          "role": "attribute",
+          "semantic_type": "hour",
+          "aliases": [
+            "ArrivalHour"
+          ],
+          "description": "Hour component extracted from AttributeValue (0-23)"
+        },
+        {
+          "name": "Minute",
+          "role": "attribute",
+          "semantic_type": "minute",
+          "aliases": [
+            "ArrivalMinute"
+          ],
+          "description": "Minute component extracted from AttributeValue (0-59)"
+        }
+      ],
+      "display": {
+        "display_name": "Arrival Time (GR)",
+        "default_label_column": "AttributeValue",
+        "default_search_columns": [
+          "AttributeValue",
+          "AttributeValueId",
+          "Hour"
+        ],
+        "default_sort": {
+          "column": "AttributeValue",
+          "direction": "asc"
+        },
+        "attribute_order": [
+          "Hour",
+          "Minute",
+          "AttributeValue"
+        ]
+      }
+    },
+    {
+      "name": "Departure Time (EN)",
+      "source": "dbo.Attr117DepartureTimeEN",
+      "keys": [
+        "AttributeValueId"
+      ],
+      "attributes": [
+        {
+          "name": "AttributeValueId",
+          "role": "attribute",
+          "semantic_type": "id",
+          "aliases": [
+            "DepartureTimeId"
+          ],
+          "description": "Surrogate / lookup identifier for the departure time value (string ID)"
+        },
+        {
+          "name": "AttributeValue",
+          "role": "attribute",
+          "semantic_type": "time",
+          "aliases": [
+            "Time",
+            "DepartureTime"
+          ],
+          "description": "Time of day value formatted as HH:MM (24-hour)"
+        },
+        {
+          "name": "Hour",
+          "role": "attribute",
+          "semantic_type": "hour",
+          "aliases": [
+            "DepartureHour"
+          ],
+          "description": "Hour component extracted from AttributeValue (0-23)"
+        },
+        {
+          "name": "Minute",
+          "role": "attribute",
+          "semantic_type": "minute",
+          "aliases": [
+            "DepartureMinute"
+          ],
+          "description": "Minute component extracted from AttributeValue (0-59)"
+        }
+      ],
+      "display": {
+        "display_name": "Departure Time (EN)",
+        "default_label_column": "AttributeValue",
+        "default_search_columns": [
+          "AttributeValue",
+          "AttributeValueId",
+          "Hour"
+        ],
+        "default_sort": {
+          "column": "AttributeValue",
+          "direction": "asc"
+        },
+        "attribute_order": [
+          "Hour",
+          "Minute",
+          "AttributeValue"
+        ]
+      }
+    },
+    {
+      "name": "Departure Time (GR)",
+      "source": "dbo.Attr117DepartureTimeGR",
+      "keys": [
+        "AttributeValueId"
+      ],
+      "attributes": [
+        {
+          "name": "AttributeValueId",
+          "role": "attribute",
+          "semantic_type": "identifier",
+          "aliases": [
+            "DepartureTimeId",
+            "AttributeValue_ID"
+          ],
+          "description": "Surrogate identifier for the departure time attribute (string id from source)"
+        },
+        {
+          "name": "AttributeValue",
+          "role": "attribute",
+          "semantic_type": "time",
+          "aliases": [
+            "DepartureTime",
+            "Time"
+          ],
+          "description": "Departure time in HH:MM format (localized Greek view)"
+        }
+      ],
+      "display": {
+        "display_name": "Departure Time",
+        "default_label_column": "AttributeValue",
+        "default_search_columns": [
+          "AttributeValue",
+          "AttributeValueId"
+        ],
+        "default_sort": {
+          "column": "AttributeValue",
+          "direction": "asc"
+        },
+        "attribute_order": [
+          "AttributeValue"
+        ]
+      }
+    },
+    {
+      "name": "High Season Month (EN)",
+      "source": "dbo.Attr118HighSeasonEN",
+      "keys": [
+        "AttributeValueId"
+      ],
+      "attributes": [
+        {
+          "name": "AttributeValueId",
+          "role": "attribute",
+          "semantic_type": "identifier",
+          "aliases": [
+            "HighSeasonId",
+            "AttributeValue_ID"
+          ],
+          "description": "Surrogate identifier for the high-season month attribute (string id from source)"
+        },
+        {
+          "name": "AttributeValue",
+          "role": "attribute",
+          "semantic_type": "month_name",
+          "aliases": [
+            "HighSeasonMonth",
+            "Month"
+          ],
+          "description": "Name of month indicating high season (English). Source values may include trailing delimiters (e.g., 'January||')."
+        }
+      ],
+      "display": {
+        "display_name": "High Season Month",
+        "default_label_column": "AttributeValue",
+        "default_search_columns": [
+          "AttributeValue",
+          "AttributeValueId"
+        ],
+        "default_sort": {
+          "column": "AttributeValue",
+          "direction": "asc"
+        },
+        "attribute_order": [
+          "AttributeValue"
+        ]
+      }
+    },
+    {
+      "name": "High Season Months (GR)",
+      "source": "dbo.Attr118HighSeasonGR",
+      "keys": [
+        "AttributeValueId"
+      ],
+      "attributes": [
+        {
+          "name": "AttributeValueId",
+          "role": "attribute",
+          "semantic_type": "identifier",
+          "aliases": [
+            "Id",
+            "MonthId"
+          ],
+          "description": "Surrogate identifier for the attribute value (stored as NVARCHAR)."
+        },
+        {
+          "name": "AttributeValue",
+          "role": "attribute",
+          "semantic_type": "month_name",
+          "aliases": [
+            "Month",
+            "MonthName"
+          ],
+          "description": "Month name in Greek (values include a trailing '||' delimiter in the source)."
+        }
+      ],
+      "display": {
+        "display_name": "High Season Months (GR)",
+        "default_label_column": "AttributeValue",
+        "default_search_columns": [
+          "AttributeValue",
+          "AttributeValueId"
+        ],
+        "default_sort": {
+          "column": "AttributeValueId",
+          "direction": "asc"
+        },
+        "attribute_order": [
+          "AttributeValue"
+        ]
+      }
+    },
+    {
+      "name": "Low Season Months (EN)",
+      "source": "dbo.Attr119LowSeasonEN",
+      "keys": [
+        "AttributeValueId"
+      ],
+      "attributes": [
+        {
+          "name": "AttributeValueId",
+          "role": "attribute",
+          "semantic_type": "identifier",
+          "aliases": [
+            "Id",
+            "MonthId"
+          ],
+          "description": "Surrogate identifier for the attribute value (stored as NVARCHAR)."
+        },
+        {
+          "name": "AttributeValue",
+          "role": "attribute",
+          "semantic_type": "month_name",
+          "aliases": [
+            "Month",
+            "MonthName",
+            "Label"
+          ],
+          "description": "Month name in English (values include a trailing '||' delimiter in the source)."
+        }
+      ],
+      "display": {
+        "display_name": "Low Season Months (EN)",
+        "default_label_column": "AttributeValue",
+        "default_search_columns": [
+          "AttributeValue",
+          "AttributeValueId"
+        ],
+        "default_sort": {
+          "column": "AttributeValueId",
+          "direction": "asc"
+        },
+        "attribute_order": [
+          "AttributeValue"
+        ]
+      }
+    }
+  ],
+  "facts": [
+    {
+      "name": "PaymentMethodTransaction",
+      "source": "dbo.AdvancedPaymentMethod",
+      "grain": [
+        "ID"
+      ],
+      "measures": [
+        {
+          "name": "TotalAmount",
+          "expression": "SUM(Amount)",
+          "unit": "currency",
+          "currency": "USD",
+          "format_hint": "currency(2)",
+          "description": "Sum of payment amounts recorded for the payment method entry. Primary monetary measure for this table."
+        },
+        {
+          "name": "NumberOfPayments",
+          "expression": "COUNT(ID)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "integer",
+          "description": "Count of payment method records (rows) in the fact table."
+        },
+        {
+          "name": "AveragePaymentAmount",
+          "expression": "AVG(Amount)",
+          "unit": "currency",
+          "currency": "USD",
+          "format_hint": "currency(2)",
+          "description": "Average payment amount per record. Nulls in Amount are excluded by AVG semantics."
+        },
+        {
+          "name": "UniqueSystemReceipts",
+          "expression": "COUNT(DISTINCT SystemReceiptNumber)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "integer",
+          "description": "Number of distinct system receipt identifiers referenced by these payment records. SystemReceiptNumber can be null; nulls are excluded."
+        },
+        {
+          "name": "CheckPaymentsCount",
+          "expression": "SUM(CASE WHEN CheckNumber IS NOT NULL OR CheckPublisher IS NOT NULL THEN 1 ELSE 0 END)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "integer",
+          "description": "Count of records that appear to be check payments (identified by presence of CheckNumber or CheckPublisher). Useful for separating check-based flows from other payment types."
+        },
+        {
+          "name": "BankDepositedAmount",
+          "expression": "SUM(CASE WHEN BankDepositDate IS NOT NULL THEN Amount ELSE 0 END)",
+          "unit": "currency",
+          "currency": "USD",
+          "format_hint": "currency(2)",
+          "description": "Sum of amounts for records that have a BankDepositDate (i.e., amounts that were deposited to a bank)."
+        },
+        {
+          "name": "PolicyAmountSum",
+          "expression": "SUM(PolicyAmount)",
+          "unit": "currency",
+          "currency": "USD",
+          "format_hint": "currency(2)",
+          "description": "Sum of PolicyAmount values. Note: this column is almost entirely null in the current dataset and should be interpreted as sparse."
+        },
+        {
+          "name": "PercentOfTotalAmount",
+          "expression": "SUM(Amount) / NULLIF(SUM(SUM(Amount)) OVER (), 0)",
+          "unit": "percentage",
+          "currency": null,
+          "format_hint": "percentage(2)",
+          "description": "Proportion of the overall table amount represented by the current aggregation context. Implemented using a window denominator (NULL-safe). Useful for charts showing share-of-total."
+        }
+      ],
+      "foreign_keys": [
+        {
+          "column": "SalesCollectionID",
+          "references": "dbo.SalesCollection.ID"
+        },
+        {
+          "column": "BankID",
+          "references": "dbo.Bank.ID"
+        },
+        {
+          "column": "CreditCardTypeID",
+          "references": "dbo.CreditCardType.ID"
+        },
+        {
+          "column": "PaymentMethodTypeID",
+          "references": "dbo.PaymentMethodType.ID"
+        },
+        {
+          "column": "ID",
+          "references": "dbo.Contract.ID"
+        }
+      ],
+      "display": {
+        "default_breakdowns": [
+          "PaymentMethodType",
+          "Bank",
+          "CollectionDate",
+          "SalesCollection",
+          "CheckPublisher"
+        ],
+        "default_filters": [
+          {
+            "column": "Amount",
+            "op": ">",
+            "value": "0"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AdvancedPaymentMethod",
+      "source": "dbo.AdvancedPaymentMethod20230517",
+      "grain": [
+        "ID"
+      ],
+      "measures": [
+        {
+          "name": "TotalAmount",
+          "expression": "SUM(Amount)",
+          "unit": "currency",
+          "currency": "USD",
+          "format_hint": "currency(3)",
+          "description": "Total payment amount recorded for these payment method rows. Amount stored with three decimal places."
+        },
+        {
+          "name": "PaymentCount",
+          "expression": "COUNT(ID)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "integer",
+          "description": "Number of payment method records (rows). Use to count payments or payment method entries."
+        },
+        {
+          "name": "AveragePaymentAmount",
+          "expression": "AVG(Amount)",
+          "unit": "currency",
+          "currency": "USD",
+          "format_hint": "currency(3)",
+          "description": "Average payment amount per payment method row."
+        },
+        {
+          "name": "MinPaymentAmount",
+          "expression": "MIN(Amount)",
+          "unit": "currency",
+          "currency": "USD",
+          "format_hint": "currency(3)",
+          "description": "Smallest payment amount observed in the dataset."
+        },
+        {
+          "name": "MaxPaymentAmount",
+          "expression": "MAX(Amount)",
+          "unit": "currency",
+          "currency": "USD",
+          "format_hint": "currency(3)",
+          "description": "Largest payment amount observed in the dataset."
+        },
+        {
+          "name": "DistinctPaymentMethodTypes",
+          "expression": "COUNT(DISTINCT PaymentMethodTypeID)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "integer",
+          "description": "Number of distinct payment method type identifiers present in the selected set."
+        },
+        {
+          "name": "AverageCreditCardInstallments",
+          "expression": "AVG(CreditCardInstallments)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "decimal(2)",
+          "description": "Average number of installments for credit card payments. Column is sparse (many nulls) so averages should be interpreted accordingly."
+        },
+        {
+          "name": "TotalPolicyAmount",
+          "expression": "SUM(PolicyAmount)",
+          "unit": "currency",
+          "currency": "USD",
+          "format_hint": "currency(3)",
+          "description": "Sum of PolicyAmount values associated with payment rows. Field is largely null in the sampled data."
+        },
+        {
+          "name": "DistinctSystemReceiptNumbers",
+          "expression": "COUNT(DISTINCT SystemReceiptNumber)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "integer",
+          "description": "Count of distinct system receipt numbers observed (useful for cross-checks with receipt tables). Field appears sparse."
+        }
+      ],
+      "foreign_keys": [
+        {
+          "column": "PaymentMethodTypeID",
+          "references": "PaymentMethodType.PaymentMethodTypeID"
+        },
+        {
+          "column": "BankID",
+          "references": "Bank.BankID"
+        },
+        {
+          "column": "CreditCardTypeID",
+          "references": "CreditCardType.CreditCardTypeID"
+        },
+        {
+          "column": "SalesCollectionID",
+          "references": "SalesCollection.SalesCollectionID"
+        }
+      ],
+      "display": {
+        "default_breakdowns": [
+          "PaymentMethodTypeID",
+          "BankID",
+          "CreditCardTypeID",
+          "CollectionDate"
+        ],
+        "default_filters": [
+          {
+            "column": "Amount",
+            "op": "IS NOT NULL",
+            "value": ""
+          },
+          {
+            "column": "Amount",
+            "op": "<>",
+            "value": "0"
+          }
+        ]
+      }
+    },
+    {
+      "name": "AdvancedPaymentSalesCollection",
+      "source": "dbo.AdvancedPaymentSalesCollection",
+      "grain": [
+        "AdvancedPaymentMethodID",
+        "SalesCollectionID"
+      ],
+      "measures": [
+        {
+          "name": "RecordCount",
+          "expression": "COUNT(*)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "integer",
+          "description": "Number of association records (rows) for the selected filter/context. At the table grain this will typically be 1 per row; useful for aggregations."
+        },
+        {
+          "name": "DistinctSalesCollections",
+          "expression": "COUNT(DISTINCT SalesCollectionID)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "integer",
+          "description": "Count of distinct sales collections represented in the current filter/context. Useful when aggregating by payment method or other dimensions."
+        },
+        {
+          "name": "DistinctAdvancedPaymentMethods",
+          "expression": "COUNT(DISTINCT AdvancedPaymentMethodID)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "integer",
+          "description": "Count of distinct advanced payment methods represented in the current filter/context. Useful when aggregating by sales collection or other dimensions."
+        }
+      ],
+      "foreign_keys": [
+        {
+          "column": "AdvancedPaymentMethodID",
+          "references": "dbo.AdvancedPaymentMethod.ID"
+        },
+        {
+          "column": "SalesCollectionID",
+          "references": "dbo.SalesCollection.ID"
+        }
+      ],
+      "display": {
+        "default_breakdowns": [
+          "AdvancedPaymentMethod",
+          "SalesCollection"
+        ],
+        "default_filters": [],
+        "default_sort": {
+          "measure": "RecordCount",
+          "order": "desc"
+        }
+      }
+    },
+    {
+      "name": "AdvertisementFact",
+      "source": "dbo.Advertisement",
+      "grain": [
+        "ID"
+      ],
+      "measures": [
+        {
+          "name": "AdvertisementCount",
+          "expression": "COUNT(ID)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "integer",
+          "description": "Number of advertisement records (row count)"
+        },
+        {
+          "name": "TotalPrice",
+          "expression": "SUM(Price)",
+          "unit": "currency",
+          "currency": "USD",
+          "format_hint": "currency(2)",
+          "description": "Sum of Price for the advertisement rows. Price is a monetary amount per advertisement."
+        },
+        {
+          "name": "AveragePrice",
+          "expression": "AVG(Price)",
+          "unit": "currency",
+          "currency": "USD",
+          "format_hint": "currency(2)",
+          "description": "Average Price per advertisement"
+        },
+        {
+          "name": "TotalDiscount",
+          "expression": "SUM(Discount)",
+          "unit": "currency",
+          "currency": "USD",
+          "format_hint": "currency(2)",
+          "description": "Sum of advertised discounts (Discount column)"
+        },
+        {
+          "name": "TotalRulesDiscount",
+          "expression": "SUM(RulesDiscount)",
+          "unit": "currency",
+          "currency": "USD",
+          "format_hint": "currency(2)",
+          "description": "Sum of discounts applied by rules"
+        },
+        {
+          "name": "TotalPaymentDiscount",
+          "expression": "SUM(PaymentDiscount)",
+          "unit": "currency",
+          "currency": "USD",
+          "format_hint": "currency(2)",
+          "description": "Sum of payment-related discounts. Note: high null rate for this column; NULLs are treated as 0 in aggregated business calculations."
+        },
+        {
+          "name": "TotalProductDiscount",
+          "expression": "SUM(ProductDiscount)",
+          "unit": "currency",
+          "currency": "USD",
+          "format_hint": "currency(2)",
+          "description": "Sum of product-specific discounts (may be mostly NULL in this dataset)"
+        },
+        {
+          "name": "TotalBundleDiscount",
+          "expression": "SUM(BundleDiscount)",
+          "unit": "currency",
+          "currency": "USD",
+          "format_hint": "currency(2)",
+          "description": "Sum of bundle discounts"
+        },
+        {
+          "name": "TotalAllDiscounts",
+          "expression": "SUM(COALESCE(Discount,0) + COALESCE(RulesDiscount,0) + COALESCE(PaymentDiscount,0) + COALESCE(ProductDiscount,0) + COALESCE(BundleDiscount,0))",
+          "unit": "currency",
+          "currency": "USD",
+          "format_hint": "currency(2)",
+          "description": "Combined total of all discount types (treats NULL as 0). Useful for net calculations."
+        },
+        {
+          "name": "NetRevenue",
+          "expression": "SUM(COALESCE(Price,0) - (COALESCE(Discount,0) + COALESCE(RulesDiscount,0) + COALESCE(PaymentDiscount,0) + COALESCE(ProductDiscount,0) + COALESCE(BundleDiscount,0)))",
+          "unit": "currency",
+          "currency": "USD",
+          "format_hint": "currency(2)",
+          "description": "Estimated net revenue = Price minus all discount types (NULL discounts treated as 0). Use as a proxy for what was billed after discounts."
+        },
+        {
+          "name": "SumAlteredAmount",
+          "expression": "SUM(AlteredAmount)",
+          "unit": "currency",
+          "currency": "USD",
+          "format_hint": "currency(2)",
+          "description": "Sum of AlteredAmount (manually adjusted amounts). Column has very high null rate; aggregated value may be sparse."
+        },
+        {
+          "name": "SumBudgetAmount",
+          "expression": "SUM(BudgetAmount)",
+          "unit": "currency",
+          "currency": "USD",
+          "format_hint": "currency(2)",
+          "description": "Sum of BudgetAmount. Column is mostly NULL in the sample."
+        },
+        {
+          "name": "SumOneTimeAmount",
+          "expression": "SUM(OneTimeAmount)",
+          "unit": "currency",
+          "currency": "USD",
+          "format_hint": "currency(2)",
+          "description": "Sum of one-time amounts associated with advertisements"
+        },
+        {
+          "name": "SumExtraFeeAmount",
+          "expression": "SUM(ExtraFeeAmount)",
+          "unit": "currency",
+          "currency": "USD",
+          "format_hint": "currency(2)",
+          "description": "Sum of extra fee amounts"
+        },
+        {
+          "name": "SumOneTimeAmountAfterDiscount",
+          "expression": "SUM(OneTimeAmountAfterDiscount)",
+          "unit": "currency",
+          "currency": "USD",
+          "format_hint": "currency(2)",
+          "description": "Sum of one-time amounts after discounts (mostly NULL in sample)"
+        },
+        {
+          "name": "SumExtraFeeAmountAfterDiscount",
+          "expression": "SUM(ExtraFeeAmountAfterDiscount)",
+          "unit": "currency",
+          "currency": "USD",
+          "format_hint": "currency(2)",
+          "description": "Sum of extra fee amounts after discounts (mostly NULL in sample)"
+        },
+        {
+          "name": "SumActualSpentBudget",
+          "expression": "SUM(ActualSpentBudget)",
+          "unit": "currency",
+          "currency": "USD",
+          "format_hint": "currency(2)",
+          "description": "Sum of actual spent budget (sparse in dataset)"
+        },
+        {
+          "name": "SumExtraFeeAmountAfterCC",
+          "expression": "SUM(ExtraFeeAmountAfterCC)",
+          "unit": "currency",
+          "currency": "USD",
+          "format_hint": "currency(2)",
+          "description": "Sum of extra fee amounts after cost corrections (sparse)"
+        },
+        {
+          "name": "SumAlteredPPCAmountAfterCC",
+          "expression": "SUM(AlteredPPCAmountAfterCC)",
+          "unit": "currency",
+          "currency": "USD",
+          "format_hint": "currency(2)",
+          "description": "Sum of altered PPC amounts after cost corrections (sparse)"
+        },
+        {
+          "name": "ActiveAdvertisements",
+          "expression": "SUM(CASE WHEN DeactivationDate IS NULL THEN 1 ELSE 0 END)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "integer",
+          "description": "Number of advertisements that are not deactivated (DeactivationDate IS NULL)"
+        },
+        {
+          "name": "SubscriptionBasedCount",
+          "expression": "SUM(CASE WHEN IsSubscriptionBased = 1 THEN 1 ELSE 0 END)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "integer",
+          "description": "Count of advertisements marked as subscription-based"
+        },
+        {
+          "name": "AverageActiveDurationDays",
+          "expression": "AVG(CASE WHEN AdvEndDate IS NOT NULL THEN DATEDIFF(day, AdvBeginDate, AdvEndDate) END)",
+          "unit": "days",
+          "currency": null,
+          "format_hint": "decimal(1)",
+          "description": "Average duration in days between AdvBeginDate and AdvEndDate for rows with an end date. Note: AdvEndDate is frequently NULL so this average is calculated on a subset."
+        }
+      ],
+      "foreign_keys": [
+        {
+          "column": "VersionSectionID",
+          "references": "VersionSection.ID"
+        },
+        {
+          "column": "CaseAttachmentID",
+          "references": "CaseAttachment.ID"
+        },
+        {
+          "column": "ContractProductID",
+          "references": "ContractProduct.ID"
+        },
+        {
+          "column": "ProductID",
+          "references": "Product.ID"
+        },
+        {
+          "column": "ProductKitID",
+          "references": "ProductKit.ID"
+        },
+        {
+          "column": "HeadingID",
+          "references": "VersionGroupItem.ID"
+        },
+        {
+          "column": "ReactivatedContractID",
+          "references": "Contract.ID"
+        },
+        {
+          "column": "RelatedAdvertisementID",
+          "references": "Advertisement.ID"
+        }
+      ],
+      "display": {
+        "default_breakdowns": [
+          "ProductID",
+          "ContractProductID",
+          "GeoAreaID",
+          "AdvBeginDate",
+          "DMTable"
+        ],
+        "default_filters": [
+          {
+            "column": "IsVerified",
+            "op": "=",
+            "value": true
+          },
+          {
+            "column": "DenyExtraction",
+            "op": "=",
+            "value": false
+          }
+        ]
+      }
+    },
+    {
+      "name": "AutoExtractHistory",
+      "source": "dbo.AutoExtractHistory",
+      "grain": [
+        "ID"
+      ],
+      "measures": [
+        {
+          "name": "ExtractionCount",
+          "expression": "COUNT(*)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "integer",
+          "description": "Total number of extraction events (row count)."
+        },
+        {
+          "name": "DistinctMessageCount",
+          "expression": "COUNT(DISTINCT Text)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "integer",
+          "description": "Number of distinct extraction text messages/templates recorded."
+        },
+        {
+          "name": "EarliestTimeStamp",
+          "expression": "MIN(TimeStamp)",
+          "unit": "datetime",
+          "currency": null,
+          "format_hint": "datetime",
+          "description": "Timestamp of the earliest recorded extraction in the filtered set."
+        },
+        {
+          "name": "LatestTimeStamp",
+          "expression": "MAX(TimeStamp)",
+          "unit": "datetime",
+          "currency": null,
+          "format_hint": "datetime",
+          "description": "Timestamp of the latest recorded extraction in the filtered set."
+        },
+        {
+          "name": "AverageExtractionsPerDay",
+          "expression": "COUNT(*) * 1.0 / NULLIF(COUNT(DISTINCT CAST(TimeStamp AS DATE)), 0)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "number(2)",
+          "description": "Average number of extraction events per distinct day in the current filter context."
+        },
+        {
+          "name": "Extracts_Type_0",
+          "expression": "SUM(CASE WHEN Type = 0 THEN 1 ELSE 0 END)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "integer",
+          "description": "Count of extraction events with Type = 0. (Interpretation of code depends on source system.)"
+        },
+        {
+          "name": "Extracts_Type_1",
+          "expression": "SUM(CASE WHEN Type = 1 THEN 1 ELSE 0 END)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "integer",
+          "description": "Count of extraction events with Type = 1. (Interpretation of code depends on source system.)"
+        },
+        {
+          "name": "Extracts_Type_2",
+          "expression": "SUM(CASE WHEN Type = 2 THEN 1 ELSE 0 END)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "integer",
+          "description": "Count of extraction events with Type = 2. (Interpretation of code depends on source system.)"
+        },
+        {
+          "name": "Extracts_Status_0",
+          "expression": "SUM(CASE WHEN Status = 0 THEN 1 ELSE 0 END)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "integer",
+          "description": "Count of extraction events with Status = 0. (Interpretation of code depends on source system.)"
+        },
+        {
+          "name": "Extracts_Status_1",
+          "expression": "SUM(CASE WHEN Status = 1 THEN 1 ELSE 0 END)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "integer",
+          "description": "Count of extraction events with Status = 1. (Interpretation of code depends on source system.)"
+        },
+        {
+          "name": "Status_0_Rate",
+          "expression": "SUM(CASE WHEN Status = 0 THEN 1 ELSE 0 END) * 1.0 / NULLIF(COUNT(*), 0)",
+          "unit": "percentage",
+          "currency": null,
+          "format_hint": "percentage(1)",
+          "description": "Proportion of extraction events where Status = 0 (percentage of total events). Interpret code meaning in source system."
+        }
+      ],
+      "foreign_keys": [],
+      "display": {
+        "default_breakdowns": [
+          "TimeStamp.Date",
+          "Type",
+          "Status"
+        ],
+        "default_filters": []
+      }
+    },
+    {
+      "name": "BankDepositDetail",
+      "source": "dbo.BankDepositDetail",
+      "grain": [
+        "ID"
+      ],
+      "measures": [
+        {
+          "name": "Deposit Count",
+          "expression": "COUNT(ID)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "integer",
+          "description": "Total number of deposit detail records (one row per deposit detail)"
+        },
+        {
+          "name": "Distinct Deposit Numbers",
+          "expression": "COUNT(DISTINCT BankDepositNumber)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "integer",
+          "description": "Number of distinct deposit identifiers recorded in BankDepositNumber"
+        },
+        {
+          "name": "Distinct Banks",
+          "expression": "COUNT(DISTINCT BankID)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "integer",
+          "description": "Number of distinct banks referenced by these deposit details"
+        },
+        {
+          "name": "Earliest Deposit Date",
+          "expression": "MIN(BankDepositDate)",
+          "unit": "datetime",
+          "currency": null,
+          "format_hint": "date",
+          "description": "The earliest BankDepositDate in the current filter context"
+        },
+        {
+          "name": "Latest Deposit Date",
+          "expression": "MAX(BankDepositDate)",
+          "unit": "datetime",
+          "currency": null,
+          "format_hint": "date",
+          "description": "The latest BankDepositDate in the current filter context"
+        },
+        {
+          "name": "Average Days Since Deposit",
+          "expression": "AVG(DATEDIFF(day, BankDepositDate, GETUTCDATE()))",
+          "unit": "days",
+          "currency": null,
+          "format_hint": "integer",
+          "description": "Average number of days between each deposit date and today (useful to gauge recency)"
+        }
+      ],
+      "foreign_keys": [
+        {
+          "column": "BankID",
+          "references": "dbo.Bank.ID"
+        },
+        {
+          "column": "ID",
+          "references": "dbo.SalesCollection.ID"
+        }
+      ],
+      "display": {
+        "default_breakdowns": [
+          "Bank (BankID → dbo.Bank.Name)",
+          "BankDepositDate.Year",
+          "BankDepositDate.Month"
+        ],
+        "default_filters": [
+          {
+            "column": "BankDepositDate",
+            "op": ">=",
+            "value": "2013-01-01"
+          }
+        ]
+      }
+    },
+    {
+      "name": "BatchActionHistory",
+      "source": "dbo.BatchActionHistory",
+      "grain": [
+        "ID"
+      ],
+      "measures": [
+        {
+          "name": "ActionCount",
+          "expression": "COUNT(ID)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "number(0)",
+          "description": "Total number of recorded batch actions (rows in this table)."
+        },
+        {
+          "name": "DistinctBatchCount",
+          "expression": "COUNT(DISTINCT BatchID)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "number(0)",
+          "description": "Number of distinct batches that have one or more actions recorded."
+        },
+        {
+          "name": "RowsAffected_Total",
+          "expression": "SUM(RowsAffected)",
+          "unit": "rows",
+          "currency": null,
+          "format_hint": "number(0)",
+          "description": "Total number of rows affected by all recorded batch actions (sum of RowsAffected). Null RowsAffected are treated as 0 if present."
+        },
+        {
+          "name": "RowsAffected_Average",
+          "expression": "AVG(CAST(RowsAffected AS FLOAT))",
+          "unit": "rows",
+          "currency": null,
+          "format_hint": "number(2)",
+          "description": "Average number of rows affected per action."
+        },
+        {
+          "name": "RowsAffected_Max",
+          "expression": "MAX(RowsAffected)",
+          "unit": "rows",
+          "currency": null,
+          "format_hint": "number(0)",
+          "description": "Maximum rows affected by a single action."
+        },
+        {
+          "name": "RowsAffected_Min",
+          "expression": "MIN(RowsAffected)",
+          "unit": "rows",
+          "currency": null,
+          "format_hint": "number(0)",
+          "description": "Minimum rows affected by a single action."
+        },
+        {
+          "name": "SuccessfulActions",
+          "expression": "SUM(CASE WHEN Status = 1 THEN 1 ELSE 0 END)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "number(0)",
+          "description": "Count of actions marked with Status = 1 (observed success flag)."
+        },
+        {
+          "name": "FailedActions",
+          "expression": "SUM(CASE WHEN Status = 0 THEN 1 ELSE 0 END)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "number(0)",
+          "description": "Count of actions marked with Status = 0 (observed failure/other flag)."
+        },
+        {
+          "name": "SuccessRate",
+          "expression": "CASE WHEN COUNT(ID) = 0 THEN NULL ELSE SUM(CASE WHEN Status = 1 THEN 1 ELSE 0 END) * 1.0 / COUNT(ID) END",
+          "unit": "percentage",
+          "currency": null,
+          "format_hint": "percentage(1)",
+          "description": "Share of actions where Status = 1 (Successful actions / total actions)."
+        },
+        {
+          "name": "ActionType_1_Count",
+          "expression": "SUM(CASE WHEN BatchActionType = 1 THEN 1 ELSE 0 END)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "number(0)",
+          "description": "Count of actions with BatchActionType = 1. (Observed values in this column are 0/1.)"
+        },
+        {
+          "name": "ActionType_0_Count",
+          "expression": "SUM(CASE WHEN BatchActionType = 0 THEN 1 ELSE 0 END)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "number(0)",
+          "description": "Count of actions with BatchActionType = 0. (Observed values in this column are 0/1.)"
+        },
+        {
+          "name": "ActionsByType_DistinctTypes",
+          "expression": "COUNT(DISTINCT Type)",
+          "unit": "count",
+          "currency": null,
+          "format_hint": "number(0)",
+          "description": "Number of distinct Type codes observed for actions (useful to understand how many action subtypes exist)."
+        }
+      ],
+      "foreign_keys": [
+        {
+          "column": "BatchID",
+          "references": "dbo.Batch.BatchID",
+          "note": "Logical reference to the Batch dimension/table (not declared in original metadata)."
+        },
+        {
+          "column": "BatchActionType",
+          "references": "dbo.BatchActionType.BatchActionTypeID",
+          "note": "Suggested dimension reference for interpreting BatchActionType codes."
+        },
+        {
+          "column": "Status",
+          "references": "dbo.ActionStatus.ActionStatusID",
+          "note": "Suggested dimension reference for interpreting Status codes (e.g., success/failure)."
+        },
+        {
+          "column": "Type",
+          "references": "dbo.ActionType.ActionTypeID",
+          "note": "Suggested reference for the Type code (observed to have multiple distinct values)."
+        }
+      ],
+      "display": {
+        "default_breakdowns": [
+          "BatchID",
+          "BatchActionType",
+          "Type",
+          "Status",
+          "TimeStamp.Year",
+          "TimeStamp.Month"
+        ],
+        "default_filters": [
+          {
+            "column": "TimeStamp",
+            "op": ">=",
+            "value": "2012-01-01",
+            "note": "Example default filter to limit analysis to data from 2012 onward. Adjust to business needs."
+          }
+        ],
+        "preferred_time_column": "TimeStamp",
+        "text_columns_for_tooltip": [
+          "Text"
+        ]
+      }
+    }
+  ],
+  "relationships": [
+    {
+      "from_": "BankDepositDetail.BankID",
+      "to": "Bank.ID",
+      "cardinality": "one_to_one",
+      "confidence": "high",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "PaymentMethodTransaction.BankID",
+      "to": "Bank.ID",
+      "cardinality": "one_to_one",
+      "confidence": "high",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvancedPaymentMethod.ID",
+      "to": "PaymentMethodTransaction.ID",
+      "cardinality": "one_to_one",
+      "confidence": "high",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvancedPaymentMethod.ID",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "high",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Active Campaign Salesperson Assignment.CampaignID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Active Campaign Salesperson Assignment.CampaignID",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Active Campaign Salesperson Assignment.CampaignID",
+      "to": "ArchivedNumber.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Active Campaign Salesperson Assignment.CampaignID",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Active Campaign Salesperson Assignment.CampaignID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Active Campaign Salesperson Assignment.SalesmanID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Active Campaign Salesperson Assignment.SalesmanID",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Active Campaign Salesperson Assignment.SalesmanID",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Active Campaign Salesperson Assignment.SalesmanID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.ContractProductID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.ContractProductID",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.ContractProductID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.ProductID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.ProductID",
+      "to": "Advanced Payment Policy.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.ProductID",
+      "to": "ArchivedNumber.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.ProductID",
+      "to": "Auto Extract Calendar.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.ProductID",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.ProductID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.VersionSectionID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.VersionSectionID",
+      "to": "Advanced Payment Policy.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.VersionSectionID",
+      "to": "ArchivedNumber.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.VersionSectionID",
+      "to": "Auto Extract Calendar.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.VersionSectionID",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.VersionSectionID",
+      "to": "Bank.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.VersionSectionID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "ArchivedNumber.CreateById",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "ArchivedNumber.CreateById",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "ArchivedNumber.CreateById",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "ArchivedNumber.CreateById",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "BankDepositDetail.BankID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "BankDepositDetail.BankID",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "BankDepositDetail.BankID",
+      "to": "Auto Extract Calendar.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "BankDepositDetail.BankID",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "BankDepositDetail.BankID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeMapping.ActivityID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeMapping.ActivityID",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeMapping.ActivityID",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeMapping.OldAttributeID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeMapping.OldAttributeID",
+      "to": "Advanced Discount Policy.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeMapping.OldAttributeID",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeMapping.OldAttributeID",
+      "to": "ArchivedNumber.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeMapping.OldAttributeID",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeMapping.OldAttributeID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeMapping.NewAttributeID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeMapping.NewAttributeID",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeMapping.NewAttributeID",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeMapping.NewAttributeID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeValueMapping.OldAttributeValueId",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeValueMapping.OldAttributeValueId",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeValueMapping.OldAttributeValueId",
+      "to": "ArchivedNumber.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeValueMapping.OldAttributeValueId",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeValueMapping.OldAttributeValueId",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeValueMapping.NewAttributeValueID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeValueMapping.NewAttributeValueID",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeValueMapping.NewAttributeValueID",
+      "to": "ArchivedNumber.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeValueMapping.NewAttributeValueID",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeValueMapping.NewAttributeValueID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Keyword Mapping.ActivityID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Keyword Mapping.ActivityID",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Keyword Mapping.ActivityID",
+      "to": "ArchivedNumber.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Keyword Mapping.ActivityID",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Keyword Mapping.ActivityID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Keyword Mapping.KeywordID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Keyword Mapping.KeywordID",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Keyword Mapping.KeywordID",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Keyword Mapping.KeywordID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Keyword Mapping.NewAttributeValueID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Keyword Mapping.NewAttributeValueID",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Keyword Mapping.NewAttributeValueID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Merge Mapping.SourceID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Merge Mapping.SourceID",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Merge Mapping.SourceID",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Merge Mapping.SourceID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Merge Mapping.TargetID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Merge Mapping.TargetID",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Merge Mapping.TargetID",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Merge Mapping.TargetID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Attribute Value Replacement.Initial_OldAttributeValueId",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Attribute Value Replacement.Initial_OldAttributeValueId",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Attribute Value Replacement.Initial_OldAttributeValueId",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Attribute Value Replacement.Initial_OldAttributeValueId",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Attribute Value Replacement.ReplaceWithAttributeValueId",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Attribute Value Replacement.ReplaceWithAttributeValueId",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Attribute Value Replacement.ReplaceWithAttributeValueId",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Attribute Value Replacement.ReplaceWithAttributeValueId",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Keyword Replacement.KeywordID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Keyword Replacement.KeywordID",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Keyword Replacement.KeywordID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Keyword Replacement.ReplaceWithKeywordID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Keyword Replacement.ReplaceWithKeywordID",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Keyword Replacement.ReplaceWithKeywordID",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Keyword Replacement.ReplaceWithKeywordID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Step1.ActivityID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Step1.ActivityID",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Step1.ActivityID",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Step1.AttributeValueID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Step1.AttributeValueID",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Step1.AttributeValueID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Step2.Activity_ID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Step2.Activity_ID",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Step2.Activity_ID",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Step2.Activity_ID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Address.CountryID",
+      "to": "Advanced Payment Policy.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Address.CountryID",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Address.CountryID",
+      "to": "ArchivedNumber.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Address.CountryID",
+      "to": "Auto Extract Calendar.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Address.CountryID",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Address.CountryID",
+      "to": "Bank.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Address.CountryID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "PaymentMethodTransaction.PaymentMethodTypeID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "PaymentMethodTransaction.PaymentMethodTypeID",
+      "to": "Advanced Discount Policy.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "PaymentMethodTransaction.PaymentMethodTypeID",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "PaymentMethodTransaction.PaymentMethodTypeID",
+      "to": "ArchivedNumber.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "PaymentMethodTransaction.PaymentMethodTypeID",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "PaymentMethodTransaction.PaymentMethodTypeID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "PaymentMethodTransaction.BankID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "PaymentMethodTransaction.BankID",
+      "to": "Advanced Payment Policy.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "PaymentMethodTransaction.BankID",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "PaymentMethodTransaction.BankID",
+      "to": "Auto Extract Calendar.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "PaymentMethodTransaction.BankID",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "PaymentMethodTransaction.BankID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "PaymentMethodTransaction.CreditCardTypeID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "PaymentMethodTransaction.CreditCardTypeID",
+      "to": "Advanced Payment Policy.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "PaymentMethodTransaction.CreditCardTypeID",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "PaymentMethodTransaction.CreditCardTypeID",
+      "to": "ArchivedNumber.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "PaymentMethodTransaction.CreditCardTypeID",
+      "to": "Auto Extract Calendar.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "PaymentMethodTransaction.CreditCardTypeID",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "PaymentMethodTransaction.CreditCardTypeID",
+      "to": "Bank.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "PaymentMethodTransaction.CreditCardTypeID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "PaymentMethodTransaction.SalesCollectionID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "PaymentMethodTransaction.SalesCollectionID",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "PaymentMethodTransaction.SalesCollectionID",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "PaymentMethodTransaction.SalesCollectionID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvancedPaymentMethod.PaymentMethodTypeID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvancedPaymentMethod.PaymentMethodTypeID",
+      "to": "Advanced Discount Policy.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvancedPaymentMethod.PaymentMethodTypeID",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvancedPaymentMethod.PaymentMethodTypeID",
+      "to": "ArchivedNumber.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvancedPaymentMethod.PaymentMethodTypeID",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvancedPaymentMethod.PaymentMethodTypeID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.GeoAreaID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.HeadingID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.HeadingID",
+      "to": "ArchivedNumber.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.HeadingID",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.HeadingID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.ProductKitID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.ProductKitID",
+      "to": "Advanced Payment Policy.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.ProductKitID",
+      "to": "Auto Extract Calendar.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.ProductKitID",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.ProductKitID",
+      "to": "Bank.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.ProductKitID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.DirProductId",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.DirProductId",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.DirProductId",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeValueMapping.ActivityID",
+      "to": "Address.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeValueMapping.ActivityID",
+      "to": "AdvertisementFact.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeValueMapping.ActivityID",
+      "to": "AutoExtractHistory.ID",
+      "cardinality": "one_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 1.0,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeMapping.ActivityID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "many_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 0.9893617021276596,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Step1.ActivityID",
+      "to": "ArchivedNumber.ID",
+      "cardinality": "many_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 0.989010989010989,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Step1.ActivityID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "many_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 0.989010989010989,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Merge Mapping.SourceID",
+      "to": "ArchivedNumber.ID",
+      "cardinality": "many_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 0.98,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Step2.Activity_ID",
+      "to": "ArchivedNumber.ID",
+      "cardinality": "many_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 0.98,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeValueMapping.ActivityID",
+      "to": "BatchActionHistory.ID",
+      "cardinality": "many_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 0.972972972972973,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeMapping.ActivityID",
+      "to": "ArchivedNumber.ID",
+      "cardinality": "many_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 0.9574468085106383,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Merge Mapping.TargetID",
+      "to": "ArchivedNumber.ID",
+      "cardinality": "many_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 0.9574468085106383,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeValueMapping.ActivityID",
+      "to": "ArchivedNumber.ID",
+      "cardinality": "many_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 0.9459459459459459,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AdvertisementFact.ContractProductID",
+      "to": "ArchivedNumber.ID",
+      "cardinality": "many_to_one",
+      "confidence": "medium",
+      "verification": {
+        "overlap_rate": 0.9456521739130435,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Active Campaign Salesperson Assignment.CampaignID",
+      "to": "Advanced Payment Policy.ID",
+      "cardinality": "many_to_one",
+      "confidence": "low",
+      "verification": {
+        "overlap_rate": 0.8857142857142857,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Active Campaign Salesperson Assignment.CampaignID",
+      "to": "Advanced Discount Policy.ID",
+      "cardinality": "many_to_one",
+      "confidence": "low",
+      "verification": {
+        "overlap_rate": 0.8857142857142857,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "PaymentMethodTransaction.BankID",
+      "to": "ArchivedNumber.ID",
+      "cardinality": "many_to_one",
+      "confidence": "low",
+      "verification": {
+        "overlap_rate": 0.8571428571428571,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "BankDepositDetail.BankID",
+      "to": "Advanced Payment Policy.ID",
+      "cardinality": "many_to_one",
+      "confidence": "low",
+      "verification": {
+        "overlap_rate": 0.8333333333333334,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "BankDepositDetail.BankID",
+      "to": "ArchivedNumber.ID",
+      "cardinality": "many_to_one",
+      "confidence": "low",
+      "verification": {
+        "overlap_rate": 0.8333333333333334,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "AttributeMapping.OldAttributeID",
+      "to": "Advanced Payment Policy.ID",
+      "cardinality": "many_to_one",
+      "confidence": "low",
+      "verification": {
+        "overlap_rate": 0.8333333333333334,
+        "method": "value_overlap"
+      }
+    },
+    {
+      "from_": "Active Campaign Salesperson Assignment.SalesmanID",
+      "to": "ArchivedNumber.ID",
+      "cardinality": "many_to_one",
+      "confidence": "low",
+      "verification": {
+        "overlap_rate": 0.8,
+        "method": "value_overlap"
+      }
+    }
+  ],
+  "table_rankings": [
+    {
+      "table": "dbo.Attr105StarsEN",
+      "duplicate_of": null,
+      "rank": 1,
+      "reason": "curated view"
+    },
+    {
+      "table": "dbo.Attr105StarsGR",
+      "duplicate_of": null,
+      "rank": 1,
+      "reason": "curated view"
+    },
+    {
+      "table": "dbo.Attr107TransactionsGR",
+      "duplicate_of": null,
+      "rank": 1,
+      "reason": "curated view"
+    },
+    {
+      "table": "dbo.Attr111UnitTypeEN",
+      "duplicate_of": null,
+      "rank": 1,
+      "reason": "curated view"
+    },
+    {
+      "table": "dbo.Attr111UnitTypeGR",
+      "duplicate_of": null,
+      "rank": 1,
+      "reason": "curated view"
+    },
+    {
+      "table": "dbo.Attr112FunctionalMonthsEN",
+      "duplicate_of": null,
+      "rank": 1,
+      "reason": "curated view"
+    },
+    {
+      "table": "dbo.Attr112FunctionalMonthsGR",
+      "duplicate_of": null,
+      "rank": 1,
+      "reason": "curated view"
+    },
+    {
+      "table": "dbo.Attr113PaymentWaysEN",
+      "duplicate_of": null,
+      "rank": 1,
+      "reason": "curated view"
+    },
+    {
+      "table": "dbo.Attr113PaymentWaysGR",
+      "duplicate_of": null,
+      "rank": 1,
+      "reason": "curated view"
+    },
+    {
+      "table": "dbo.Attr115RoomKeysEN",
+      "duplicate_of": null,
+      "rank": 1,
+      "reason": "curated view"
+    },
+    {
+      "table": "dbo.Attr115RoomKeysGR",
+      "duplicate_of": null,
+      "rank": 1,
+      "reason": "curated view"
+    },
+    {
+      "table": "dbo.Attr116ArrivalTimeEN",
+      "duplicate_of": null,
+      "rank": 1,
+      "reason": "curated view"
+    },
+    {
+      "table": "dbo.Attr116ArrivalTimeGR",
+      "duplicate_of": null,
+      "rank": 1,
+      "reason": "curated view"
+    },
+    {
+      "table": "dbo.Attr117DepartureTimeEN",
+      "duplicate_of": null,
+      "rank": 1,
+      "reason": "curated view"
+    },
+    {
+      "table": "dbo.Attr117DepartureTimeGR",
+      "duplicate_of": null,
+      "rank": 1,
+      "reason": "curated view"
+    },
+    {
+      "table": "dbo.Attr118HighSeasonEN",
+      "duplicate_of": null,
+      "rank": 1,
+      "reason": "curated view"
+    },
+    {
+      "table": "dbo.Attr118HighSeasonGR",
+      "duplicate_of": null,
+      "rank": 1,
+      "reason": "curated view"
+    },
+    {
+      "table": "dbo.Attr119LowSeasonEN",
+      "duplicate_of": null,
+      "rank": 1,
+      "reason": "curated view"
+    },
+    {
+      "table": "HEADQUARTERS\\spitsaris.ViewPrefectureBPDtls",
+      "duplicate_of": null,
+      "rank": 1,
+      "reason": "curated view"
+    },
+    {
+      "table": "HEADQUARTERS\\spitsaris.ViewPrefectureBPs",
+      "duplicate_of": null,
+      "rank": 1,
+      "reason": "curated view"
+    },
+    {
+      "table": "dbo.ActiveCampaignSalesman",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "dbo.Address",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "dbo.AdvancedPaymentMethod",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "dbo.AdvancedPaymentMethod20230517",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "dbo.AdvancedPaymentPolicy",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "dbo.AdvancedPaymentSalesCollection",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "dbo.AdvDiscountPolicy",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "dbo.Advertisement",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "dbo.AdvertisementDeactivationReason",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "dbo.AdvertisementSalesType",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "dbo.AllGeoAreas",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "dbo.ArchivedNumber",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "dbo.AttrRepository",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "dbo.AutoExtractCalendar",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "dbo.AutoExtractHistory",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "dbo.AvailableConditionOperands",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "dbo.Bank",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "dbo.BankDepositDetail",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "dbo.BatchActionHistory",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "HEADQUARTERS\\cstraitchof.DEV12867ClassificationBackup",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "HEADQUARTERS\\cstraitchof.DEV15648ClassificationBackup",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "HEADQUARTERS\\spitsaris.devops11385_InvoicePaymentMethod_NULL_PaymentMonth",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31672",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "HEADQUARTERS\\svytinioti.DialerBusinessPoint_20240704_31673",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "MigrationSteps.AttributeMapping",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "MigrationSteps.AttributeValueMapping",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "MigrationSteps.KeywordMapping",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "MigrationSteps.MergeMapping",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "MigrationSteps.ReplaceAV",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "MigrationSteps.ReplaceKeywords",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "MigrationSteps.Step1",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    },
+    {
+      "table": "MigrationSteps.Step2",
+      "duplicate_of": null,
+      "rank": 4,
+      "reason": "raw table"
+    }
+  ],
+  "audit": {
+    "dialect": "tsql",
+    "built_at": "2025-11-03T12:15:31.220813",
+    "build_duration_seconds": 1036.9224979877472,
+    "discovery_timestamp": "2025-11-03T06:43:01.206560"
+  }
+}
