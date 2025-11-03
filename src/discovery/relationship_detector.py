@@ -365,13 +365,59 @@ def _detect_implicit_relationships(
         overlap_rate = stats["overlap_rate"]
         name_similarity = stats["name_similarity"]
         cardinality = stats["cardinality"]
+        sample_size1 = stats.get("sample_size1", 0)
+        sample_size2 = stats.get("sample_size2", 0)
         
         # Filter by overlap threshold
         if overlap_rate < overlap_threshold:
             continue
         
-        # Determine confidence based on overlap rate AND name match
-        if overlap_rate >= 0.98 and name_similarity >= 0.8:
+        # ✅ CRITICAL FIX: Reject suspicious one-to-one relationships
+        # These are likely false positives (different tables shouldn't have identical ID sets)
+        if cardinality == "one_to_one":
+            # Extract table names
+            table1 = ".".join(col1_full.split(".")[:-1])
+            table2 = ".".join(col2_full.split(".")[:-1])
+            
+            # Reject if:
+            # 1. Tables are completely different (not parent/child naming pattern)
+            # 2. 100% overlap with equal sample sizes (suspicious coincidence)
+            # 3. Low name similarity (columns named differently)
+            tables_unrelated = not (
+                table1.lower() in table2.lower() or 
+                table2.lower() in table1.lower()
+            )
+            perfect_overlap = (overlap_rate >= 0.999 and sample_size1 == sample_size2)
+            
+            if tables_unrelated and perfect_overlap and name_similarity < 0.7:
+                logger.debug(
+                    f"  ❌ Rejecting suspicious 1:1: {col1_full} <-> {col2_full} "
+                    f"(overlap={overlap_rate:.3f}, name_sim={name_similarity:.2f})"
+                )
+                continue
+        
+        # ✅ REQUIRED: Enforce many-to-one cardinality for implicit relationships
+        # One-to-many is acceptable only if strong name pattern (e.g., ParentID -> Parent.ID)
+        if cardinality == "one_to_many":
+            # Check if column names suggest parent-child relationship
+            col1_name = col1_full.split(".")[-1].lower()
+            col2_name = col2_full.split(".")[-1].lower()
+            table2_name = col2_full.split(".")[-2].lower()
+            
+            # Pattern: CustomerID -> Customer.ID
+            has_name_pattern = (
+                col1_name.replace("id", "").replace("_", "") == table2_name.replace("_", "") or
+                col2_name == "id" and table2_name in col1_name
+            )
+            
+            if not has_name_pattern:
+                logger.debug(
+                    f"  ⚠️ Skipping one-to-many without name pattern: {col1_full} -> {col2_full}"
+                )
+                continue
+        
+        # Determine confidence based on overlap rate AND name match AND cardinality
+        if overlap_rate >= 0.98 and name_similarity >= 0.8 and cardinality == "many_to_one":
             confidence = "high"
         elif overlap_rate >= 0.95 and name_similarity >= 0.7:
             confidence = "medium"
@@ -520,14 +566,23 @@ def _calculate_value_overlaps(
         overlap_rate = len(intersection) / max(len(values1), len(values2))
         
         # Determine cardinality (heuristic based on distinct counts)
+        # ✅ IMPROVED: Stricter cardinality detection using min_cardinality_ratio
         distinct1 = len(values1)
         distinct2 = len(values2)
         
-        if distinct1 > distinct2 * 2:
+        # Use the min_cardinality_ratio parameter (default 2.0)
+        # Require at least 2x difference for directional relationships
+        ratio_1_to_2 = distinct1 / max(distinct2, 1)
+        ratio_2_to_1 = distinct2 / max(distinct1, 1)
+        
+        if ratio_1_to_2 >= min_cardinality_ratio:
+            # distinct1 >> distinct2: many col1 values -> few col2 values
             cardinality = "many_to_one"
-        elif distinct2 > distinct1 * 2:
+        elif ratio_2_to_1 >= min_cardinality_ratio:
+            # distinct2 >> distinct1: few col1 values -> many col2 values
             cardinality = "one_to_many"
         else:
+            # Similar counts - likely one-to-one OR suspicious
             cardinality = "one_to_one"
         
         overlaps[(col1_full, col2_full)] = {
