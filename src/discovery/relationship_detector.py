@@ -1,1006 +1,791 @@
 """
-Optimized Relationship Detector
-Multi-stage filtering pipeline for fast foreign key relationship detection
-Reduces comparisons from O(n²) to O(n log n) through smart pre-filtering
+Relationship Detection Module
+
+Detects relationships between database tables using multiple strategies:
+1. Explicit foreign keys (schema-defined) - HIGHEST CONFIDENCE
+2. Curated asset JOINs (views/SPs/RDLs) - HIGH CONFIDENCE  
+3. Implicit value overlap with name matching - MEDIUM/LOW CONFIDENCE
+
+Priority:
+- Explicit > Curated > Implicit
+- Relationships are deduplicated and ranked by confidence
 """
 
 import logging
-import time
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
-from dataclasses import dataclass
-from typing import Dict, List, Optional, Set, Tuple, Any
-from sqlalchemy import create_engine, text, pool
-from sqlalchemy.engine import Engine
-
+from typing import Dict, Any, List, Tuple, Optional, Set
+from collections import defaultdict
+from difflib import SequenceMatcher
 import sqlglot
-
-
-from .relationship_config import RelationshipDetectionConfig
+from sqlglot import parse_one, exp
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class ColumnInfo:
-    """Lightweight column information for relationship detection"""
-
-    schema: str
-    table: str
-    name: str
-    type: str
-    is_primary_key: bool
-    is_indexed: bool
-    is_nullable: bool
-    distinct_count: Optional[int] = None
-    sample_values: Optional[List[str]] = None
-
-    @property
-    def full_name(self) -> str:
-        return f"{self.schema}.{self.table}.{self.name}"
-
-    @property
-    def table_name(self) -> str:
-        return f"{self.schema}.{self.table}"
-
-
-@dataclass
-class RelationshipCandidate:
-    """Candidate relationship with scoring"""
-
-    from_column: ColumnInfo
-    to_column: ColumnInfo
-    name_score: float
-    stage: str  # Which filtering stage produced this candidate
-
-    def __lt__(self, other):
-        return self.name_score > other.name_score  # Higher scores first
-
-
-@dataclass
-class DetectedRelationship:
-    """Detected foreign key relationship"""
-
-    from_column: str
-    to_column: str
-    overlap_rate: float
-    cardinality: str  # many_to_one, one_to_one
-    method: str
-    confidence: str  # high, medium, low
-    name_score: float
-    verification: Dict
-
-
-def _parse_join_condition(on_clause) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
-    """
-    Extract table.column pairs from JOIN ON clause
-    
-    Args:
-        on_clause: sqlglot ON clause expression
-        
-    Returns:
-        Tuple of (left_table, left_col, right_table, right_col)
-        Returns (None, None, None, None) if parsing fails
-    """
-    try:
-        # Handle simple equality: table1.col1 = table2.col2
-        if isinstance(on_clause, exp.EQ):
-            left = on_clause.left
-            right = on_clause.right
-            
-            # Both sides must be columns
-            if isinstance(left, exp.Column) and isinstance(right, exp.Column):
-                left_table = left.table if left.table else None
-                left_col = left.name if left.name else None
-                right_table = right.table if right.table else None
-                right_col = right.name if right.name else None
-                
-                if all([left_table, left_col, right_table, right_col]):
-                    return left_table, left_col, right_table, right_col
-        
-        # Handle complex conditions (AND, OR) - extract first simple equality
-        elif isinstance(on_clause, (exp.And, exp.Or)):
-            # Recursively check left side
-            result = _parse_join_condition(on_clause.left)
-            if result and all(result):
-                return result
-            
-            # Recursively check right side
-            result = _parse_join_condition(on_clause.right)
-            if result and all(result):
-                return result
-    
-    except Exception as e:
-        logger.debug(f"Failed to parse join condition: {e}")
-    
-    return None, None, None, None
-
-
-def _normalize_table_name(table: str, discovery_data: Dict[str, Any]) -> str:
-    """
-    Normalize table name to include schema if missing
-    
-    Args:
-        table: Table name (may or may not include schema)
-        discovery_data: Discovery data to look up schemas
-        
-    Returns:
-        Normalized table name (schema.table)
-    """
-    # Already has schema
-    if "." in table:
-        return table
-    
-    # Try to find schema by searching discovery data
-    for schema in discovery_data.get("schemas", []):
-        schema_name = schema.get("name")
-        for tbl in schema.get("tables", []):
-            if tbl.get("name") == table:
-                return f"{schema_name}.{table}"
-    
-    # Fallback: assume dbo schema (SQL Server default)
-    logger.debug(f"Could not find schema for table {table}, assuming 'dbo'")
-    return f"dbo.{table}"
-
-
-class RelationshipDetector:
-    """
-    Optimized relationship detector with multi-stage filtering
-
-    Pipeline:
-    1. Build indexes (PK, FK, type groups)
-    2. Type compatibility filter (~70% reduction)
-    3. Name-based pre-scoring (~80% reduction)
-    4. Index requirement filter (~50% reduction)
-    5. Cardinality pre-check (~40% reduction)
-    6. Parallel overlap analysis (final verification)
-    """
-
-    def __init__(
-        self,
-        connection_string: str,
-        discovery_data: Dict,
-        config: Optional[RelationshipDetectionConfig] = None,
-    ):
-        self.connection_string = connection_string
-        self.discovery_data = discovery_data
-        self.config = config or RelationshipDetectionConfig.from_env()
-
-        # Performance tracking
-        self.stats = {
-            "total_columns": 0,
-            "pk_columns": 0,
-            "candidates_after_type_filter": 0,
-            "candidates_after_name_filter": 0,
-            "candidates_after_index_filter": 0,
-            "candidates_after_cardinality_filter": 0,
-            "relationships_found": 0,
-            "comparisons_made": 0,
-            "time_building_indexes": 0,
-            "time_filtering": 0,
-            "time_overlap_checks": 0,
-        }
-
-        # Indexes built once
-        self.pk_index: Dict[str, List[ColumnInfo]] = {}
-        self.all_columns: List[ColumnInfo] = []
-        self.indexed_columns: Dict[str, Set[str]] = {}
-        self.type_index: Dict[int, List[ColumnInfo]] = {}
-
-        # Connection pool for parallel processing
-        self.engine: Optional[Engine] = None
-
-    def detect_relationships(self) -> List[DetectedRelationship]:
-        """
-        Main entry point for relationship detection
-        Returns list of detected relationships sorted by confidence
-        """
-
-        logger.info("=" * 80)
-        logger.info("FK DETECTION DIAGNOSTICS")
-        logger.info("=" * 80)
-
-        # Count total potential FK candidates
-        total_columns = len(self.all_columns)
-        pk_columns = self.stats["pk_columns"]
-        logger.info(f"Total columns in database: {total_columns}")
-        logger.info(f"Primary key columns: {pk_columns}")
-        logger.info(f"Theoretical max comparisons: {total_columns * pk_columns:,}")
-        logger.info(f"Config min_overlap_rate: {self.config.min_overlap_rate}")
-        logger.info(f"Config sample_size: {self.config.sample_size}")
-
-        # Type distribution
-        type_dist = {}
-        for col in self.all_columns:
-            type_key = col.data_type.lower()
-            type_dist[type_key] = type_dist.get(type_key, 0) + 1
-
-        logger.info(f"Column type distribution:")
-        for col_type, count in sorted(type_dist.items(), key=lambda x: -x[1])[:10]:
-            logger.info(f"  • {col_type}: {count}")
-
-        logger.info("=" * 80)
-
-        if not self.config.enabled:
-            logger.info("Relationship detection disabled")
-            return []
-
-        start_time = time.time()
-        logger.info(
-            f"Starting optimized relationship detection (strategy: {self.config.strategy})"
-        )
-
-        try:
-            # Initialize connection pool
-            self._init_connection_pool()
-
-            # Stage 1: Build indexes
-            stage_start = time.time()
-            self._build_indexes()
-            self.stats["time_building_indexes"] = time.time() - stage_start
-
-            total_possible = self.stats["total_columns"] * self.stats["pk_columns"]
-            logger.info(
-                f"Indexes built: {self.stats['total_columns']} total columns, "
-                f"{self.stats['pk_columns']} PK columns, "
-                f"{total_possible:,} potential comparisons"
-            )
-
-            # Stage 2-5: Generate and filter candidates
-            stage_start = time.time()
-            candidates = self._generate_candidates()
-            self.stats["time_filtering"] = time.time() - stage_start
-
-            if not candidates:
-                logger.warning("No relationship candidates found after filtering")
-                return []
-
-            # Apply hard cap
-            if len(candidates) > self.config.max_comparisons:
-                logger.warning(
-                    f"Candidates ({len(candidates)}) exceed max_comparisons "
-                    f"({self.config.max_comparisons}), truncating to top-scored"
-                )
-                candidates = candidates[: self.config.max_comparisons]
-
-            reduction_pct = 100 * (1 - len(candidates) / max(total_possible, 1))
-            logger.info(
-                f"Filtering complete: {len(candidates)} candidates "
-                f"({reduction_pct:.1f}% reduction from naive approach)"
-            )
-
-            # Stage 6: Parallel overlap analysis
-            stage_start = time.time()
-            relationships = self._analyze_candidates_parallel(candidates, start_time)
-            self.stats["time_overlap_checks"] = time.time() - stage_start
-            self.stats["relationships_found"] = len(relationships)
-
-            # Sort by confidence and overlap rate
-            relationships.sort(
-                key=lambda r: (
-                    {"high": 3, "medium": 2, "low": 1}.get(r.confidence, 0),
-                    r.overlap_rate,
-                ),
-                reverse=True,
-            )
-
-            elapsed = time.time() - start_time
-            logger.info(
-                f"Relationship detection complete: {len(relationships)} relationships found "
-                f"in {elapsed:.1f}s ({self.stats['comparisons_made']} comparisons)"
-            )
-            self._log_statistics()
-
-            return relationships
-
-        except Exception as e:
-            logger.error(f"Relationship detection failed: {e}", exc_info=True)
-            return []
-        finally:
-            if self.engine:
-                self.engine.dispose()
-
-    def detect_relationships_from_views(
-        discovery_data: Dict[str, Any], config: Any
-    ) -> List[Dict[str, Any]]:
-        """
-        Detect relationships by analyzing JOIN clauses in view definitions
-
-        Process:
-        1. Extract view SQL from named_assets
-        2. Parse SQL with sqlglot
-        3. Identify JOIN conditions
-        4. Map to discovery tables
-        5. Create high-confidence relationships
-
-        Args:
-            discovery_data: Discovery JSON with named_assets
-            config: Relationship detection configuration
-
-        Returns:
-            List of relationship dictionaries
-        """
-        import time
-
-        if not config.detect_views:
-            logger.info("View relationship detection disabled")
-            return []
-
-        logger.info("Starting view relationship detection...")
-        relationships = []
-        views_analyzed = 0
-        max_views = config.max_views
-        start_time = time.time()
-
-        for asset in discovery_data.get("named_assets", []):
-            if asset.get("kind") != "view":
-                continue
-
-            if views_analyzed >= max_views:
-                logger.warning(
-                    f"Reached max views limit ({max_views}), stopping analysis"
-                )
-                break
-
-            view_name = asset.get("name", "unknown")
-            sql = asset.get("sql_normalized", "")
-
-            if not sql:
-                logger.debug(f"Skipping view {view_name}: no SQL definition")
-                continue
-
-            try:
-                # Parse SQL with timeout protection
-                parsed = sqlglot.parse_one(
-                    sql, dialect=discovery_data.get("dialect", "")
-                )
-
-                # Extract joins
-                for join in parsed.find_all(sqlglot.exp.Join):
-                    # Get join condition
-                    on_clause = join.args.get("on")
-                    if not on_clause:
-                        continue
-
-                    # Extract left and right columns
-                    left_table, left_col, right_table, right_col = (
-                        _parse_join_condition(on_clause)
-                    )
-
-                    if all([left_table, left_col, right_table, right_col]):
-                        # Normalize table names (add schema if missing)
-                        left_table = _normalize_table_name(left_table, discovery_data)
-                        right_table = _normalize_table_name(right_table, discovery_data)
-
-                        relationships.append(
-                            {
-                                "from": f"{left_table}.{left_col}",
-                                "to": f"{right_table}.{right_col}",
-                                "method": "view_join_analysis",
-                                "cardinality": "unknown",  # Would need value analysis
-                                "confidence": "high",  # Views are curated
-                                "source_view": view_name,
-                                "detection_timestamp": time.time(),
-                            }
-                        )
-
-                views_analyzed += 1
-
-            except sqlglot.errors.ParseError as e:
-                logger.warning(f"Failed to parse view {view_name}: {e}")
-            except Exception as e:
-                logger.error(f"Error analyzing view {view_name}: {e}")
-
-        elapsed = time.time() - start_time
-        logger.info(
-            f"View relationship detection complete: analyzed {views_analyzed} views, "
-            f"found {len(relationships)} relationships in {elapsed:.2f}s"
-        )
-
-        return relationships
-
-
-    def _init_connection_pool(self):
-        """Initialize connection pool for parallel operations"""
-        self.engine = create_engine(
-            self.connection_string,
-            poolclass=pool.QueuePool,
-            pool_size=self.config.max_workers + 2,
-            max_overflow=5,
-            pool_pre_ping=True,
-            pool_recycle=3600,
-            connect_args={"timeout": 10},
-        )
-
-    def _build_indexes(self):
-        """Build lookup indexes from discovery data"""
-        logger.debug("Building relationship detection indexes...")
-
-        for schema_data in self.discovery_data.get("schemas", []):
-            schema_name = schema_data["name"]
-
-            for table_data in schema_data.get("tables", []):
-                table_name = table_data["name"]
-                table_full_name = f"{schema_name}.{table_name}"
-
-                # Track indexed columns
-                indexed_cols = set()
-                for pk_col in table_data.get("primary_key", []):
-                    indexed_cols.add(pk_col)
-                for idx in table_data.get("indexes", []):
-                    indexed_cols.update(idx.get("columns", []))
-                self.indexed_columns[table_full_name] = indexed_cols
-
-                # Process each column
-                for col_data in table_data.get("columns", []):
-                    col_name = col_data["name"]
-                    col_type = col_data["type"]
-
-                    # Extract stats
-                    stats = col_data.get("stats", {})
-                    distinct_count = stats.get("distinct_count")
-                    sample_values = stats.get("sample_values", [])
-
-                    col_info = ColumnInfo(
-                        schema=schema_name,
-                        table=table_name,
-                        name=col_name,
-                        type=col_type,
-                        is_primary_key=col_name in table_data.get("primary_key", []),
-                        is_indexed=col_name in indexed_cols,
-                        is_nullable=col_data.get("nullable", True),
-                        distinct_count=distinct_count,
-                        sample_values=sample_values[:5] if sample_values else None,
-                    )
-
-                    self.all_columns.append(col_info)
-                    self.stats["total_columns"] += 1
-
-                    # Index primary keys
-                    if col_info.is_primary_key:
-                        if table_full_name not in self.pk_index:
-                            self.pk_index[table_full_name] = []
-                        self.pk_index[table_full_name].append(col_info)
-                        self.stats["pk_columns"] += 1
-
-                    # Index by type group
-                    type_group = self.config.get_type_group(col_type)
-                    if type_group >= 0:
-                        if type_group not in self.type_index:
-                            self.type_index[type_group] = []
-                        self.type_index[type_group].append(col_info)
-
-        logger.debug(
-            f"Indexes built: {len(self.all_columns)} columns, "
-            f"{self.stats['pk_columns']} PKs, "
-            f"{len(self.type_index)} type groups"
-        )
-
-    def _generate_candidates(self) -> List[RelationshipCandidate]:
-        """
-        Generate relationship candidates using multi-stage filtering
-        Returns sorted list of candidates (highest score first)
-        """
-        candidates = []
-
-        # Iterate through all non-PK columns as potential FKs
-        for from_col in self.all_columns:
-            # Skip if it's already a primary key
-            if from_col.is_primary_key:
-                continue
-
-            # Get type group for type compatibility
-            from_type_group = self.config.get_type_group(from_col.type)
-            if from_type_group < 0:
-                continue  # Unknown type, skip
-
-            # Get candidate PK columns with matching type
-            candidate_pks = self.type_index.get(from_type_group, [])
-            candidate_pks = [c for c in candidate_pks if c.is_primary_key]
-
-            self.stats["candidates_after_type_filter"] += len(candidate_pks)
-
-            # Apply filters and scoring
-            for to_col in candidate_pks:
-                # Skip self-references (same table)
-                if from_col.table_name == to_col.table_name:
-                    continue
-
-                # Stage 3: Name-based scoring
-                name_score = self._calculate_name_score(from_col, to_col)
-                if name_score < 0.3:  # Minimum threshold
-                    continue
-
-                self.stats["candidates_after_name_filter"] += 1
-
-                # Stage 4: Index requirement
-                if self.config.require_index_on_target and not to_col.is_indexed:
-                    continue
-
-                self.stats["candidates_after_index_filter"] += 1
-
-                # Stage 5: Cardinality pre-check
-                if not self._passes_cardinality_check(from_col, to_col):
-                    continue
-
-                self.stats["candidates_after_cardinality_filter"] += 1
-
-                # Add to candidates
-                candidates.append(
-                    RelationshipCandidate(
-                        from_column=from_col,
-                        to_column=to_col,
-                        name_score=name_score,
-                        stage="full_filter",
-                    )
-                )
-
-        # Sort by score (highest first)
-        candidates.sort()
-
-        return candidates
-
-    def _calculate_name_score(self, from_col: ColumnInfo, to_col: ColumnInfo) -> float:
-        """
-        Calculate name-based similarity score between columns
-        Returns 0.0 (no match) to 1.0 (perfect match)
-        """
-        from_name = from_col.name.lower()
-        to_name = to_col.name.lower()
-        to_table = to_col.table.lower()
-
-        score = 0.0
-
-        # Exact name match
-        if from_name == to_name:
-            score += 0.5
-
-        # Column name ends with referenced column name
-        # e.g., CustomerID → Customer.CustomerID
-        elif from_name.endswith(to_name):
-            score += 0.4
-
-        # Column name contains referenced column name
-        elif to_name in from_name:
-            score += 0.3
-
-        # Column name starts with table name
-        # e.g., CustomerID → Customer.ID
-        if from_name.startswith(to_table):
-            score += 0.2
-
-        # Check for FK naming patterns
-        if self.config.prioritize_named_patterns:
-            from_name_lower = from_name
-            for pattern in self.config.fk_suffix_patterns:
-                if from_name_lower.endswith(pattern):
-                    score += 0.15
-                    break
-
-            for pattern in self.config.fk_infix_patterns:
-                if pattern in from_name_lower:
-                    score += 0.1
-                    break
-
-        # Bonus if to_column is indexed (likely a real PK)
-        if to_col.is_indexed:
-            score += 0.1
-
-        # Penalty if from_column is nullable (weak relationship)
-        if from_col.is_nullable:
-            score -= 0.05
-
-        return min(1.0, max(0.0, score))
-
-    def _passes_cardinality_check(
-        self, from_col: ColumnInfo, to_col: ColumnInfo
-    ) -> bool:
-        """
-        Quick cardinality check without DB query
-        For many-to-one: from.distinct_count should be <= to.distinct_count * 1.1
-        """
-        if from_col.distinct_count is None or to_col.distinct_count is None:
-            return True  # Can't check, allow it through
-
-        # Allow 10% tolerance for slight mismatches
-        return from_col.distinct_count <= to_col.distinct_count * 1.1
-
-    def _analyze_candidates_parallel(
-        self, candidates: List[RelationshipCandidate], start_time: float
-    ) -> List[DetectedRelationship]:
-        """
-        Analyze candidates in parallel with timeout protection
-        """
-        relationships = []
-        completed = 0
-
-        logger.info(
-            f"Starting parallel overlap analysis for {len(candidates)} candidates "
-            f"(max {self.config.max_workers} workers)"
-        )
-
-        with ThreadPoolExecutor(max_workers=self.config.max_workers) as executor:
-            # Submit all tasks
-            future_to_candidate = {
-                executor.submit(self._check_overlap, candidate): candidate
-                for candidate in candidates
-            }
-
-            # Process results as they complete
-            for future in future_to_candidate:
-                # Check global timeout
-                elapsed = time.time() - start_time
-                if elapsed > self.config.global_timeout:
-                    logger.warning(
-                        f"Global timeout reached ({self.config.global_timeout}s), "
-                        f"stopping after {completed}/{len(candidates)} candidates"
-                    )
-                    break
-
-                try:
-                    result = future.result(timeout=self.config.timeout_per_comparison)
-                    completed += 1
-
-                    if result:
-                        relationships.append(result)
-
-                    # Progress logging every 10%
-                    if completed % max(1, len(candidates) // 10) == 0:
-                        pct = 100 * completed / len(candidates)
-                        logger.debug(
-                            f"Progress: {completed}/{len(candidates)} ({pct:.0f}%), "
-                            f"{len(relationships)} relationships found"
-                        )
-
-                except FutureTimeoutError:
-                    candidate = future_to_candidate[future]
-                    logger.warning(
-                        f"Timeout checking {candidate.from_column.full_name} → "
-                        f"{candidate.to_column.full_name}"
-                    )
-                    completed += 1
-
-                except Exception as e:
-                    candidate = future_to_candidate[future]
-                    logger.error(
-                        f"Error checking {candidate.from_column.full_name} → "
-                        f"{candidate.to_column.full_name}: {e}"
-                    )
-                    completed += 1
-
-        return relationships
-
-    def _check_overlap(
-        self, candidate: RelationshipCandidate
-    ) -> Optional[DetectedRelationship]:
-        """
-        Check actual value overlap between two columns
-        Uses smaller sample size for speed
-        """
-        from_col = candidate.from_column
-        to_col = candidate.to_column
-
-        self.stats["comparisons_made"] += 1
-
-        try:
-            # Use smaller sample for speed
-            overlap_rate, cardinality = self._calculate_overlap_rate(from_col, to_col)
-
-            if overlap_rate < self.config.min_overlap_rate:
-                return None
-
-            # Determine confidence level
-            confidence = self._determine_confidence(
-                overlap_rate=overlap_rate,
-                name_score=candidate.name_score,
-                cardinality=cardinality,
-            )
-
-            return DetectedRelationship(
-                from_column=from_col.full_name,
-                to_column=to_col.full_name,
-                overlap_rate=overlap_rate,
-                cardinality=cardinality,
-                method="value_overlap",
-                confidence=confidence,
-                name_score=candidate.name_score,
-                verification={
-                    "sample_size": self.config.sample_size,
-                    "from_distinct": from_col.distinct_count,
-                    "to_distinct": to_col.distinct_count,
-                },
-            )
-
-        except Exception as e:
-            logger.debug(
-                f"Overlap check failed for {from_col.full_name} → {to_col.full_name}: {e}"
-            )
-            return None
-
-    def _calculate_overlap_rate(
-        self, from_col: ColumnInfo, to_col: ColumnInfo
-    ) -> Tuple[float, str]:
-        """
-        Calculate overlap rate using optimized sampling query
-        Returns (overlap_rate, cardinality)
-        """
-        # Build optimized sampling query
-        dialect = self.discovery_data.get("dialect", "generic").lower()
-
-        if dialect in ["mssql", "tsql"]:
-            query = text(
-                f"""
-                WITH sample_from AS (
-                    SELECT TOP ({self.config.sample_size}) [{from_col.name}] as val
-                    FROM [{from_col.schema}].[{from_col.table}]
-                    WHERE [{from_col.name}] IS NOT NULL
-                ),
-                sample_to AS (
-                    SELECT DISTINCT [{to_col.name}] as val
-                    FROM [{to_col.schema}].[{to_col.table}]
-                    WHERE [{to_col.name}] IS NOT NULL
-                )
-                SELECT 
-                    COUNT(DISTINCT sf.val) as total_from,
-                    COUNT(DISTINCT CASE WHEN st.val IS NOT NULL THEN sf.val END) as matched,
-                    COUNT(DISTINCT sf.val) as distinct_from
-                FROM sample_from sf
-                LEFT JOIN sample_to st ON sf.val = st.val
-            """
-            )
-        elif dialect in ["mysql", "mariadb"]:
-            query = text(
-                f"""
-                SELECT 
-                    COUNT(DISTINCT sf.val) as total_from,
-                    COUNT(DISTINCT CASE WHEN st.val IS NOT NULL THEN sf.val END) as matched,
-                    COUNT(DISTINCT sf.val) as distinct_from
-                FROM (
-                    SELECT `{from_col.name}` as val
-                    FROM `{from_col.schema}`.`{from_col.table}`
-                    WHERE `{from_col.name}` IS NOT NULL
-                    LIMIT {self.config.sample_size}
-                ) sf
-                LEFT JOIN (
-                    SELECT DISTINCT `{to_col.name}` as val
-                    FROM `{to_col.schema}`.`{to_col.table}`
-                    WHERE `{to_col.name}` IS NOT NULL
-                ) st ON sf.val = st.val
-            """
-            )
-        else:  # PostgreSQL, generic
-            query = text(
-                f"""
-                WITH sample_from AS (
-                    SELECT "{from_col.name}" as val
-                    FROM "{from_col.schema}"."{from_col.table}"
-                    WHERE "{from_col.name}" IS NOT NULL
-                    LIMIT {self.config.sample_size}
-                ),
-                sample_to AS (
-                    SELECT DISTINCT "{to_col.name}" as val
-                    FROM "{to_col.schema}"."{to_col.table}"
-                    WHERE "{to_col.name}" IS NOT NULL
-                )
-                SELECT 
-                    COUNT(DISTINCT sf.val) as total_from,
-                    COUNT(DISTINCT CASE WHEN st.val IS NOT NULL THEN sf.val ELSE NULL END) as matched,
-                    COUNT(DISTINCT sf.val) as distinct_from
-                FROM sample_from sf
-                LEFT JOIN sample_to st ON sf.val = st.val
-            """
-            )
-
-        # Execute query
-        with self.engine.connect() as conn:
-            result = conn.execute(query).fetchone()
-            total_from = result[0] or 0
-            matched = result[1] or 0
-            distinct_from = result[2] or 1  # Avoid division by zero
-
-        # Calculate overlap rate
-        overlap_rate = matched / distinct_from if distinct_from > 0 else 0.0
-
-        # Determine cardinality
-        if distinct_from == matched and matched == total_from:
-            cardinality = "one_to_one"
-        else:
-            cardinality = "many_to_one"
-
-        return overlap_rate, cardinality
-
-    def _determine_confidence(
-        self, overlap_rate: float, name_score: float, cardinality: str
-    ) -> str:
-        """Determine confidence level based on multiple factors"""
-        # High confidence: strong name match + high overlap
-        if name_score >= 0.7 and overlap_rate >= 0.95:
-            return "high"
-
-        # Medium confidence: decent name match or high overlap
-        if name_score >= 0.5 and overlap_rate >= 0.90:
-            return "medium"
-
-        if name_score >= 0.7 and overlap_rate >= 0.85:
-            return "medium"
-
-        # Low confidence: meets minimum thresholds
-        return "low"
-
-    def _log_statistics(self):
-        """Log detailed statistics about the detection process"""
-        logger.info("=== Relationship Detection Statistics ===")
-        logger.info(f"  Total columns scanned: {self.stats['total_columns']}")
-        logger.info(f"  Primary key columns: {self.stats['pk_columns']}")
-        logger.info(
-            f"  After type filter: {self.stats['candidates_after_type_filter']}"
-        )
-        logger.info(
-            f"  After name filter: {self.stats['candidates_after_name_filter']}"
-        )
-        logger.info(
-            f"  After index filter: {self.stats['candidates_after_index_filter']}"
-        )
-        logger.info(
-            f"  After cardinality filter: {self.stats['candidates_after_cardinality_filter']}"
-        )
-        logger.info(f"  Overlap comparisons made: {self.stats['comparisons_made']}")
-        logger.info(f"  Relationships found: {self.stats['relationships_found']}")
-        logger.info(
-            f"  Time building indexes: {self.stats['time_building_indexes']:.2f}s"
-        )
-        logger.info(f"  Time filtering: {self.stats['time_filtering']:.2f}s")
-        logger.info(f"  Time overlap checks: {self.stats['time_overlap_checks']:.2f}s")
-
-        total_possible = self.stats["total_columns"] * self.stats["pk_columns"]
-        if total_possible > 0:
-            reduction = 100 * (1 - self.stats["comparisons_made"] / total_possible)
-            logger.info(f"  Overall reduction: {reduction:.1f}%")
-
-
 # ============================================================================
-# STANDALONE WRAPPER FUNCTIONS (for external imports)
+# MAIN ENTRY POINT
 # ============================================================================
 
 def detect_relationships(
-    connection_string: str,
     discovery_data: Dict[str, Any],
-    config: Optional[RelationshipDetectionConfig] = None
+    overlap_threshold: float = 0.95,
+    name_similarity_threshold: float = 0.6,
+    sample_size: int = 1000,
+    min_cardinality_ratio: float = 2.0
 ) -> List[Dict[str, Any]]:
     """
-    Standalone function to detect relationships using RelationshipDetector class.
+    Detect relationships between tables using multiple strategies
+    
+    Priority order:
+    1. Explicit foreign keys (schema-defined) - confidence='very_high'
+    2. Curated asset JOINs (views/SPs/RDLs) - confidence='high'
+    3. Implicit value overlap with name matching - confidence='medium'/'low'
     
     Args:
-        connection_string: Database connection string
-        discovery_data: Discovery JSON data
-        config: Relationship detection configuration
+        discovery_data: Discovery JSON from Phase 1
+        overlap_threshold: Minimum overlap rate for implicit relationships (default: 0.95)
+        name_similarity_threshold: Minimum name similarity for implicit rels (default: 0.6)
+        sample_size: Sample size for overlap detection
+        min_cardinality_ratio: Minimum ratio for many-to-one detection (default: 2.0)
         
     Returns:
-        List of detected relationship dictionaries
+        List of deduplicated relationship definitions with confidence scores
     """
-    detector = RelationshipDetector(
-        connection_string=connection_string,
-        discovery_data=discovery_data,
-        config=config
-    )
-    
-    # Convert DetectedRelationship objects to dictionaries
-    relationships = detector.detect_relationships()
-    
-    return [
-        {
-            "from": rel.from_column,
-            "to": rel.to_column,
-            "overlap_rate": rel.overlap_rate,
-            "cardinality": rel.cardinality,
-            "method": rel.method,
-            "confidence": rel.confidence,
-            "name_score": rel.name_score,
-            "verification": rel.verification
-        }
-        for rel in relationships
-    ]
-
-
-def detect_relationships_from_views(
-    discovery_data: Dict[str, Any],
-    config: Any
-) -> List[Dict[str, Any]]:
-    """
-    Detect relationships by analyzing JOIN clauses in view definitions.
-    
-    This is a standalone function that can be imported directly.
-    
-    Process:
-    1. Extract view SQL from named_assets
-    2. Parse SQL with sqlglot
-    3. Identify JOIN conditions
-    4. Map to discovery tables
-    5. Create high-confidence relationships
-    
-    Args:
-        discovery_data: Discovery JSON with named_assets
-        config: Relationship detection configuration
-        
-    Returns:
-        List of relationship dictionaries
-    """
-    import time
-    import sqlglot
-    from sqlglot import exp
-    
-    if not config.detect_views:
-        logger.info("View relationship detection disabled")
-        return []
-    
-    logger.info("Starting view relationship detection...")
     relationships = []
-    views_analyzed = 0
-    max_views = config.max_views
-    start_time = time.time()
     
-    for asset in discovery_data.get("named_assets", []):
-        if asset.get("kind") != "view":
+    logger.info("=" * 80)
+    logger.info("RELATIONSHIP DETECTION")
+    logger.info("=" * 80)
+    
+    # Strategy 1: Explicit foreign keys from schema
+    logger.info("Strategy 1: Extracting explicit foreign keys from schema...")
+    explicit_rels = _extract_explicit_foreign_keys(discovery_data)
+    relationships.extend(explicit_rels)
+    logger.info(f"  ✓ Found {len(explicit_rels)} explicit foreign key relationships")
+    
+    # Strategy 2: Extract JOINs from curated assets (NEW - HIGH CONFIDENCE)
+    logger.info("Strategy 2: Extracting relationships from curated assets (views/SPs/RDLs)...")
+    curated_rels = _extract_relationships_from_curated_assets(discovery_data)
+    relationships.extend(curated_rels)
+    logger.info(f"  ✓ Found {len(curated_rels)} relationships from curated assets")
+    
+    # Strategy 3: Implicit relationships via value overlap (LOWEST CONFIDENCE)
+    logger.info("Strategy 3: Detecting implicit relationships via value overlap...")
+    implicit_rels = _detect_implicit_relationships(
+        discovery_data,
+        overlap_threshold=overlap_threshold,
+        name_similarity_threshold=name_similarity_threshold,
+        sample_size=sample_size,
+        min_cardinality_ratio=min_cardinality_ratio
+    )
+    relationships.extend(implicit_rels)
+    logger.info(f"  ✓ Found {len(implicit_rels)} implicit relationships")
+    
+    # Deduplicate and rank by confidence
+    logger.info("Deduplicating and ranking relationships...")
+    relationships = _deduplicate_and_rank_relationships(relationships)
+    
+    # Log summary by confidence
+    confidence_counts = defaultdict(int)
+    for rel in relationships:
+        confidence_counts[rel["confidence"]] += 1
+    
+    logger.info("=" * 80)
+    logger.info(f"RELATIONSHIP DETECTION COMPLETE")
+    logger.info(f"  Total relationships: {len(relationships)}")
+    logger.info(f"  By confidence:")
+    for conf in ["very_high", "high", "medium", "low"]:
+        if conf in confidence_counts:
+            logger.info(f"    {conf}: {confidence_counts[conf]}")
+    logger.info("=" * 80)
+    
+    return relationships
+
+
+# ============================================================================
+# STRATEGY 1: EXPLICIT FOREIGN KEYS
+# ============================================================================
+
+def _extract_explicit_foreign_keys(
+    discovery_data: Dict[str, Any]
+) -> List[Dict[str, Any]]:
+    """
+    Extract explicit foreign key relationships from schema metadata
+    
+    These are defined in the database schema and are the most reliable.
+    Confidence: 'very_high'
+    """
+    relationships = []
+    
+    for schema in discovery_data.get("schemas", []):
+        schema_name = schema.get("name")
+        
+        for table in schema.get("tables", []):
+            table_name = table.get("name")
+            full_table_name = f"{schema_name}.{table_name}"
+            
+            for fk in table.get("foreign_keys", []):
+                from_col = fk.get("column")
+                ref_table = fk.get("ref_table")
+                ref_col = fk.get("ref_column")
+                
+                if not all([from_col, ref_table, ref_col]):
+                    continue
+                
+                relationships.append({
+                    "from": f"{full_table_name}.{from_col}",
+                    "to": f"{ref_table}.{ref_col}",
+                    "cardinality": "many_to_one",  # FK is typically many-to-one
+                    "confidence": "very_high",
+                    "method": "explicit_foreign_key",
+                    "overlap_rate": None,
+                    "source_asset": None
+                })
+    
+    return relationships
+
+
+# ============================================================================
+# STRATEGY 2: CURATED ASSET JOINS (Views/SPs/RDLs)
+# ============================================================================
+
+def _extract_relationships_from_curated_assets(
+    discovery_data: Dict[str, Any]
+) -> List[Dict[str, Any]]:
+    """
+    Extract relationships from JOIN clauses in views, stored procedures, and RDL queries
+    
+    This provides HIGH CONFIDENCE relationships because they are explicitly written
+    by domain experts and are known to work in production.
+    
+    Returns:
+        List of relationship dicts with confidence='high'
+    """
+    relationships = []
+    named_assets = discovery_data.get("named_assets", [])
+    
+    for asset in named_assets:
+        asset_kind = asset.get("kind", "")
+        asset_name = asset.get("name", "")
+        sql_normalized = asset.get("sql_normalized", "")
+        
+        if not sql_normalized:
             continue
         
-        if views_analyzed >= max_views:
-            logger.warning(
-                f"Reached max views limit ({max_views}), stopping analysis"
-            )
-            break
-        
-        view_name = asset.get("name", "unknown")
-        sql = asset.get("sql_normalized", "")
-        
-        if not sql:
-            logger.debug(f"Skipping view {view_name}: no SQL definition")
+        # Skip if not a query-based asset
+        if asset_kind not in ["view", "stored_procedure", "storedprocedure", "rdl"]:
             continue
         
         try:
-            # Parse SQL with timeout protection
-            parsed = sqlglot.parse_one(
-                sql, dialect=discovery_data.get("dialect", "")
-            )
+            # Parse SQL to extract JOIN conditions
+            parsed = parse_one(sql_normalized, read="tsql")
             
-            # Extract joins
-            for join in parsed.find_all(sqlglot.exp.Join):
-                # Get join condition
-                on_clause = join.args.get("on")
-                if not on_clause:
+            # Find all JOIN nodes
+            for join_node in parsed.find_all(exp.Join):
+                join_on = join_node.args.get("on")
+                
+                if not join_on:
                     continue
                 
-                # Extract left and right columns using helper function
-                left_table, left_col, right_table, right_col = (
-                    _parse_join_condition(on_clause)
-                )
-                
-                if all([left_table, left_col, right_table, right_col]):
-                    # Normalize table names (add schema if missing)
-                    left_table = _normalize_table_name(left_table, discovery_data)
-                    right_table = _normalize_table_name(right_table, discovery_data)
+                # Extract equality conditions from ON clause
+                for condition in _extract_equality_conditions(join_on):
+                    left_table, left_col = _parse_column_reference(condition["left"])
+                    right_table, right_col = _parse_column_reference(condition["right"])
                     
-                    relationships.append(
-                        {
-                            "from": f"{left_table}.{left_col}",
-                            "to": f"{right_table}.{right_col}",
-                            "method": "view_join_analysis",
-                            "cardinality": "unknown",  # Would need value analysis
-                            "confidence": "high",  # Views are curated
-                            "source_view": view_name,
-                            "detection_timestamp": time.time(),
-                        }
-                    )
-            
-            views_analyzed += 1
-        
-        except sqlglot.errors.ParseError as e:
-            logger.warning(f"Failed to parse view {view_name}: {e}")
+                    if not all([left_table, left_col, right_table, right_col]):
+                        continue
+                    
+                    # Determine cardinality hint from JOIN type
+                    join_type = join_node.args.get("kind", "").upper() if join_node.args.get("kind") else "INNER"
+                    cardinality_hint = _infer_cardinality_from_join_type(join_type)
+                    
+                    relationships.append({
+                        "from": f"{left_table}.{left_col}",
+                        "to": f"{right_table}.{right_col}",
+                        "cardinality": cardinality_hint,
+                        "confidence": "high",
+                        "method": "curated_asset_join",
+                        "source_asset": asset_name,
+                        "source_kind": asset_kind,
+                        "overlap_rate": None
+                    })
+                    
         except Exception as e:
-            logger.error(f"Error analyzing view {view_name}: {e}")
-    
-    elapsed = time.time() - start_time
-    logger.info(
-        f"View relationship detection complete: analyzed {views_analyzed} views, "
-        f"found {len(relationships)} relationships in {elapsed:.2f}s"
-    )
+            logger.debug(f"  Failed to parse SQL for {asset_name}: {e}")
+            continue
     
     return relationships
+
+
+def _extract_equality_conditions(on_clause) -> List[Dict[str, Any]]:
+    """
+    Extract equality conditions from JOIN ON clause
+    
+    Example: ON a.id = b.id AND a.type = 'X'
+    Returns: [{"left": "a.id", "right": "b.id", "operator": "="}]
+    
+    Handles:
+    - Simple equality: a.id = b.id
+    - Compound conditions: a.id = b.id AND a.type = b.type
+    - Nested conditions: (a.id = b.id) OR (a.alt_id = b.id)
+    """
+    conditions = []
+    
+    # Handle compound conditions (AND/OR)
+    if isinstance(on_clause, (exp.And, exp.Or)):
+        for child in on_clause.args.values():
+            if isinstance(child, list):
+                for item in child:
+                    conditions.extend(_extract_equality_conditions(item))
+            else:
+                conditions.extend(_extract_equality_conditions(child))
+    
+    # Handle equality conditions
+    elif isinstance(on_clause, exp.EQ):
+        left = on_clause.args.get("this")
+        right = on_clause.args.get("expression")
+        
+        # Only extract column = column (not column = literal)
+        if isinstance(left, exp.Column) and isinstance(right, exp.Column):
+            conditions.append({
+                "left": left.sql(),
+                "right": right.sql(),
+                "operator": "="
+            })
+    
+    return conditions
+
+
+def _parse_column_reference(col_ref: str) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Parse column reference into (table, column)
+    
+    Examples:
+        "schema.table.column" -> ("schema.table", "column")
+        "table.column" -> ("table", "column")
+        "t1.column" -> ("t1", "column")
+        "column" -> (None, "column")
+    
+    Returns:
+        (table_name, column_name) or (None, column_name) if table can't be determined
+    """
+    # Remove quotes if present
+    col_ref = col_ref.replace('"', '').replace('[', '').replace(']', '')
+    
+    parts = col_ref.split(".")
+    
+    if len(parts) >= 3:
+        # schema.table.column
+        return (".".join(parts[:-1]), parts[-1])
+    elif len(parts) == 2:
+        # table.column or alias.column
+        return (parts[0], parts[1])
+    else:
+        # Just column name - can't determine table
+        return (None, col_ref)
+
+
+def _infer_cardinality_from_join_type(join_type: str) -> str:
+    """
+    Infer cardinality hint from JOIN type
+    
+    This is a heuristic - not always accurate but better than nothing
+    
+    Examples:
+        LEFT JOIN: many-to-one (many left rows -> one right row)
+        RIGHT JOIN: one-to-many
+        INNER JOIN: many-to-one (most common pattern)
+    """
+    join_type_upper = join_type.upper() if join_type else ""
+    
+    # LEFT/LEFT OUTER JOIN often implies many-to-one
+    if "LEFT" in join_type_upper:
+        return "many_to_one"
+    
+    # RIGHT/RIGHT OUTER JOIN implies one-to-many
+    elif "RIGHT" in join_type_upper:
+        return "one_to_many"
+    
+    # INNER JOIN - assume many-to-one (most common pattern)
+    else:
+        return "many_to_one"
+
+
+# ============================================================================
+# STRATEGY 3: IMPLICIT VALUE OVERLAP
+# ============================================================================
+
+def _detect_implicit_relationships(
+    discovery_data: Dict[str, Any],
+    overlap_threshold: float = 0.95,
+    name_similarity_threshold: float = 0.6,
+    sample_size: int = 1000,
+    min_cardinality_ratio: float = 2.0
+) -> List[Dict[str, Any]]:
+    """
+    Detect implicit relationships via value overlap
+    
+    ENHANCED with:
+    - Column name similarity requirement (reduces false positives)
+    - Cardinality detection (many-to-one vs one-to-one)
+    - Confidence scoring based on overlap rate AND name match
+    
+    Args:
+        overlap_threshold: Minimum overlap rate (0.95 = 95%)
+        name_similarity_threshold: Minimum column name similarity (0.6 = 60%)
+        sample_size: Max rows to sample per table
+        min_cardinality_ratio: Min ratio for many-to-one (default: 2.0)
+        
+    Returns:
+        List of implicit relationships with confidence scores
+    """
+    relationships = []
+    
+    # Build index of all columns by table
+    column_index = _build_column_index(discovery_data)
+    
+    # Find candidate column pairs (potential FKs)
+    candidate_pairs = _find_candidate_column_pairs(
+        column_index,
+        name_similarity_threshold
+    )
+    
+    logger.info(f"  Found {len(candidate_pairs)} candidate column pairs (after name filtering)")
+    
+    # Calculate overlap for each candidate pair
+    overlaps = _calculate_value_overlaps(
+        discovery_data,
+        candidate_pairs,
+        sample_size
+    )
+    
+    logger.info(f"  Calculated overlap for {len(overlaps)} pairs")
+    
+    # Build relationships from overlaps
+    for (col1_full, col2_full), stats in overlaps.items():
+        overlap_rate = stats["overlap_rate"]
+        name_similarity = stats["name_similarity"]
+        cardinality = stats["cardinality"]
+        
+        # Filter by overlap threshold
+        if overlap_rate < overlap_threshold:
+            continue
+        
+        # Determine confidence based on overlap rate AND name match
+        if overlap_rate >= 0.98 and name_similarity >= 0.8:
+            confidence = "high"
+        elif overlap_rate >= 0.95 and name_similarity >= 0.7:
+            confidence = "medium"
+        elif overlap_rate >= 0.90 and name_similarity >= 0.6:
+            confidence = "low"
+        else:
+            # Too low confidence - skip
+            continue
+        
+        relationships.append({
+            "from": col1_full,
+            "to": col2_full,
+            "cardinality": cardinality,
+            "confidence": confidence,
+            "method": "value_overlap",
+            "overlap_rate": overlap_rate,
+            "name_similarity": name_similarity,
+            "source_asset": None
+        })
+    
+    return relationships
+
+
+def _build_column_index(discovery_data: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Build an index of all columns grouped by data type
+    
+    Returns:
+        Dict mapping data_type -> list of column info
+        Example: {"int": [{"full_name": "dbo.Orders.CustomerID", ...}]}
+    """
+    column_index = defaultdict(list)
+    
+    for schema in discovery_data.get("schemas", []):
+        schema_name = schema.get("name")
+        
+        for table in schema.get("tables", []):
+            table_name = table.get("name")
+            full_table_name = f"{schema_name}.{table_name}"
+            
+            for col in table.get("columns", []):
+                col_name = col.get("name")
+                col_type = col.get("type", "").lower()
+                
+                # Normalize type (strip length/precision)
+                normalized_type = col_type.split("(")[0].strip()
+                
+                column_index[normalized_type].append({
+                    "full_name": f"{full_table_name}.{col_name}",
+                    "table": full_table_name,
+                    "column": col_name,
+                    "type": normalized_type,
+                    "stats": col.get("stats", {})
+                })
+    
+    return column_index
+
+
+def _find_candidate_column_pairs(
+    column_index: Dict[str, List[Dict[str, Any]]],
+    name_similarity_threshold: float
+) -> List[Tuple[str, str, float]]:
+    """
+    Find candidate column pairs that might be related
+    
+    Filters:
+    1. Same data type
+    2. Different tables
+    3. Column name similarity >= threshold
+    4. At least one column ends with 'ID' or 'Key' (FK pattern)
+    
+    Returns:
+        List of (col1_full_name, col2_full_name, name_similarity)
+    """
+    candidates = []
+    
+    for data_type, columns in column_index.items():
+        # Skip non-FK types
+        if data_type not in ["int", "bigint", "smallint", "varchar", "nvarchar", "uniqueidentifier", "guid"]:
+            continue
+        
+        # Compare all pairs within same type
+        for i, col1 in enumerate(columns):
+            for col2 in columns[i+1:]:
+                # Skip same table
+                if col1["table"] == col2["table"]:
+                    continue
+                
+                # Calculate name similarity
+                name1 = col1["column"].lower()
+                name2 = col2["column"].lower()
+                similarity = SequenceMatcher(None, name1, name2).ratio()
+                
+                # Check if at least one looks like an ID/Key column
+                is_id_pattern = (
+                    name1.endswith("id") or name1.endswith("key") or
+                    name2.endswith("id") or name2.endswith("key") or
+                    name1 == "id" or name2 == "id"
+                )
+                
+                # Also check for suffix matching (e.g., "CustomerID" matches "ID")
+                suffix_match = (
+                    (name1.endswith("id") and name2 == "id") or
+                    (name2.endswith("id") and name1 == "id")
+                )
+                
+                # Accept if:
+                # - High name similarity (>=threshold) AND has ID pattern, OR
+                # - Suffix match with lower threshold
+                if (similarity >= name_similarity_threshold and is_id_pattern) or \
+                   (suffix_match and similarity >= 0.4):
+                    candidates.append((col1["full_name"], col2["full_name"], similarity))
+    
+    return candidates
+
+
+def _calculate_value_overlaps(
+    discovery_data: Dict[str, Any],
+    candidate_pairs: List[Tuple[str, str, float]],
+    sample_size: int
+) -> Dict[Tuple[str, str], Dict[str, Any]]:
+    """
+    Calculate value overlap rate for candidate column pairs
+    
+    Uses sample values from discovery data to estimate overlap.
+    Also determines cardinality (one-to-one vs many-to-one).
+    
+    Returns:
+        Dict mapping (col1, col2) -> {overlap_rate, name_similarity, cardinality}
+    """
+    overlaps = {}
+    
+    # Build value sets from discovery data
+    value_cache = _build_value_cache(discovery_data)
+    
+    for col1_full, col2_full, name_similarity in candidate_pairs:
+        # Get sample values
+        values1 = value_cache.get(col1_full, set())
+        values2 = value_cache.get(col2_full, set())
+        
+        if not values1 or not values2:
+            continue
+        
+        # Calculate overlap
+        intersection = values1 & values2
+        overlap_rate = len(intersection) / max(len(values1), len(values2))
+        
+        # Determine cardinality (heuristic based on distinct counts)
+        distinct1 = len(values1)
+        distinct2 = len(values2)
+        
+        if distinct1 > distinct2 * 2:
+            cardinality = "many_to_one"
+        elif distinct2 > distinct1 * 2:
+            cardinality = "one_to_many"
+        else:
+            cardinality = "one_to_one"
+        
+        overlaps[(col1_full, col2_full)] = {
+            "overlap_rate": overlap_rate,
+            "name_similarity": name_similarity,
+            "cardinality": cardinality,
+            "sample_size1": distinct1,
+            "sample_size2": distinct2
+        }
+    
+    return overlaps
+
+
+def _build_value_cache(discovery_data: Dict[str, Any]) -> Dict[str, Set[str]]:
+    """
+    Build cache of sample values for each column
+    
+    Returns:
+        Dict mapping "schema.table.column" -> set of sample values
+    """
+    value_cache = {}
+    
+    for schema in discovery_data.get("schemas", []):
+        schema_name = schema.get("name")
+        
+        for table in schema.get("tables", []):
+            table_name = table.get("name")
+            full_table_name = f"{schema_name}.{table_name}"
+            
+            for col in table.get("columns", []):
+                col_name = col.get("name")
+                full_col_name = f"{full_table_name}.{col_name}"
+                
+                # Get sample values from stats
+                stats = col.get("stats", {})
+                sample_values = stats.get("sample_values", [])
+                
+                if sample_values:
+                    # Convert to set of strings for comparison
+                    value_cache[full_col_name] = set(str(v) for v in sample_values if v is not None)
+    
+    return value_cache
+
+
+# ============================================================================
+# DEDUPLICATION AND RANKING
+# ============================================================================
+
+def _deduplicate_and_rank_relationships(
+    relationships: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """
+    Deduplicate relationships and rank by confidence/method
+    
+    Priority (highest to lowest):
+    1. Explicit foreign keys (confidence='very_high')
+    2. Curated asset joins (confidence='high')
+    3. Value overlap with strong name match (confidence='high'/'medium')
+    4. Value overlap with weak name match (confidence='low')
+    
+    When duplicates exist, keep the highest confidence relationship.
+    Also normalizes bidirectional relationships (A->B and B->A become single A->B).
+    """
+    # Group by normalized (from, to) pair
+    grouped = defaultdict(list)
+    
+    for rel in relationships:
+        from_col = rel["from"]
+        to_col = rel["to"]
+        
+        # Normalize: always sort lexicographically to catch bidirectional duplicates
+        key = tuple(sorted([from_col, to_col]))
+        grouped[key].append(rel)
+    
+    # Keep highest confidence relationship for each pair
+    confidence_rank = {
+        "very_high": 4,
+        "high": 3,
+        "medium": 2,
+        "low": 1
+    }
+    
+    method_rank = {
+        "explicit_foreign_key": 4,
+        "curated_asset_join": 3,
+        "value_overlap": 2
+    }
+    
+    deduplicated = []
+    for (col1, col2), rels in grouped.items():
+        # Sort by confidence, then method, then overlap_rate
+        def sort_key(r):
+            return (
+                confidence_rank.get(r["confidence"], 0),
+                method_rank.get(r["method"], 0),
+                r.get("overlap_rate", 0) or 0
+            )
+        
+        best_rel = max(rels, key=sort_key)
+        
+        # Ensure consistent direction (from -> to based on cardinality)
+        if best_rel.get("cardinality") == "one_to_many":
+            # Swap direction for one-to-many
+            best_rel["from"], best_rel["to"] = best_rel["to"], best_rel["from"]
+            best_rel["cardinality"] = "many_to_one"
+        
+        deduplicated.append(best_rel)
+    
+    # Sort by confidence for readability
+    deduplicated.sort(
+        key=lambda r: confidence_rank.get(r["confidence"], 0),
+        reverse=True
+    )
+    
+    return deduplicated
+
+
+# ============================================================================
+# UTILITY FUNCTIONS
+# ============================================================================
+
+def validate_relationships(
+    relationships: List[Dict[str, Any]],
+    discovery_data: Dict[str, Any]
+) -> Dict[str, Any]:
+    """
+    Validate relationships against discovery data
+    
+    Checks:
+    - Both columns exist in schema
+    - Data types are compatible
+    - Referenced tables exist
+    
+    Returns:
+        Validation report with errors and warnings
+    """
+    report = {
+        "valid_count": 0,
+        "invalid_count": 0,
+        "errors": [],
+        "warnings": []
+    }
+    
+    # Build column existence index
+    existing_columns = set()
+    for schema in discovery_data.get("schemas", []):
+        schema_name = schema.get("name")
+        for table in schema.get("tables", []):
+            table_name = table.get("name")
+            for col in table.get("columns", []):
+                col_name = col.get("name")
+                existing_columns.add(f"{schema_name}.{table_name}.{col_name}")
+    
+    for rel in relationships:
+        from_col = rel["from"]
+        to_col = rel["to"]
+        
+        # Check existence
+        if from_col not in existing_columns:
+            report["errors"].append(f"Column not found: {from_col}")
+            report["invalid_count"] += 1
+        elif to_col not in existing_columns:
+            report["errors"].append(f"Column not found: {to_col}")
+            report["invalid_count"] += 1
+        else:
+            report["valid_count"] += 1
+        
+        # Check for self-referential relationships
+        from_table = ".".join(from_col.split(".")[:-1])
+        to_table = ".".join(to_col.split(".")[:-1])
+        
+        if from_table == to_table:
+            report["warnings"].append(f"Self-referential relationship: {from_col} -> {to_col}")
+    
+    return report
+
+
+def format_relationships_summary(relationships: List[Dict[str, Any]]) -> str:
+    """
+    Format relationships as human-readable summary
+    
+    Returns:
+        Formatted string for logging/display
+    """
+    lines = ["\n" + "=" * 80]
+    lines.append("RELATIONSHIP SUMMARY")
+    lines.append("=" * 80)
+    
+    # Group by confidence
+    by_confidence = defaultdict(list)
+    for rel in relationships:
+        by_confidence[rel["confidence"]].append(rel)
+    
+    for confidence in ["very_high", "high", "medium", "low"]:
+        if confidence not in by_confidence:
+            continue
+        
+        rels = by_confidence[confidence]
+        lines.append(f"\n{confidence.upper()} Confidence ({len(rels)} relationships):")
+        
+        for rel in rels[:10]:  # Show first 10
+            from_col = rel["from"]
+            to_col = rel["to"]
+            method = rel["method"]
+            cardinality = rel["cardinality"]
+            
+            line = f"  {from_col} -> {to_col} ({cardinality})"
+            
+            if method == "curated_asset_join":
+                line += f" [from {rel.get('source_kind', 'asset')}]"
+            elif method == "value_overlap":
+                overlap = rel.get("overlap_rate", 0)
+                line += f" [overlap={overlap:.1%}]"
+            
+            lines.append(line)
+        
+        if len(rels) > 10:
+            lines.append(f"  ... and {len(rels) - 10} more")
+    
+    lines.append("=" * 80)
+    
+    return "\n".join(lines)
+
+
+# ============================================================================
+# CONVENIENCE FUNCTION
+# ============================================================================
+
+def build_relationship_graph(
+    relationships: List[Dict[str, Any]],
+    min_confidence: str = "medium"
+) -> Dict[str, List[str]]:
+    """
+    Build adjacency list graph from relationships
+    
+    Args:
+        relationships: List of relationship definitions
+        min_confidence: Minimum confidence level to include
+        
+    Returns:
+        Dict mapping table -> list of related tables
+    """
+    confidence_order = ["low", "medium", "high", "very_high"]
+    min_idx = confidence_order.index(min_confidence) if min_confidence in confidence_order else 0
+    
+    graph = defaultdict(set)
+    
+    for rel in relationships:
+        # Filter by confidence
+        conf_idx = confidence_order.index(rel["confidence"]) if rel["confidence"] in confidence_order else 0
+        if conf_idx < min_idx:
+            continue
+        
+        from_table = ".".join(rel["from"].split(".")[:-1])
+        to_table = ".".join(rel["to"].split(".")[:-1])
+        
+        graph[from_table].add(to_table)
+        graph[to_table].add(from_table)  # Bidirectional
+    
+    # Convert sets to sorted lists
+    return {table: sorted(list(related)) for table, related in graph.items()}
