@@ -14,7 +14,7 @@ class RelationshipDetectionConfig:
     # Core detection settings
     enabled: bool = True
     strategy: str = "smart_filter"  # Options: full, smart_filter, name_only
-    min_overlap_rate: float = 0.75  # Lowered from 0.80 to catch more candidates
+    min_overlap_rate: float = 0.90  # Lowered from 0.80 to catch more candidates
     sample_size: int = 500  # Increased from 100 for better accuracy
     
     # Performance tuning

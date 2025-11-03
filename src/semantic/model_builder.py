@@ -18,7 +18,7 @@ from typing import Dict, List, Optional, Any, Tuple
 
 from langchain_openai import AzureChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import BaseModel, ValidationError, Field
+from pydantic import BaseModel, ValidationError, Field, validator
 
 from config.settings import (
     get_settings,
@@ -39,10 +39,29 @@ from typing import Union
 class ColumnMetadata(BaseModel):
     """Column metadata in semantic model"""
     name: str
-    role: Union[str, List[str]]  # Can be single role or multiple roles
+    role: Union[str, List[str]] = "attribute"  # Default to attribute
     semantic_type: Optional[str] = None
-    aliases: List[str] = []
+    aliases: List[str] = Field(default_factory=list)
     description: Optional[str] = None
+    
+    @validator('role', pre=True)
+    def validate_role(cls, v):
+        """Ensure role is valid and normalized"""
+        valid_roles = {'primary_key', 'foreign_key', 'attribute', 'label', 'measure', 'dimension_key'}
+        if isinstance(v, str):
+            if v not in valid_roles:
+                logger.warning(f"Invalid role: {v}, defaulting to 'attribute'")
+                return 'attribute'
+            return v
+        elif isinstance(v, list):
+            validated = []
+            for role in v:
+                if role in valid_roles:
+                    validated.append(role)
+                else:
+                    logger.warning(f"Skipping invalid role: {role}")
+            return validated if validated else ['attribute']
+        return 'attribute'
 
 
 class DisplayConfig(BaseModel):
@@ -393,6 +412,26 @@ class SemanticModelBuilder:
             # Step 5: Build facts
             logger.info("Step 5: Building facts...")
             facts = self._build_facts(compressed, classification)
+
+            # Validate facts have measures
+            facts_without_measures = []
+            for fact in facts:
+                if not fact.get('measures') or len(fact['measures']) == 0:
+                    facts_without_measures.append(fact['name'])
+                    logger.warning(f"Fact '{fact['name']}' has no measures defined")
+                    
+                    # Try to auto-detect measures from numeric columns
+                    source_table = fact.get('source', '')
+                    table_data = self._get_tables_by_names(compressed, [source_table])
+                    if table_data:
+                        auto_measures = self._auto_detect_measures(table_data[0])
+                        if auto_measures:
+                            fact['measures'] = auto_measures
+                            logger.info(f"Auto-detected {len(auto_measures)} measures for '{fact['name']}'")
+
+            if facts_without_measures and not any(f.get('measures') for f in facts):
+                logger.error("No facts have measures! Q&A will fail.")
+                raise ValueError("Semantic model invalid: No facts with measures")
             
             # Step 6: Build relationships
             logger.info("Step 6: Building relationships...")
@@ -722,6 +761,27 @@ Respond with dimension definitions JSON array."""
                 continue
             
             fact_table = fact_tables_data[0]
+
+            # Detect potential measure columns automatically
+            potential_measures = []
+            for col in fact_table.get('columns', []):
+                col_type = col.get('type', '').lower()
+                col_name = col.get('name', '').lower()
+                
+                # Numeric columns likely to be measures
+                if any(t in col_type for t in ['int', 'decimal', 'numeric', 'float', 'money']):
+                    # Skip ID columns
+                    if not any(keyword in col_name for keyword in ['id', 'key', 'code']):
+                        measure_hint = {
+                            'column': col['name'],
+                            'type': col['type'],
+                            'stats': col.get('stats', {})
+                        }
+                        potential_measures.append(measure_hint)
+
+            # Add to user prompt
+            measure_context = f"\n\nPotential measure columns detected:\n{json.dumps(potential_measures, indent=2)}"
+            user_prompt += measure_context
             
             system_prompt = """You are a fact table modeler. Enrich fact tables with measures and metadata.
 
@@ -790,96 +850,69 @@ Respond with fact definition JSON object."""
         facts: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
         """
-        Build semantic relationships from discovery relationships
-        Maps to semantic model object names
+        Build relationships from discovery data + validate against model objects
         """
-        logger.info("    Mapping relationships to semantic model...")
-        
-        inferred_rels = discovery_data.get("inferred_relationships", [])
-        
-        # ADD: Log incoming relationships for debugging
-        logger.info(f"      Found {len(inferred_rels)} relationships in discovery data")
-        if len(inferred_rels) > 0:
-            logger.debug(f"      Sample relationship: {inferred_rels[0]}")
-        
-        # Build mapping from source table to semantic name
-        source_to_semantic = {}
-        
-        for entity in entities:
-            source_to_semantic[entity["source"]] = entity["name"]
-        for dimension in dimensions:
-            source_to_semantic[dimension["source"]] = dimension["name"]
-        for fact in facts:
-            source_to_semantic[fact["source"]] = fact["name"]
-        
-        # ADD: Log source mapping for debugging
-        logger.info(f"      Built source mapping with {len(source_to_semantic)} tables")
-        logger.debug(f"      Sample mappings: {list(source_to_semantic.items())[:3]}")
-        
         relationships = []
-        skipped_count = 0  # ADD: Track skipped relationships
         
-        for rel in inferred_rels:
-            try:
-                # Parse from/to
-                from_parts = rel["from"].split(".")
-                to_parts = rel["to"].split(".")
-                
-                # CHANGE: Add validation and better error messages
-                if len(from_parts) < 3:
-                    logger.warning(f"      Invalid 'from' format (need schema.table.column): {rel['from']}")
-                    skipped_count += 1
-                    continue
-                
-                if len(to_parts) < 3:
-                    logger.warning(f"      Invalid 'to' format (need schema.table.column): {rel['to']}")
-                    skipped_count += 1
-                    continue
-                
+        # Create lookup of all object columns
+        object_columns = {}
+        for entity in entities:
+            for pk_col in entity.get('primary_key', []):
+                key = f"{entity['name']}.{pk_col}"
+                object_columns[key] = {'type': 'entity', 'object': entity['name']}
+        
+        for dimension in dimensions:
+            for key_col in dimension.get('keys', []):
+                key = f"{dimension['name']}.{key_col}"
+                object_columns[key] = {'type': 'dimension', 'object': dimension['name']}
+        
+        # Extract relationships from discovery
+        discovered_rels = discovery_data.get('inferred_relationships', [])
+        
+        for rel in discovered_rels:
+            from_col = rel.get('from', '')
+            to_col = rel.get('to', '')
+            
+            # Convert schema.table.column to ObjectName.column
+            from_parts = from_col.split('.')
+            to_parts = to_col.split('.')
+            
+            if len(from_parts) >= 3 and len(to_parts) >= 3:
                 from_table = f"{from_parts[0]}.{from_parts[1]}"
                 to_table = f"{to_parts[0]}.{to_parts[1]}"
                 
-                # Map to semantic names
-                from_semantic = source_to_semantic.get(from_table)
-                to_semantic = source_to_semantic.get(to_table)
+                # Find corresponding objects in model
+                from_obj = self._find_model_object(from_table, entities, dimensions, facts)
+                to_obj = self._find_model_object(to_table, entities, dimensions, facts)
                 
-                # CHANGE: Log why relationships are being skipped
-                if not from_semantic:
-                    logger.debug(f"      Skipping - no semantic name for source table: {from_table}")
-                    skipped_count += 1
-                    continue
-                
-                if not to_semantic:
-                    logger.debug(f"      Skipping - no semantic name for target table: {to_table}")
-                    skipped_count += 1
-                    continue
-                
-                # Build semantic relationship
-                rel_obj = {
-                    "from": f"{from_semantic}.{from_parts[2]}",
-                    "to": f"{to_semantic}.{to_parts[2]}",
-                    "cardinality": rel.get("cardinality", "many_to_one"),
-                    "confidence": rel.get("confidence", "medium")
-                }
-                
-                # Add verification if present
-                if "overlap_rate" in rel:
-                    rel_obj["verification"] = {
-                        "overlap_rate": rel["overlap_rate"]
+                if from_obj and to_obj:
+                    relationship = {
+                        'from': f"{from_obj['name']}.{from_parts[-1]}",
+                        'to': f"{to_obj['name']}.{to_parts[-1]}",
+                        'cardinality': rel.get('cardinality', 'many_to_one'),
+                        'confidence': rel.get('confidence', 'medium'),
+                        'verification': {
+                            'overlap_rate': rel.get('overlap_rate', 0.0),
+                            'method': rel.get('method', 'inferred')
+                        }
                     }
-                
-                relationships.append(rel_obj)
-            
-            except Exception as e:
-                logger.warning(f"      Failed to map relationship: {rel.get('from', 'unknown')} -> {rel.get('to', 'unknown')}: {e}")
-                skipped_count += 1
+                    relationships.append(relationship)
         
-        # CHANGE: Add summary logging
-        logger.info(f"      ✓ Mapped {len(relationships)} relationships ({skipped_count} skipped)")
-        if skipped_count > 0:
-            logger.warning(f"      ⚠ Skipped {skipped_count} relationships - check logs for details")
-        
+        logger.info(f"    ✓ Built {len(relationships)} validated relationships")
         return relationships
+
+    def _find_model_object(
+        self,
+        source_table: str,
+        entities: List[Dict],
+        dimensions: List[Dict],
+        facts: List[Dict]
+    ) -> Optional[Dict]:
+        """Find model object by source table"""
+        for obj in entities + dimensions + facts:
+            if obj.get('source') == source_table:
+                return obj
+        return None
     
     def _rank_tables(self, discovery_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
@@ -1071,3 +1104,21 @@ def clear_semantic_cache():
         logger.info(f"Cleared semantic model cache: {cache_file}")
     else:
         logger.info("No semantic model cache to clear")
+
+
+def _auto_detect_measures(self, table_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Auto-detect measures from numeric columns"""
+    measures = []
+    for col in table_data.get('columns', []):
+        col_type = col.get('type', '').lower()
+        col_name = col['name']
+        
+        if any(t in col_type for t in ['int', 'decimal', 'numeric', 'float', 'money']):
+            if not any(kw in col_name.lower() for kw in ['id', 'key', 'code']):
+                measures.append({
+                    'name': col_name,
+                    'expression': f"SUM({col_name})",
+                    'unit': 'numeric',
+                    'description': f"Auto-detected measure from {col_name}"
+                })
+    return measures[:5]  # Limit to top 5 auto-detected measures
