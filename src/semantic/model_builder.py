@@ -780,8 +780,19 @@ Respond with dimension definitions JSON array."""
                         potential_measures.append(measure_hint)
 
             # Add to user prompt
-            measure_context = f"\n\nPotential measure columns detected:\n{json.dumps(potential_measures, indent=2)}"
-            user_prompt += measure_context
+            # measure_context = f"\n\nPotential measure columns detected:\n{json.dumps(potential_measures, indent=2)}"
+            # user_prompt += measure_context
+
+            user_prompt = f"""Enrich this fact table:
+
+{json.dumps(fact_table, indent=2)}
+
+Respond with fact definition JSON object."""
+            
+            if potential_measures:
+                measure_context = f"\n\nPotential measure columns detected:\n{json.dumps(potential_measures, indent=2)}"
+                user_prompt += measure_context
+            
             
             system_prompt = """You are a fact table modeler. Enrich fact tables with measures and metadata.
 
@@ -821,11 +832,8 @@ Respond with valid JSON object:
   }
 }"""
             
-            user_prompt = f"""Enrich this fact table:
+            
 
-{json.dumps(fact_table, indent=2)}
-
-Respond with fact definition JSON object."""
             
             try:
                 fact_result = self.llm_client.call_with_retry(system_prompt, user_prompt)

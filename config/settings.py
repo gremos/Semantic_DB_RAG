@@ -606,7 +606,7 @@ def get_settings(reload: bool = False) -> Settings:
         try:
             _settings = Settings.from_env()
             _settings.validate()
-            _settings.logging.configure()
+            _settings.logging.configure(_settings)  # ✅ FIX: Pass _settings as parameter
             
             logger.info("Configuration loaded successfully")
             logger.debug(_settings.summary())
