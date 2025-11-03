@@ -429,10 +429,8 @@ if __name__ == '__main__':
     from pathlib import Path
     
     # Setup logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s [%(levelname)s] %(name)s: %(message)s'
-    )
+    from config.settings import get_settings
+    get_settings() 
     
     print("Semantic Model Builder - Integration Module")
     print("=" * 80)

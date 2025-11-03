@@ -23,7 +23,7 @@ def setup_logging(settings: Settings) -> logging.Logger:
         Configured root logger
     """
     # Ensure log directory exists
-    log_dir = Path(settings.LOG_DIR)
+    log_dir = settings.paths.log_dir
     log_dir.mkdir(parents=True, exist_ok=True)
     
     # Create root logger
@@ -32,10 +32,12 @@ def setup_logging(settings: Settings) -> logging.Logger:
     
     # Remove existing handlers
     root_logger.handlers.clear()
-    
-    # Console handler with colors
     console_handler = colorlog.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)
+
+    # Console handler with colors
+    console_level = getattr(logging, settings.logging.level.upper(), logging.INFO)
+    console_handler = colorlog.StreamHandler(sys.stdout)
+    console_handler.setLevel(console_level)
     console_formatter = colorlog.ColoredFormatter(
         '%(log_color)s%(levelname)-8s%(reset)s %(blue)s%(name)s%(reset)s: %(message)s',
         log_colors={
@@ -50,11 +52,18 @@ def setup_logging(settings: Settings) -> logging.Logger:
     root_logger.addHandler(console_handler)
     
     # File handler for discovery/semantic logs
-    file_handler = logging.FileHandler(
+    from logging.handlers import RotatingFileHandler
+    
+    # File handler for discovery/semantic logs with rotation
+    # Max 10MB per file, keep 5 backup files
+    file_handler = RotatingFileHandler(
         log_dir / 'discovery_semantic.log',
         mode='a',
+        maxBytes=10*1024*1024,  # 10MB
+        backupCount=5,
         encoding='utf-8'
     )
+
     file_handler.setLevel(logging.DEBUG)
     file_formatter = logging.Formatter(
         '%(asctime)s - %(name)s - %(levelname)s - %(message)s',

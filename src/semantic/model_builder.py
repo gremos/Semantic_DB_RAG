@@ -18,7 +18,7 @@ from typing import Dict, List, Optional, Any, Tuple
 
 from langchain_openai import AzureChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ValidationError, Field
 
 from config.settings import (
     get_settings,
@@ -92,16 +92,19 @@ class FactDefinition(BaseModel):
     display: Optional[Dict[str, Any]] = None
 
 
+
+
 class RelationshipDefinition(BaseModel):
     """Relationship between tables"""
-    from_field: str = None  # Rename to avoid Python keyword
+    from_: str = Field(..., alias='from')  # Required field with 'from' alias
     to: str
     cardinality: str
     confidence: str
     verification: Optional[Dict[str, Any]] = None
     
     class Config:
-        fields = {'from_field': 'from'}
+        populate_by_name = True  # Allow both 'from_' and 'from' during parsing
+        by_alias = True  # Serialize using alias ('from') instead of field name
 
 
 class TableRanking(BaseModel):

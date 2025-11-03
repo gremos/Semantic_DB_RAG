@@ -24,11 +24,11 @@ from src.discovery.discovery_engine import run_discovery, clear_discovery_cache
 from src.semantic.model_builder import SemanticModelBuilder
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S'
-)
+# logging.basicConfig(
+#     level=logging.INFO,
+#     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+#     datefmt='%Y-%m-%d %H:%M:%S'
+# )
 logger = logging.getLogger(__name__)
 
 
@@ -37,6 +37,8 @@ def cmd_discovery(args):
     Phase 1: Database Discovery
     Introspects database schema, samples data, detects relationships
     """
+    # Ensure logging is configured
+    get_settings()
     # Handle sample mode CLI arguments (override env vars)
     if hasattr(args, 'sample_mode') and args.sample_mode:
         logger.info("=" * 80)

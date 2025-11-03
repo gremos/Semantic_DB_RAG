@@ -474,14 +474,20 @@ class LoggingConfig:
                           '%(asctime)s - %(name)s - %(levelname)s - %(message)s'),
         )
     
-    def configure(self):
-        """Configure Python logging"""
-        level = getattr(logging, self.level.upper(), logging.INFO)
-        logging.basicConfig(
-            level=level,
-            format=self.format,
-            datefmt='%Y-%m-%d %H:%M:%S'
-        )
+    def configure(self, settings: 'Settings'):
+        """
+        Configure Python logging using centralized logging config
+        
+        Args:
+            settings: Full settings object to pass to logging setup
+        """
+        # Import here to avoid circular dependency
+        from src.utils.logging_config import setup_logging
+        
+        # Setup logging with both console and file handlers
+        setup_logging(settings)
+        
+        logger.info(f"Logging configured: level={self.level}, file=logs/discovery_semantic.log")
 
 
 # ============================================================================
