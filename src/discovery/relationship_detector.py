@@ -27,10 +27,10 @@ logger = logging.getLogger(__name__)
 
 def detect_relationships(
     discovery_data: Dict[str, Any],
-    overlap_threshold: float = 0.95,
-    name_similarity_threshold: float = 0.6,
+    overlap_threshold: float = 0.98,  # ✅ STRICTER: 98% minimum
+    name_similarity_threshold: float = 0.7,  # ✅ STRICTER: 70% name match
     sample_size: int = 1000,
-    min_cardinality_ratio: float = 2.0
+    min_cardinality_ratio: float = 3.0  # ✅ STRICTER: 3x difference for many-to-one
 ) -> List[Dict[str, Any]]:
     """
     Detect relationships between tables using multiple strategies
@@ -374,26 +374,51 @@ def _detect_implicit_relationships(
         
         # ✅ CRITICAL FIX: Reject suspicious one-to-one relationships
         # These are likely false positives (different tables shouldn't have identical ID sets)
+        # ✅ CRITICAL FIX: Reject suspicious one-to-one relationships
+        # These are likely false positives (different tables shouldn't have identical ID sets)
         if cardinality == "one_to_one":
             # Extract table names
             table1 = ".".join(col1_full.split(".")[:-1])
             table2 = ".".join(col2_full.split(".")[:-1])
             
-            # Reject if:
-            # 1. Tables are completely different (not parent/child naming pattern)
-            # 2. 100% overlap with equal sample sizes (suspicious coincidence)
-            # 3. Low name similarity (columns named differently)
-            tables_unrelated = not (
+            # Extract column names
+            col1_name = col1_full.split(".")[-1].lower()
+            col2_name = col2_full.split(".")[-1].lower()
+            
+            # ✅ AGGRESSIVE: Reject ALL one-to-one unless:
+            # 1. Tables have parent/child naming pattern (e.g., "Order" and "OrderDetail")
+            # 2. Column names are highly similar (>0.8)
+            # 3. One column is explicitly named after the other table (e.g., "CustomerID" in Orders)
+            
+            tables_related = (
                 table1.lower() in table2.lower() or 
                 table2.lower() in table1.lower()
             )
-            perfect_overlap = (overlap_rate >= 0.999 and sample_size1 == sample_size2)
             
-            if tables_unrelated and perfect_overlap and name_similarity < 0.7:
+            # Check if column name matches table name (FK pattern)
+            table1_name = table1.split('.')[-1].lower()
+            table2_name = table2.split('.')[-1].lower()
+            fk_pattern_match = (
+                table1_name in col1_name or 
+                table2_name in col2_name or
+                table1_name in col2_name or
+                table2_name in col1_name
+            )
+            
+            high_name_similarity = name_similarity >= 0.8
+            perfect_overlap = overlap_rate >= 0.995
+            
+            # ✅ Reject unless ALL criteria met
+            if perfect_overlap and not (tables_related and fk_pattern_match and high_name_similarity):
                 logger.debug(
-                    f"  ❌ Rejecting suspicious 1:1: {col1_full} <-> {col2_full} "
+                    f"  ❌ Rejecting 1:1 (unrelated tables): {col1_full} <-> {col2_full} "
                     f"(overlap={overlap_rate:.3f}, name_sim={name_similarity:.2f})"
                 )
+                continue
+            
+            # ✅ Additional check: Reject if generic ID columns from unrelated tables
+            if col1_name == 'id' and col2_name == 'id' and not tables_related:
+                logger.debug(f"  ❌ Rejecting generic ID columns from unrelated tables: {table1} <-> {table2}")
                 continue
         
         # ✅ REQUIRED: Enforce many-to-one cardinality for implicit relationships

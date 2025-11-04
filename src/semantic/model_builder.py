@@ -511,15 +511,26 @@ class SemanticModelBuilder:
 1. **ENTITIES**: Lookup/reference tables (customers, products, employees)
    - Typically have: primary key, descriptive columns, low cardinality
    - Few foreign keys, stable data
+   - Examples: Customer, Product, Employee, Supplier
 
-2. **DIMENSIONS**: Analysis dimensions (date, geography, categories)
-   - Hierarchical structure (year -> quarter -> month)
-   - Used for slicing/filtering data
+2. **DIMENSIONS**: Analysis dimensions for slicing/filtering data
+   - **CRITICAL**: Look for these patterns:
+     * TIME dimensions: Date, Calendar, Year, Month, Period (have Year/Month/Day columns)
+     * GEOGRAPHY dimensions: Location, Region, Country, City (have hierarchical geo columns)
+     * CATEGORY dimensions: ProductCategory, Classification (have hierarchical category columns)
+   - Hierarchical structure (year -> quarter -> month OR country -> state -> city)
+   - Low-to-medium cardinality
+   - Used for slicing/filtering/grouping in analytics
+   - Column names include: Year, Month, Quarter, Date, Country, Region, Category, Type
+   - Examples: DimDate, DimTime, DimGeography, DimProductCategory
 
 3. **FACTS**: Transaction/measurement tables (sales, orders, events)
-   - Many foreign keys to entities/dimensions
-   - Contain numeric measures
+   - Many foreign keys to entities/dimensions (3+ FK columns)
+   - Contain numeric measures (amounts, quantities, counts)
    - High cardinality, many rows
+   - Examples: FactSales, Orders, Transactions, Events
+
+**PRIORITIZE** identifying time dimensions (tables with Date/Year/Month columns) as these are critical for temporal analysis.
 
 Respond with valid JSON only:
 {
@@ -877,9 +888,54 @@ Respond with valid JSON object:
         # Extract relationships from discovery
         discovered_rels = discovery_data.get('inferred_relationships', [])
         
+        # ✅ ADD: Confidence-based filtering thresholds
+        CONFIDENCE_THRESHOLDS = {
+            'very_high': 1.0,   # Always include (explicit FKs)
+            'high': 1.0,        # Always include (curated assets)
+            'medium': 0.5,      # Include 50% (review overlap + cardinality)
+            'low': 0.0          # Never include (too risky)
+        }
+        
+        # ✅ ADD: Build semantic domain map for entities
+        entity_domains = {}
+        for entity in entities:
+            source = entity.get('source', '').lower()
+            # Extract semantic domain from table name (e.g., "Payment", "Customer", "Product")
+            name_parts = source.split('.')[-1].replace('_', ' ').split()
+            entity_domains[entity['name']] = set(name_parts)
+        
+        filtered_count = 0
+        accepted_count = 0
+        
         for rel in discovered_rels:
             from_col = rel.get('from', '')
             to_col = rel.get('to', '')
+            confidence = rel.get('confidence', 'low')
+            cardinality = rel.get('cardinality', 'one_to_one')
+            overlap_rate = rel.get('overlap_rate', 0.0)
+            
+            # ✅ ADD: Filter by confidence threshold
+            if CONFIDENCE_THRESHOLDS.get(confidence, 0.0) == 0.0:
+                filtered_count += 1
+                logger.debug(f"  ❌ Filtered {confidence} confidence: {from_col} -> {to_col}")
+                continue
+            
+            # ✅ ADD: Reject suspicious one-to-one relationships
+            if cardinality == 'one_to_one' and overlap_rate >= 0.999:
+                # Extract table names
+                from_table_parts = from_col.split('.')[:-1]
+                to_table_parts = to_col.split('.')[:-1]
+                
+                # Check if tables are from same semantic domain
+                from_table = from_table_parts[-1] if from_table_parts else ''
+                to_table = to_table_parts[-1] if to_table_parts else ''
+                
+                # Reject if tables don't share any semantic relationship
+                if from_table.lower() not in to_table.lower() and \
+                to_table.lower() not in from_table.lower():
+                    filtered_count += 1
+                    logger.debug(f"  ❌ Filtered suspicious 1:1: {from_col} -> {to_col} (overlap={overlap_rate:.3f})")
+                    continue
             
             # Convert schema.table.column to ObjectName.column
             from_parts = from_col.split('.')
@@ -893,19 +949,40 @@ Respond with valid JSON object:
                 from_obj = self._find_model_object(from_table, entities, dimensions, facts)
                 to_obj = self._find_model_object(to_table, entities, dimensions, facts)
                 
+                # ✅ ADD: Only include if BOTH objects exist in semantic model
                 if from_obj and to_obj:
+                    # ✅ ADD: Semantic domain validation
+                    from_obj_name = from_obj['name']
+                    to_obj_name = to_obj['name']
+                    
+                    # Check if objects share semantic domain (for medium confidence)
+                    if confidence == 'medium':
+                        from_domain = entity_domains.get(from_obj_name, set())
+                        to_domain = entity_domains.get(to_obj_name, set())
+                        
+                        # Require at least some overlap in semantic domain
+                        if not (from_domain & to_domain) and overlap_rate < 0.97:
+                            filtered_count += 1
+                            logger.debug(f"  ❌ Filtered cross-domain medium confidence: {from_obj_name} -> {to_obj_name}")
+                            continue
+                    
                     relationship = {
                         'from': f"{from_obj['name']}.{from_parts[-1]}",
                         'to': f"{to_obj['name']}.{to_parts[-1]}",
                         'cardinality': rel.get('cardinality', 'many_to_one'),
-                        'confidence': rel.get('confidence', 'medium'),
+                        'confidence': confidence,
                         'verification': {
-                            'overlap_rate': rel.get('overlap_rate', 0.0),
+                            'overlap_rate': overlap_rate,
                             'method': rel.get('method', 'inferred')
                         }
                     }
                     relationships.append(relationship)
+                    accepted_count += 1
+                else:
+                    filtered_count += 1
+                    logger.debug(f"  ❌ Filtered - objects not in model: {from_col} -> {to_col}")
         
+        logger.info(f"    ✓ Accepted {accepted_count} relationships, filtered {filtered_count}")
         logger.info(f"    ✓ Built {len(relationships)} validated relationships")
         return relationships
 
