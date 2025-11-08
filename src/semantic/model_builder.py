@@ -676,75 +676,187 @@ Respond with entity definitions JSON array."""
         dimension_tables = classification.get("dimensions", [])
         if not dimension_tables:
             logger.info("    No dimensions to build")
+            dimensions = []
+        else:
+            logger.info(f"    Building {len(dimension_tables)} dimensions in batches of {self.dimension_batch_size}...")
+            
+            dimensions = []
+            
+            for i in range(0, len(dimension_tables), self.dimension_batch_size):
+                batch = dimension_tables[i:i + self.dimension_batch_size]
+                logger.info(f"      Processing dimension batch {i // self.dimension_batch_size + 1} ({len(batch)} tables)...")
+                
+                batch_tables = self._get_tables_by_names(compressed_discovery, batch)
+                
+                system_prompt = """You are a dimensional modeler. Enrich dimension tables with semantic metadata.
+
+    For each dimension, provide:
+    - Meaningful name
+    - Key columns
+    - Attributes with semantic types (date, year, month_name, country, etc.)
+    - Display configuration (attribute order for drill-down) - REQUIRED, NOT NULL
+
+    **CRITICAL:** The display field MUST be populated with attribute_order showing the logical drill-down hierarchy."""
+
+                user_prompt = f"""Enrich these dimension tables:
+
+    {json.dumps(batch_tables, indent=2)}
+
+    Respond with array of dimension definition JSON objects."""
+
+                try:
+                    batch_result = self.llm_client.call_with_retry(system_prompt, user_prompt)
+                    
+                    for dim_data in batch_result:
+                        try:
+                            validated = DimensionDefinition(**dim_data)
+                            dimensions.append(validated.dict())
+                        except ValidationError as e:
+                            logger.warning(f"Dimension validation failed: {e}")
+                
+                except Exception as e:
+                    logger.error(f"Dimension batch processing failed: {e}")
+            
+            logger.info(f"      ✓ Built {len(dimensions)} dimensions")
+        
+        # ✅ NEW: Auto-generate time dimensions from fact tables
+        logger.info("    Checking for temporal columns to create time dimensions...")
+        time_dimensions = self._auto_generate_time_dimensions(compressed_discovery, classification)
+        
+        if time_dimensions:
+            logger.info(f"    ✅ Auto-generated {len(time_dimensions)} time dimension(s)")
+            dimensions.extend(time_dimensions)
+        else:
+            logger.warning("    ⚠️  No temporal columns found - time-based queries will fail!")
+        
+        return dimensions
+    
+    def _auto_generate_time_dimensions(
+        self,
+        compressed_discovery: Dict[str, Any],
+        classification: Dict[str, List[str]]
+    ) -> List[Dict[str, Any]]:
+        """
+        Auto-generate time dimensions from datetime columns in fact tables
+        
+        Critical for temporal queries like "last quarter", "this year", etc.
+        """
+        time_dimensions = []
+        fact_tables = classification.get("facts", [])
+        
+        # Scan fact tables for datetime columns
+        datetime_columns = []
+        for fact_name in fact_tables:
+            fact_data = self._get_tables_by_names(compressed_discovery, [fact_name])
+            if not fact_data:
+                continue
+            
+            for col in fact_data[0].get('columns', []):
+                col_type = col.get('type', '').lower()
+                col_name = col.get('name', '')
+                
+                # Detect datetime columns
+                if any(dt_type in col_type for dt_type in ['date', 'time', 'timestamp']):
+                    datetime_columns.append({
+                        'source_table': fact_name,
+                        'column_name': col_name,
+                        'column_type': col['type'],
+                        'stats': col.get('stats', {})
+                    })
+        
+        if not datetime_columns:
             return []
         
-        logger.info(f"    Building {len(dimension_tables)} dimensions in batches of {self.dimension_batch_size}...")
+        # Create virtual time dimension
+        # Pick the most common datetime column name (CreatedOn, OrderDate, TransactionDate, etc.)
+        from collections import Counter
+        col_names = [dc['column_name'] for dc in datetime_columns]
+        most_common_col = Counter(col_names).most_common(1)[0][0]
         
-        dimensions = []
+        logger.info(f"      Generating time dimension based on column: {most_common_col}")
         
-        for i in range(0, len(dimension_tables), self.dimension_batch_size):
-            batch = dimension_tables[i:i + self.dimension_batch_size]
-            logger.info(f"      Processing dimension batch {i // self.dimension_batch_size + 1} ({len(batch)} tables)...")
-            
-            batch_tables = self._get_tables_by_names(compressed_discovery, batch)
-            
-            system_prompt = """You are a dimensional modeler. Enrich dimension tables with semantic metadata.
-
-For each dimension, provide:
-- Meaningful name
-- Key columns
-- Attributes with semantic types (date, year, month_name, country, etc.)
-- Display configuration (attribute order for drill-down) - REQUIRED, NOT NULL
-
-**CRITICAL:** The display field MUST be populated with attribute_order showing the logical drill-down hierarchy.
-
-Respond with valid JSON array:
-[
-  {
-    "name": "Date",
-    "source": "dbo.DimDate",
-    "keys": ["DateKey"],
-    "attributes": [
-      {"name": "Date", "semantic_type": "date", "role": "attribute", "aliases": [], "description": "Calendar date"},
-      {"name": "Year", "semantic_type": "year", "role": "attribute", "aliases": ["FiscalYear"], "description": "Calendar year"},
-      {"name": "Month", "semantic_type": "month_name", "role": "attribute", "aliases": ["MonthName"], "description": "Month name"}
-    ],
-    "display": {
-      "display_name": "Date",
-      "default_label_column": "Date",
-      "default_search_columns": ["Date", "Year", "Month"],
-      "default_sort": {"column": "Date", "direction": "desc"},
-      "attribute_order": ["Year", "Month", "Date"]
-    }
-  }
-]
-
-RULES:
-- Display field is REQUIRED
-- attribute_order MUST show hierarchical drill-down path
-- NEVER use null for display fields"""
-            
-            user_prompt = f"""Enrich these dimension tables:
-
-{json.dumps(batch_tables, indent=2)}
-
-Respond with dimension definitions JSON array."""
-            
-            try:
-                batch_result = self.llm_client.call_with_retry(system_prompt, user_prompt)
-                
-                for dim_data in batch_result:
-                    try:
-                        validated = DimensionDefinition(**dim_data)
-                        dimensions.append(validated.dict())
-                    except ValidationError as e:
-                        logger.warning(f"Dimension validation failed: {e}")
-            
-            except Exception as e:
-                logger.error(f"Dimension batch processing failed: {e}")
+        # Create virtual DimDate dimension
+        time_dim = {
+            "name": "Date",
+            "source": f"VIRTUAL_DIM_{most_common_col}",  # Virtual dimension marker
+            "keys": ["Date"],
+            "attributes": [
+                {
+                    "name": "Date",
+                    "role": "attribute",
+                    "semantic_type": "date",
+                    "aliases": ["DateKey", "FullDate"],
+                    "description": f"Full date value (derived from {most_common_col})"
+                },
+                {
+                    "name": "Year",
+                    "role": "attribute",
+                    "semantic_type": "year",
+                    "aliases": ["CalendarYear", "Yr"],
+                    "description": "Calendar year (e.g., 2024, 2025)"
+                },
+                {
+                    "name": "Quarter",
+                    "role": "attribute",
+                    "semantic_type": "quarter",
+                    "aliases": ["Qtr", "QuarterNumber"],
+                    "description": "Calendar quarter (1-4)"
+                },
+                {
+                    "name": "Month",
+                    "role": "attribute",
+                    "semantic_type": "month_number",
+                    "aliases": ["MonthNumber", "Mo"],
+                    "description": "Month number (1-12)"
+                },
+                {
+                    "name": "MonthName",
+                    "role": "attribute",
+                    "semantic_type": "month_name",
+                    "aliases": ["Month Name", "MonthText"],
+                    "description": "Month name (January, February, etc.)"
+                },
+                {
+                    "name": "Week",
+                    "role": "attribute",
+                    "semantic_type": "week",
+                    "aliases": ["WeekNumber", "ISOWeek"],
+                    "description": "Week number (1-53)"
+                },
+                {
+                    "name": "DayOfMonth",
+                    "role": "attribute",
+                    "semantic_type": "day",
+                    "aliases": ["Day", "DayNumber"],
+                    "description": "Day of month (1-31)"
+                },
+                {
+                    "name": "DayOfWeek",
+                    "role": "attribute",
+                    "semantic_type": "day_of_week",
+                    "aliases": ["Weekday", "DayName"],
+                    "description": "Day name (Monday, Tuesday, etc.)"
+                }
+            ],
+            "display": {
+                "display_name": "Date",
+                "default_label_column": "Date",
+                "default_search_columns": ["Date", "Year", "MonthName"],
+                "default_sort": {
+                    "column": "Date",
+                    "direction": "desc"
+                },
+                "attribute_order": ["Year", "Quarter", "MonthName", "Week", "DayOfMonth", "DayOfWeek"]
+            },
+            "metadata": {
+                "is_virtual": True,
+                "source_columns": datetime_columns,
+                "generation_logic": f"Derived from datetime columns in fact tables. SQL generation should use DATEPART/EXTRACT functions on {most_common_col}."
+            }
+        }
         
-        logger.info(f"      ✓ Built {len(dimensions)} dimensions")
-        return dimensions
+        time_dimensions.append(time_dim)
+        return time_dimensions
     
     def _build_facts(
         self,
@@ -870,11 +982,24 @@ Respond with valid JSON object:
     ) -> List[Dict[str, Any]]:
         """
         Build relationships from discovery data + validate against model objects
+        
+        This method:
+        1. Creates lookup of all semantic model objects (entities, dimensions, facts)
+        2. Filters relationships from discovery data
+        3. Maps source table relationships to semantic model object relationships
+        4. Applies confidence-based filtering to reduce false positives
+        5. Validates that both sides of relationship exist in semantic model
+        
+        Returns:
+            List of validated relationship definitions with confidence scores
         """
+        logger.info("    Building relationships...")
+        
         relationships = []
         
-        # Create lookup of all object columns
+        # Step 1: Create lookup of all object columns (for validation)
         object_columns = {}
+        
         for entity in entities:
             for pk_col in entity.get('primary_key', []):
                 key = f"{entity['name']}.{pk_col}"
@@ -885,18 +1010,20 @@ Respond with valid JSON object:
                 key = f"{dimension['name']}.{key_col}"
                 object_columns[key] = {'type': 'dimension', 'object': dimension['name']}
         
-        # Extract relationships from discovery
+        # Step 2: Extract relationships from discovery data
         discovered_rels = discovery_data.get('inferred_relationships', [])
         
-        # ✅ ADD: Confidence-based filtering thresholds
+        # Step 3: Define confidence-based filtering thresholds
+        # This prevents low-quality relationships from polluting the model
         CONFIDENCE_THRESHOLDS = {
-            'very_high': 1.0,   # Always include (explicit FKs)
-            'high': 1.0,        # Always include (curated assets)
+            'very_high': 1.0,   # Always include (explicit FKs from schema)
+            'high': 1.0,        # Always include (curated assets like views/SPs)
             'medium': 0.5,      # Include 50% (review overlap + cardinality)
-            'low': 0.0          # Never include (too risky)
+            'low': 0.0          # Never include (too risky - likely false positives)
         }
         
-        # ✅ ADD: Build semantic domain map for entities
+        # Step 4: Build semantic domain map for entities
+        # Used to reject cross-domain relationships that don't make sense
         entity_domains = {}
         for entity in entities:
             source = entity.get('source', '').lower()
@@ -907,6 +1034,7 @@ Respond with valid JSON object:
         filtered_count = 0
         accepted_count = 0
         
+        # Step 5: Process each discovered relationship
         for rel in discovered_rels:
             from_col = rel.get('from', '')
             to_col = rel.get('to', '')
@@ -914,13 +1042,15 @@ Respond with valid JSON object:
             cardinality = rel.get('cardinality', 'one_to_one')
             overlap_rate = rel.get('overlap_rate', 0.0)
             
-            # ✅ ADD: Filter by confidence threshold
+            # Filter 5a: Reject based on confidence threshold
             if CONFIDENCE_THRESHOLDS.get(confidence, 0.0) == 0.0:
                 filtered_count += 1
                 logger.debug(f"  ❌ Filtered {confidence} confidence: {from_col} -> {to_col}")
                 continue
             
-            # ✅ ADD: Reject suspicious one-to-one relationships
+            # Filter 5b: Reject suspicious one-to-one relationships
+            # One-to-one with 99.9%+ overlap usually means duplicate/mirror tables
+            # which should NOT be treated as foreign key relationships
             if cardinality == 'one_to_one' and overlap_rate >= 0.999:
                 # Extract table names
                 from_table_parts = from_col.split('.')[:-1]
@@ -931,41 +1061,47 @@ Respond with valid JSON object:
                 to_table = to_table_parts[-1] if to_table_parts else ''
                 
                 # Reject if tables don't share any semantic relationship
+                # (e.g., "PaymentMethod" and "User" shouldn't have 1:1 with 99.9% overlap)
                 if from_table.lower() not in to_table.lower() and \
                 to_table.lower() not in from_table.lower():
                     filtered_count += 1
                     logger.debug(f"  ❌ Filtered suspicious 1:1: {from_col} -> {to_col} (overlap={overlap_rate:.3f})")
                     continue
             
-            # Convert schema.table.column to ObjectName.column
+            # Step 6: Convert schema.table.column to ObjectName.column
+            # This maps database-level relationships to semantic model relationships
             from_parts = from_col.split('.')
             to_parts = to_col.split('.')
             
+            # Both must be fully qualified (schema.table.column)
             if len(from_parts) >= 3 and len(to_parts) >= 3:
                 from_table = f"{from_parts[0]}.{from_parts[1]}"
                 to_table = f"{to_parts[0]}.{to_parts[1]}"
                 
-                # Find corresponding objects in model
+                # Find corresponding objects in semantic model
                 from_obj = self._find_model_object(from_table, entities, dimensions, facts)
                 to_obj = self._find_model_object(to_table, entities, dimensions, facts)
                 
-                # ✅ ADD: Only include if BOTH objects exist in semantic model
+                # Filter 6a: Only include if BOTH objects exist in semantic model
+                # This ensures we don't create dangling relationships
                 if from_obj and to_obj:
-                    # ✅ ADD: Semantic domain validation
                     from_obj_name = from_obj['name']
                     to_obj_name = to_obj['name']
                     
-                    # Check if objects share semantic domain (for medium confidence)
+                    # Filter 6b: Semantic domain validation for medium confidence
+                    # Medium confidence relationships need extra validation
                     if confidence == 'medium':
                         from_domain = entity_domains.get(from_obj_name, set())
                         to_domain = entity_domains.get(to_obj_name, set())
                         
                         # Require at least some overlap in semantic domain
+                        # or high overlap rate (97%+) to proceed
                         if not (from_domain & to_domain) and overlap_rate < 0.97:
                             filtered_count += 1
                             logger.debug(f"  ❌ Filtered cross-domain medium confidence: {from_obj_name} -> {to_obj_name}")
                             continue
                     
+                    # Create validated relationship
                     relationship = {
                         'from': f"{from_obj['name']}.{from_parts[-1]}",
                         'to': f"{to_obj['name']}.{to_parts[-1]}",
@@ -982,8 +1118,10 @@ Respond with valid JSON object:
                     filtered_count += 1
                     logger.debug(f"  ❌ Filtered - objects not in model: {from_col} -> {to_col}")
         
+        # Step 7: Log results
         logger.info(f"    ✓ Accepted {accepted_count} relationships, filtered {filtered_count}")
         logger.info(f"    ✓ Built {len(relationships)} validated relationships")
+        
         return relationships
 
     def _find_model_object(
@@ -993,7 +1131,7 @@ Respond with valid JSON object:
         dimensions: List[Dict],
         facts: List[Dict]
     ) -> Optional[Dict]:
-        """Find model object by source table"""
+        """Find model object by source table name"""
         for obj in entities + dimensions + facts:
             if obj.get('source') == source_table:
                 return obj
