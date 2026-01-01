@@ -1,11 +1,6 @@
 {
-  "fingerprint": "41e65abb603ddce5f40c0b07fed680e8b06de648a49ea56f31152bb74d2251a2",
-  "timestamp": "2025-11-03T08:43:03.467376",
-  "sample_mode": true,
-  "sample_config": {
-    "tables_per_schema": 20,
-    "views_per_schema": 20,
-    "stored_procedures": 20,
-    "rdl_files": 20
-  }
+  "fingerprint": "dbc759e285544e0c7e8065f426c4d988184f0361ae55f6f6df343e0b7f09ea2e",
+  "timestamp": "2025-12-31T15:36:24.300210",
+  "sample_mode": false,
+  "sample_config": null
 }

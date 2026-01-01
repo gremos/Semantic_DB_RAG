@@ -541,19 +541,21 @@ class DiscoveryEngine:
             if table_data:
                 tables_data.append(table_data)
         
-        # Process views
-        for idx, view_name in enumerate(view_names, 1):
-            if self._should_exclude_table(view_name):
-                logger.debug(f"Skipping excluded view: {view_name}")
-                continue
-            
-            logger.info(f"    [{idx}/{len(view_names)}] View: {schema_name}.{view_name}")
-            view_data = self._discover_table(schema_name, view_name, 'view')
+        # Process views - filter excluded first, then process concurrently
+        filtered_view_names = [
+            v for v in view_names
+            if not self._should_exclude_table(v)
+        ]
 
-            
-            if view_data:
-                tables_data.append(view_data)
-        
+        excluded_count = len(view_names) - len(filtered_view_names)
+        if excluded_count > 0:
+            logger.debug(f"    Skipped {excluded_count} excluded views")
+
+        if filtered_view_names:
+            logger.info(f"    Processing {len(filtered_view_names)} views concurrently...")
+            views_data = self._discover_views_concurrent(schema_name, filtered_view_names)
+            tables_data.extend(views_data)
+
         return tables_data
     
     def _discover_table_metadata_only(
@@ -632,63 +634,79 @@ class DiscoveryEngine:
 
     def _discover_views_concurrent(self, schema_name: str, view_names: List[str]) -> List[Dict]:
         """
-        Process views concurrently with timeout protection and fallback strategies
-        
+        Process views concurrently with timeout protection and immediate continue
+
+        Strategy:
+        1. Submit all views to thread pool
+        2. Use short timeout per view (VIEW_SAMPLING_TIMEOUT)
+        3. On timeout: immediately continue to next, use metadata-only fallback
+        4. Never block the entire discovery for a single slow view
+
         Args:
             schema_name: Schema name
             view_names: List of view names to process
-            
+
         Returns:
             List of view data dictionaries
         """
         if not view_names:
             return []
-        
-        max_workers = self.discovery_config.max_workers
-        logger.info(f"    Processing views with {max_workers} workers")
-        
+
+        max_workers = min(self.discovery_config.max_workers, len(view_names))
+        timeout_per_view = self.discovery_config.view_sampling_timeout or 60
+
+        logger.info(f"    Processing {len(view_names)} views with {max_workers} workers "
+                    f"(timeout: {timeout_per_view}s per view)")
+
         views_data = []
         completed = 0
-        timeout_per_view = self.discovery_config.view_sampling_timeout
-        
+        timed_out = 0
+        failed = 0
+
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             # Submit all view discovery tasks
             future_to_view = {
                 executor.submit(
-                    self._discover_view_with_fallback, 
-                    schema_name, 
+                    self._discover_view_with_fallback,
+                    schema_name,
                     view_name,
                     timeout_per_view
                 ): view_name
                 for view_name in view_names
             }
-            
-            # Process results as they complete
-            for future in as_completed(future_to_view):
+
+            # Process results as they complete - with tight timeout
+            for future in as_completed(future_to_view, timeout=timeout_per_view * len(view_names) + 60):
                 view_name = future_to_view[future]
                 completed += 1
-                
+
                 try:
-                    view_data = future.result(timeout=timeout_per_view + 10)
+                    # Short timeout for getting result - view should already be done or timed out
+                    view_data = future.result(timeout=5)
+
                     if view_data:
                         views_data.append(view_data)
-                        
-                    # Log progress every 10%
-                    if completed % max(1, len(view_names) // 10) == 0:
+
+                    # Log progress every 10% or every 5 views
+                    progress_interval = max(1, min(5, len(view_names) // 10))
+                    if completed % progress_interval == 0:
                         pct = 100 * completed / len(view_names)
                         logger.info(
-                            f"    Views progress: {completed}/{len(view_names)} ({pct:.0f}%)"
+                            f"    Views: {completed}/{len(view_names)} ({pct:.0f}%) - "
+                            f"{len(views_data)} OK, {timed_out} timeout, {failed} failed"
                         )
-                        
+
                 except FutureTimeoutError:
+                    timed_out += 1
                     logger.warning(
-                        f"⏱️ Timeout processing view {schema_name}.{view_name} - "
-                        f"attempting metadata-only fallback"
+                        f"    ⏱️ View {schema_name}.{view_name} timed out - using metadata fallback"
                     )
-                    # Try metadata-only fallback
+
+                    # Quick metadata-only fallback (no data sampling)
                     try:
                         view_data = self._discover_table_metadata_only(schema_name, view_name, 'view')
                         if view_data:
+                            view_data['timeout_fallback'] = True
                             views_data.append(view_data)
                             self._expensive_objects.append({
                                 'name': f"{schema_name}.{view_name}",
@@ -697,63 +715,84 @@ class DiscoveryEngine:
                                 'duration': timeout_per_view
                             })
                     except Exception as e:
-                        logger.error(f"Metadata fallback failed for {schema_name}.{view_name}: {e}")
-                        
+                        failed += 1
+                        logger.debug(f"    Metadata fallback failed for {view_name}: {e}")
+
+                    # IMMEDIATELY CONTINUE - don't block on this view
+                    continue
+
                 except Exception as e:
-                    logger.error(f"Error processing view {schema_name}.{view_name}: {e}")
-        
-        logger.info(f"    ✓ Completed {len(views_data)}/{len(view_names)} views")
+                    failed += 1
+                    logger.warning(f"    ❌ View {schema_name}.{view_name} failed: {str(e)[:100]}")
+                    # Continue to next view immediately
+                    continue
+
+        # Final summary
+        logger.info(f"    ✓ Views complete: {len(views_data)}/{len(view_names)} successful, "
+                    f"{timed_out} timed out, {failed} failed")
+
         return views_data
 
     def _discover_view_with_fallback(
-        self, 
-        schema_name: str, 
-        view_name: str, 
+        self,
+        schema_name: str,
+        view_name: str,
         timeout_seconds: int
     ) -> Optional[Dict]:
         """
-        Discover a view with timeout protection using thread-based approach
-        
+        Discover a view with strict timeout protection
+
         Strategy:
-        1. Try full discovery with timeout
-        2. If timeout, return None (outer function will handle fallback)
-        
+        1. Try full discovery with hard timeout
+        2. If timeout, raise immediately (outer function handles fallback)
+        3. Track slow views for reporting
+
         Args:
             schema_name: Schema name
             view_name: View name
             timeout_seconds: Timeout in seconds
-            
+
         Returns:
             View data dictionary or None
         """
         start_time = time.time()
-        
+        full_name = f"{schema_name}.{view_name}"
+
         try:
-            # Use a nested executor with timeout for the actual discovery
+            # Use nested executor with strict timeout
             with ThreadPoolExecutor(max_workers=1) as inner_executor:
-                future = inner_executor.submit(self._discover_table, schema_name, view_name, 'view')
+                future = inner_executor.submit(
+                    self._discover_table, schema_name, view_name, 'view'
+                )
+
+                # Hard timeout - don't wait longer than specified
                 view_data = future.result(timeout=timeout_seconds)
-                
+
                 elapsed = time.time() - start_time
-                if elapsed > 10:  # Log if took more than 10 seconds
-                    logger.info(f"      View {schema_name}.{view_name}: {elapsed:.1f}s")
-                    if elapsed > 60:  # Track expensive objects
-                        self._expensive_objects.append({
-                            'name': f"{schema_name}.{view_name}",
-                            'type': 'view',
-                            'reason': 'slow_query',
-                            'duration': elapsed
-                        })
-                
+
+                # Log slow views (> 10s)
+                if elapsed > 10:
+                    logger.debug(f"      Slow view {full_name}: {elapsed:.1f}s")
+
+                # Track expensive views (> 30s) for reporting
+                if elapsed > 30:
+                    self._expensive_objects.append({
+                        'name': full_name,
+                        'type': 'view',
+                        'reason': 'slow_query',
+                        'duration': elapsed
+                    })
+
                 return view_data
-                
+
         except FutureTimeoutError:
             elapsed = time.time() - start_time
-            logger.warning(f"⏱️ View {schema_name}.{view_name} timed out after {elapsed:.1f}s")
-            raise  # Re-raise to be caught by outer function
-            
+            # Don't log here - outer function will log and handle
+            raise  # Re-raise for outer function to handle
+
         except Exception as e:
-            logger.error(f"Error discovering view {schema_name}.{view_name}: {e}")
+            elapsed = time.time() - start_time
+            logger.debug(f"      View {full_name} error after {elapsed:.1f}s: {str(e)[:80]}")
             return None
     
     def _discover_table(self, schema_name: str, table_name: str, table_type: str) -> Optional[Dict]:
@@ -1396,35 +1435,21 @@ class DiscoveryEngine:
             'named_assets': getattr(self, '_named_assets_cache', [])
         }
         
-        # Method 1 & 2: Standard detection (explicit + implicit FKs)
+        # Method 1 & 2: Standard detection (explicit FKs + curated asset JOINs + implicit)
         try:
             from src.discovery.relationship_detector import detect_relationships
-            
+
             relationships = detect_relationships(
-                connection_string=self.connection_string,
-                discovery_data=discovery_for_relationships,
-                config=self.relationship_config
+                discovery_data=discovery_for_relationships
             )
             all_relationships.extend(relationships)
             logger.info(f"  ✓ Standard detection: {len(relationships)} relationships")
-            
+
         except Exception as e:
             logger.error(f"Standard relationship detection failed: {e}", exc_info=True)
-        
-        # Method 3: View join analysis
-        if self.relationship_config.detect_views:
-            try:
-                from src.discovery.relationship_detector import detect_relationships_from_views
-                
-                view_relationships = detect_relationships_from_views(
-                    discovery_data=discovery_for_relationships,
-                    config=self.relationship_config
-                )
-                all_relationships.extend(view_relationships)
-                logger.info(f"  ✓ View join analysis: {len(view_relationships)} relationships")
-                
-            except Exception as e:
-                logger.error(f"View relationship detection failed: {e}", exc_info=True)
+
+        # Note: View join analysis is now included in detect_relationships()
+        # via _extract_relationships_from_curated_assets() which processes views
         
         # Method 4: RDL join analysis
         if self.relationship_config.detect_rdl_joins:

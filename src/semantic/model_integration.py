@@ -21,27 +21,51 @@ def run_semantic_model_pipeline(
     connection_string: Optional[str] = None,
     use_discovery_cache: bool = True,
     use_semantic_cache: bool = True,
-    skip_relationships: bool = False
+    skip_relationships: bool = False,
+    use_audit: bool = True
 ) -> Dict[str, Any]:
     """
-    Run complete pipeline: Discovery -> Semantic Model
-    
+    Run complete pipeline: Discovery -> Semantic Model with Audit Integration
+
     Args:
         connection_string: Database connection string (uses config if not provided)
         use_discovery_cache: Use cached discovery if valid
         use_semantic_cache: Use cached semantic model if valid
         skip_relationships: Skip relationship detection in discovery
-        
+        use_audit: Load and integrate audit data for enhanced ranking/relationships
+
     Returns:
         Semantic model dictionary
     """
     from src.discovery.engine import run_discovery
     from model_builder import build_semantic_model
-    
+
     logger.info("=" * 80)
     logger.info("RUNNING FULL SEMANTIC MODEL PIPELINE")
+    if use_audit:
+        logger.info("(with audit integration enabled)")
     logger.info("=" * 80)
-    
+
+    # Phase 0: Load Audit (optional)
+    audit_report = None
+    if use_audit:
+        logger.info("\n[PHASE 0] Loading Audit Data...")
+        try:
+            from src.discovery.audit_integration import AuditEnhancedDiscovery
+            enhanced = AuditEnhancedDiscovery()
+            audit_report = enhanced.load_audit_with_mapping()
+
+            if audit_report:
+                logger.info(f"✓ Audit loaded: {audit_report.source_server}/{audit_report.database_name}")
+                logger.info(f"  - Hot tables: {audit_report.hot_tables_count}")
+                logger.info(f"  - Warm tables: {audit_report.warm_tables_count}")
+                logger.info(f"  - Join patterns: {len(audit_report.join_frequency)}")
+            else:
+                logger.info("  No audit data available - continuing without")
+        except Exception as e:
+            logger.warning(f"  Could not load audit data: {e}")
+            audit_report = None
+
     # Phase 1: Discovery
     logger.info("\n[PHASE 1] Running Discovery...")
     discovery_data = run_discovery(
@@ -49,26 +73,34 @@ def run_semantic_model_pipeline(
         skip_relationships=skip_relationships,
         connection_string=connection_string
     )
-    
+
     logger.info(f"✓ Discovery complete: {discovery_data['metadata']['total_tables']} tables")
-    
-    # Phase 2: Semantic Model
+
+    # Phase 2: Semantic Model (with audit integration)
     logger.info("\n[PHASE 2] Building Semantic Model...")
     semantic_model = build_semantic_model(
         discovery_data=discovery_data,
-        use_cache=use_semantic_cache
+        audit_report=audit_report,
+        use_cache=use_semantic_cache,
+        use_audit=False  # Already loaded above
     )
-    
+
     logger.info(f"✓ Semantic model complete:")
     logger.info(f"  - Entities: {len(semantic_model['entities'])}")
     logger.info(f"  - Dimensions: {len(semantic_model['dimensions'])}")
     logger.info(f"  - Facts: {len(semantic_model['facts'])}")
     logger.info(f"  - Relationships: {len(semantic_model['relationships'])}")
-    
+
+    # Log audit integration results
+    if audit_report and semantic_model.get('audit', {}).get('production_audit'):
+        audit_info = semantic_model['audit']['production_audit']
+        logger.info(f"  - Audit integrated: {audit_info.get('table_metrics_count', 0)} metrics, "
+                    f"{audit_info.get('join_patterns_count', 0)} join patterns")
+
     logger.info("\n" + "=" * 80)
     logger.info("PIPELINE COMPLETE")
     logger.info("=" * 80)
-    
+
     return semantic_model
 
 
@@ -134,17 +166,22 @@ def add_semantic_model_commands(cli_parser):
         action='store_true',
         help='Skip relationship detection'
     )
+    pipeline_parser.add_argument(
+        '--no-audit',
+        action='store_true',
+        help='Skip audit data integration'
+    )
 
 
 def handle_semantic_model_command(args):
     """
     Handle semantic model CLI commands
-    
+
     Usage in main.py:
-    
+
     ```python
     args = parser.parse_args()
-    
+
     if args.command == 'model':
         handle_semantic_model_command(args)
     elif args.command == 'full-pipeline':
@@ -153,12 +190,19 @@ def handle_semantic_model_command(args):
     """
     if args.command == 'model':
         from model_builder import build_semantic_model
-        
+
+        # Check for --no-audit flag
+        use_audit = not getattr(args, 'no_audit', False)
+
         logger.info("Building semantic model...")
+        if use_audit:
+            logger.info("(with audit integration)")
+
         semantic_model = build_semantic_model(
-            use_cache=not args.force_refresh
+            use_cache=not args.force_refresh,
+            use_audit=use_audit
         )
-        
+
         # Save to output file if specified
         if args.output:
             output_path = Path(args.output)
@@ -166,23 +210,39 @@ def handle_semantic_model_command(args):
             with open(output_path, 'w', encoding='utf-8') as f:
                 json.dump(semantic_model, f, indent=2, ensure_ascii=False)
             logger.info(f"Saved semantic model to {output_path}")
-        
-        print("\n✓ Semantic model built successfully")
+
+        print("\n Semantic model built successfully")
         print(f"  Entities: {len(semantic_model['entities'])}")
         print(f"  Dimensions: {len(semantic_model['dimensions'])}")
         print(f"  Facts: {len(semantic_model['facts'])}")
-        
+
+        # Show audit integration status
+        if semantic_model.get('audit', {}).get('production_audit'):
+            audit_info = semantic_model['audit']['production_audit']
+            print(f"  Audit: {audit_info.get('table_metrics_count', 0)} metrics integrated")
+        else:
+            print("  Audit: Not integrated")
+
     elif args.command == 'full-pipeline':
+        use_audit = not getattr(args, 'no_audit', False)
+
         semantic_model = run_semantic_model_pipeline(
             use_discovery_cache=not args.skip_discovery_cache,
             use_semantic_cache=not args.skip_semantic_cache,
-            skip_relationships=args.skip_relationships
+            skip_relationships=args.skip_relationships,
+            use_audit=use_audit
         )
-        
-        print("\n✓ Full pipeline completed successfully")
+
+        print("\n Full pipeline completed successfully")
         print(f"  Entities: {len(semantic_model['entities'])}")
         print(f"  Dimensions: {len(semantic_model['dimensions'])}")
         print(f"  Facts: {len(semantic_model['facts'])}")
+
+        # Show audit integration status
+        if semantic_model.get('audit', {}).get('production_audit'):
+            audit_info = semantic_model['audit']['production_audit']
+            print(f"  Audit: {audit_info.get('table_metrics_count', 0)} metrics, "
+                  f"{audit_info.get('join_patterns_count', 0)} join patterns")
 
 
 # ============================================================================

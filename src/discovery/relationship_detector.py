@@ -258,21 +258,21 @@ def _extract_equality_conditions(on_clause) -> List[Dict[str, Any]]:
 def _parse_column_reference(col_ref: str) -> Tuple[Optional[str], Optional[str]]:
     """
     Parse column reference into (table, column)
-    
+
     Examples:
         "schema.table.column" -> ("schema.table", "column")
         "table.column" -> ("table", "column")
         "t1.column" -> ("t1", "column")
         "column" -> (None, "column")
-    
+
     Returns:
         (table_name, column_name) or (None, column_name) if table can't be determined
     """
     # Remove quotes if present
     col_ref = col_ref.replace('"', '').replace('[', '').replace(']', '')
-    
+
     parts = col_ref.split(".")
-    
+
     if len(parts) >= 3:
         # schema.table.column
         return (".".join(parts[:-1]), parts[-1])
@@ -282,6 +282,31 @@ def _parse_column_reference(col_ref: str) -> Tuple[Optional[str], Optional[str]]
     else:
         # Just column name - can't determine table
         return (None, col_ref)
+
+
+def _parse_join_condition(on_clause) -> Tuple[Optional[str], Optional[str], Optional[str], Optional[str]]:
+    """
+    Parse JOIN ON clause to extract first equality condition tables/columns.
+
+    Used by RDL parser to extract relationship info from JOIN conditions.
+
+    Args:
+        on_clause: sqlglot expression representing ON clause
+
+    Returns:
+        (left_table, left_col, right_table, right_col) or (None, None, None, None) if not parseable
+    """
+    conditions = _extract_equality_conditions(on_clause)
+
+    if not conditions:
+        return (None, None, None, None)
+
+    # Use first equality condition
+    cond = conditions[0]
+    left_table, left_col = _parse_column_reference(cond["left"])
+    right_table, right_col = _parse_column_reference(cond["right"])
+
+    return (left_table, left_col, right_table, right_col)
 
 
 def _infer_cardinality_from_join_type(join_type: str) -> str:

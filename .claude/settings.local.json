@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cat cache/semantic_model.json)",
+      "Bash(python -c \"\nimport json,sys\nd=json.load\\(sys.stdin\\)\n\nprint\\(''=== SEMANTIC MODEL SUMMARY ===''\\)\nprint\\(f''Entities: {len\\(d.get\\(\"\"entities\"\",[]\\)\\)}''\\)\nprint\\(f''Dimensions: {len\\(d.get\\(\"\"dimensions\"\",[]\\)\\)}''\\)\nprint\\(f''Facts: {len\\(d.get\\(\"\"facts\"\",[]\\)\\)}''\\)\nprint\\(f''Relationships: {len\\(d.get\\(\"\"relationships\"\",[]\\)\\)}''\\)\nprint\\(\\)\n\n# Key entities\nprint\\(''=== KEY ENTITIES ===''\\)\nfor e in d.get\\(''entities'', []\\)[:15]:\n    cols = len\\(e.get\\(''columns'', []\\)\\)\n    print\\(f''  {e[\"\"name\"\"]}: {cols} columns \\(source: {e.get\\(\"\"source\"\",\"\"?\"\"\\)}\\)''\\)\n\nprint\\(\\)\nprint\\(''=== KEY FACTS \\(with measures\\) ===''\\)\nfor f in d.get\\(''facts'', []\\)[:10]:\n    measures = [m[''name''] for m in f.get\\(''measures'', []\\)][:5]\n    print\\(f''  {f[\"\"name\"\"]}: {measures}...''\\)\n\")"
+    ]
+  }
+}

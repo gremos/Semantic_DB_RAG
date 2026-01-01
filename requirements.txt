@@ -6,7 +6,11 @@ pydantic-settings==2.1.0
 # LLM & AI
 langchain==0.1.0
 langchain-openai==0.0.2
+langchain-core>=0.1.0
 openai==1.6.0
+httpx>=0.25.0  # For Azure Claude (Anthropic) API calls
+anthropic
+
 
 # Database
 sqlalchemy==2.0.23
@@ -43,3 +47,5 @@ pytest-asyncio==0.21.1
 tenacity==8.2.3
 jinja2==3.1.2
 jsonschema==4.20.0
+
+rich

@@ -5,7 +5,7 @@ Loads all settings from environment variables with validation and defaults
 import os
 import logging
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import Dict, List, Optional, Set
 from dataclasses import dataclass
 
 from dotenv import load_dotenv
@@ -76,7 +76,7 @@ def get_env_list(key: str, default: Optional[List[str]] = None, separator: str =
 
 
 # ============================================================================
-# AZURE OPENAI CONFIGURATION
+# LLM PROVIDER CONFIGURATION
 # ============================================================================
 
 @dataclass
@@ -86,16 +86,17 @@ class AzureOpenAIConfig:
     api_version: str
     endpoint: str
     api_key: str
-    
+
     @classmethod
     def from_env(cls) -> 'AzureOpenAIConfig':
         return cls(
-            deployment_name=get_env('DEPLOYMENT_NAME', required=True),
-            api_version=get_env('API_VERSION', required=True),
-            endpoint=get_env('AZURE_ENDPOINT', required=True),
+            # Try new env vars first, fall back to legacy
+            deployment_name=get_env('AZURE_OPENAI_DEPLOYMENT_NAME') or get_env('DEPLOYMENT_NAME', required=True),
+            api_version=get_env('AZURE_OPENAI_API_VERSION') or get_env('API_VERSION', required=True),
+            endpoint=get_env('AZURE_OPENAI_ENDPOINT') or get_env('AZURE_ENDPOINT', required=True),
             api_key=get_env('AZURE_OPENAI_API_KEY', required=True),
         )
-    
+
     def validate(self):
         """Validate configuration"""
         if not self.endpoint.startswith('https://'):
@@ -104,21 +105,187 @@ class AzureOpenAIConfig:
             raise ValueError("Azure OpenAI API key is required")
 
 
+@dataclass
+class AzureClaudeConfig:
+    """Azure-hosted Claude (Anthropic) configuration"""
+    endpoint: str
+    api_key: str
+    model: str
+    api_version: str
+    max_tokens: int
+    temperature: float
+
+    @classmethod
+    def from_env(cls) -> 'AzureClaudeConfig':
+        return cls(
+            endpoint=get_env('AZURE_CLAUDE_ENDPOINT', ''),
+            api_key=get_env('AZURE_CLAUDE_API_KEY', ''),
+            model=get_env('AZURE_CLAUDE_MODEL', 'claude-sonnet-4-20250514'),
+            api_version=get_env('AZURE_CLAUDE_API_VERSION', '2023-06-01'),
+            max_tokens=get_env_int('AZURE_CLAUDE_MAX_TOKENS', 4096),
+            temperature=get_env_float('AZURE_CLAUDE_TEMPERATURE', 0.0),  # 0 for deterministic SQL generation
+        )
+
+    def validate(self):
+        """Validate configuration"""
+        if not self.endpoint:
+            raise ValueError("Azure Claude endpoint is required")
+        if not self.endpoint.startswith('https://'):
+            raise ValueError(f"Invalid Azure Claude endpoint: {self.endpoint}")
+        if not self.api_key or self.api_key == 'YOUR_AZURE_CLAUDE_API_KEY':
+            raise ValueError("Azure Claude API key is required")
+
+    @property
+    def messages_url(self) -> str:
+        """Get the full messages API URL"""
+        base = self.endpoint.rstrip('/')
+        return f"{base}/anthropic/v1/messages"
+
+
+@dataclass
+class LLMConfig:
+    """Unified LLM configuration supporting multiple providers"""
+    provider: str  # 'azure_openai' or 'azure_claude'
+    azure_openai: AzureOpenAIConfig
+    azure_claude: AzureClaudeConfig
+
+    @classmethod
+    def from_env(cls) -> 'LLMConfig':
+        provider = get_env('LLM_PROVIDER', 'azure_openai').lower()
+
+        return cls(
+            provider=provider,
+            azure_openai=AzureOpenAIConfig.from_env(),
+            azure_claude=AzureClaudeConfig.from_env(),
+        )
+
+    def validate(self):
+        """Validate the active provider configuration"""
+        if self.provider == 'azure_openai':
+            self.azure_openai.validate()
+        elif self.provider == 'azure_claude':
+            self.azure_claude.validate()
+        else:
+            raise ValueError(f"Unknown LLM provider: {self.provider}. Use 'azure_openai' or 'azure_claude'")
+
+    @property
+    def active_config(self):
+        """Get the active provider's configuration"""
+        if self.provider == 'azure_claude':
+            return self.azure_claude
+        return self.azure_openai
+
+
 # ============================================================================
 # DATABASE CONFIGURATION
 # ============================================================================
 
 @dataclass
+class DatabaseMapping:
+    """Single production-to-development database mapping"""
+    prod_server: str
+    prod_database: str
+    dev_server: str
+    dev_database: str
+
+    @property
+    def prod_key(self) -> str:
+        """Production database identifier"""
+        return f"{self.prod_server.lower()}/{self.prod_database.lower()}"
+
+    @property
+    def dev_key(self) -> str:
+        """Development database identifier"""
+        return f"{self.dev_server.lower()}/{self.dev_database.lower()}"
+
+    def matches_prod(self, server: str, database: str) -> bool:
+        """Check if production server/database matches this mapping"""
+        return (
+            server.lower() == self.prod_server.lower() and
+            database.lower() == self.prod_database.lower()
+        )
+
+    def matches_dev(self, server: str, database: str) -> bool:
+        """Check if development server/database matches this mapping"""
+        return (
+            server.lower() == self.dev_server.lower() and
+            database.lower() == self.dev_database.lower()
+        )
+
+
+@dataclass
+class DatabaseMappingConfig:
+    """Configuration for production-to-development database mappings"""
+    mappings: List[DatabaseMapping]
+
+    @classmethod
+    def from_env(cls) -> 'DatabaseMappingConfig':
+        """
+        Parse DATABASE_MAPPINGS from environment
+        Format: prod_server/prod_db:dev_server/dev_db,prod_server2/prod_db2:dev_server2/dev_db2
+        """
+        mapping_str = get_env('DATABASE_MAPPINGS', '')
+        mappings = []
+
+        if mapping_str:
+            for mapping in mapping_str.split(','):
+                mapping = mapping.strip()
+                if not mapping or ':' not in mapping:
+                    continue
+
+                try:
+                    prod_part, dev_part = mapping.split(':')
+                    prod_server, prod_db = prod_part.strip().split('/')
+                    dev_server, dev_db = dev_part.strip().split('/')
+
+                    mappings.append(DatabaseMapping(
+                        prod_server=prod_server.strip(),
+                        prod_database=prod_db.strip(),
+                        dev_server=dev_server.strip(),
+                        dev_database=dev_db.strip()
+                    ))
+                except ValueError as e:
+                    logger.warning(f"Invalid database mapping '{mapping}': {e}")
+                    continue
+
+        return cls(mappings=mappings)
+
+    def get_dev_for_prod(self, prod_server: str, prod_database: str) -> Optional[DatabaseMapping]:
+        """Get development database mapping for a production database"""
+        for mapping in self.mappings:
+            if mapping.matches_prod(prod_server, prod_database):
+                return mapping
+        return None
+
+    def get_prod_for_dev(self, dev_server: str, dev_database: str) -> Optional[DatabaseMapping]:
+        """Get production database mapping for a development database"""
+        for mapping in self.mappings:
+            if mapping.matches_dev(dev_server, dev_database):
+                return mapping
+        return None
+
+    def list_mappings(self) -> List[Dict[str, str]]:
+        """Return mappings as list of dictionaries"""
+        return [
+            {
+                "production": f"{m.prod_server}/{m.prod_database}",
+                "development": f"{m.dev_server}/{m.dev_database}"
+            }
+            for m in self.mappings
+        ]
+
+
+@dataclass
 class DatabaseConfig:
     """Database connection configuration"""
     connection_string: str
-    
+
     @classmethod
     def from_env(cls) -> 'DatabaseConfig':
         return cls(
             connection_string=get_env('DATABASE_CONNECTION_STRING', required=True)
         )
-    
+
     def validate(self):
         """Validate configuration"""
         if not self.connection_string:
@@ -497,8 +664,10 @@ class LoggingConfig:
 @dataclass
 class Settings:
     """Master settings container"""
-    azure_openai: AzureOpenAIConfig
+    llm: LLMConfig
+    azure_openai: AzureOpenAIConfig  # Keep for backward compatibility
     database: DatabaseConfig
+    database_mappings: DatabaseMappingConfig
     paths: PathConfig
     discovery: DiscoveryConfig
     relationships: RelationshipDetectionConfig
@@ -506,13 +675,16 @@ class Settings:
     query_execution: QueryExecutionConfig
     confidence: ConfidenceConfig
     logging: LoggingConfig
-    
+
     @classmethod
     def from_env(cls) -> 'Settings':
         """Load all settings from environment variables"""
+        llm_config = LLMConfig.from_env()
         return cls(
-            azure_openai=AzureOpenAIConfig.from_env(),
+            llm=llm_config,
+            azure_openai=llm_config.azure_openai,  # Backward compatibility
             database=DatabaseConfig.from_env(),
+            database_mappings=DatabaseMappingConfig.from_env(),
             paths=PathConfig.from_env(),
             discovery=DiscoveryConfig.from_env(),
             relationships=RelationshipDetectionConfig.from_env(),
@@ -521,24 +693,35 @@ class Settings:
             confidence=ConfidenceConfig.from_env(),
             logging=LoggingConfig.from_env(),
         )
-    
+
     def validate(self):
         """Validate all configurations"""
-        self.azure_openai.validate()
+        self.llm.validate()
         self.database.validate()
         self.relationships.validate()
         self.semantic_model.validate()
         self.query_execution.validate()
         self.confidence.validate()
-    
+
     def summary(self) -> str:
         """Return a formatted summary of key settings"""
+        # LLM provider summary
+        if self.llm.provider == 'azure_claude':
+            llm_summary = f"""LLM Provider: Azure Claude
+  Model:             {self.llm.azure_claude.model}
+  Endpoint:          {self.llm.azure_claude.endpoint[:50]}...
+  Max Tokens:        {self.llm.azure_claude.max_tokens}
+  Temperature:       {self.llm.azure_claude.temperature}"""
+        else:
+            llm_summary = f"""LLM Provider: Azure OpenAI
+  Deployment:        {self.llm.azure_openai.deployment_name}
+  API Version:       {self.llm.azure_openai.api_version}
+  Endpoint:          {self.llm.azure_openai.endpoint[:50]}..."""
+
         return f"""
 Configuration Summary:
 =====================
-Azure OpenAI:
-  Deployment:        {self.azure_openai.deployment_name}
-  API Version:       {self.azure_openai.api_version}
+{llm_summary}
 
 Database:
   Connection:        {self.database.connection_string[:50]}...
@@ -661,9 +844,21 @@ def get_confidence_config() -> ConfidenceConfig:
     """Get confidence configuration"""
     return get_settings().confidence
 
-def get_llm_config() -> AzureOpenAIConfig:
-    """Get LLM configuration (alias for Azure OpenAI config)"""
-    return get_settings().azure_openai
+
+def get_llm_config() -> LLMConfig:
+    """Get unified LLM configuration"""
+    return get_settings().llm
+
+
+def get_azure_claude_config() -> AzureClaudeConfig:
+    """Get Azure Claude configuration"""
+    return get_settings().llm.azure_claude
+
+
+def get_database_mappings() -> DatabaseMappingConfig:
+    """Get database mappings configuration"""
+    return get_settings().database_mappings
+
 
 # ============================================================================
 # INITIALIZATION

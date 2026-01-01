@@ -1,0 +1,875 @@
+=== MALFORMED JSON DEBUG ===
+Timestamp: 2025-12-31T09:32:16.308473
+Attempt: 1
+Error: Expecting ',' delimiter: line 429 column 59 (char 14315)
+Response length: 14511 chars
+
+=== RAW RESPONSE ===
+```json
+[
+  {
+    "name": "Business Point",
+    "source": "dbo.BusinessPoint",
+    "primary_key": ["ID"],
+    "display": {
+      "display_name": "Business Point",
+      "default_label_column": "Name",
+      "default_search_columns": ["Name", "BrandName", "Code"],
+      "default_sort": {"column": "Name", "direction": "asc"}
+    },
+    "columns": [
+      {
+        "name": "ID",
+        "role": "primary_key",
+        "semantic_type": "id",
+        "aliases": ["BusinessPointID", "BPID"],
+        "description": "Unique identifier for the business point"
+      },
+      {
+        "name": "LocationNodeID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["LocationNode", "Location Node"],
+        "description": "Reference to the location classifier node"
+      },
+      {
+        "name": "LocationAddressID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["LocationAddress", "Location Address"],
+        "description": "Reference to the physical location address"
+      },
+      {
+        "name": "ActivityClassifierNodeID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["ActivityNode", "Activity Classifier"],
+        "description": "Reference to the business activity classification"
+      },
+      {
+        "name": "SalesNodeID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["SalesNode", "Sales Region"],
+        "description": "Reference to the sales territory classifier node"
+      },
+      {
+        "name": "BillingAddressID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["BillingAddress", "Invoice Address"],
+        "description": "Reference to the billing/invoicing address"
+      },
+      {
+        "name": "SalesContactID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["SalesContact", "Sales Rep"],
+        "description": "Reference to the assigned sales contact person"
+      },
+      {
+        "name": "LegalFormID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["LegalForm", "Company Type"],
+        "description": "Reference to the legal entity form (e.g., LLC, Corp)"
+      },
+      {
+        "name": "Name",
+        "role": "label",
+        "semantic_type": "person_or_org_name",
+        "aliases": ["BusinessName", "Company Name", "Organization Name"],
+        "description": "Official registered name of the business point"
+      },
+      {
+        "name": "Url",
+        "role": "attribute",
+        "semantic_type": "url",
+        "aliases": ["Website", "WebAddress", "Homepage"],
+        "description": "Website URL of the business point"
+      },
+      {
+        "name": "IsActive",
+        "role": "attribute",
+        "semantic_type": "flag",
+        "aliases": ["Active", "Status", "Enabled"],
+        "description": "Indicates whether the business point is currently active"
+      },
+      {
+        "name": "DeactivationReason",
+        "role": "attribute",
+        "semantic_type": "description",
+        "aliases": ["InactiveReason", "Closure Reason"],
+        "description": "Reason for deactivating or closing the business point"
+      },
+      {
+        "name": "CreatedOn",
+        "role": "attribute",
+        "semantic_type": "timestamp",
+        "aliases": ["CreateDate", "DateCreated", "Created"],
+        "description": "Date and time when the record was created"
+      },
+      {
+        "name": "CreatedBy",
+        "role": "attribute",
+        "semantic_type": "username",
+        "aliases": ["Creator", "CreatedByUser"],
+        "description": "Username of the person who created the record"
+      },
+      {
+        "name": "ModifiedOn",
+        "role": "attribute",
+        "semantic_type": "timestamp",
+        "aliases": ["UpdateDate", "LastModified", "Modified"],
+        "description": "Date and time of the last modification"
+      },
+      {
+        "name": "ModifiedBy",
+        "role": "attribute",
+        "semantic_type": "username",
+        "aliases": ["Modifier", "UpdatedBy", "LastModifiedBy"],
+        "description": "Username of the person who last modified the record"
+      },
+      {
+        "name": "BrandName",
+        "role": "attribute",
+        "semantic_type": "person_or_org_name",
+        "aliases": ["TradeName", "DBA", "Trading As"],
+        "description": "Commercial brand or trading name of the business"
+      },
+      {
+        "name": "TaxOfficeID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["TaxOffice", "DOY"],
+        "description": "Reference to the associated tax office"
+      },
+      {
+        "name": "VatCategoryID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["VATCategory", "Tax Category"],
+        "description": "Reference to the VAT category classification"
+      },
+      {
+        "name": "Code",
+        "role": "attribute",
+        "semantic_type": "code",
+        "aliases": ["BusinessCode", "CustomerCode", "BP Code"],
+        "description": "Unique business code identifier for the business point"
+      },
+      {
+        "name": "Profession",
+        "role": "attribute",
+        "semantic_type": "category",
+        "aliases": ["BusinessType", "Industry", "Occupation"],
+        "description": "Professional activity or industry type"
+      },
+      {
+        "name": "IsPOI",
+        "role": "attribute",
+        "semantic_type": "flag",
+        "aliases": ["PointOfInterest", "POI Flag"],
+        "description": "Indicates if this is a point of interest"
+      },
+      {
+        "name": "CustomerSourceID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["CustomerSource", "Lead Source"],
+        "description": "Reference to the customer acquisition source"
+      },
+      {
+        "name": "LastUpdateOn",
+        "role": "attribute",
+        "semantic_type": "timestamp",
+        "aliases": ["LastUpdate", "LastRefresh"],
+        "description": "Date of the last data update from external source"
+      },
+      {
+        "name": "LastUpdateBy",
+        "role": "attribute",
+        "semantic_type": "username",
+        "aliases": ["LastUpdater", "UpdatedByUser"],
+        "description": "Username who performed the last update"
+      },
+      {
+        "name": "SalesAddressID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["SalesAddress", "Delivery Address"],
+        "description": "Reference to the sales/delivery address"
+      },
+      {
+        "name": "DMKey",
+        "role": "attribute",
+        "semantic_type": "id",
+        "aliases": ["DataMigrationKey", "Legacy ID"],
+        "description": "Data migration key from legacy system"
+      },
+      {
+        "name": "DMTable",
+        "role": "attribute",
+        "semantic_type": "code",
+        "aliases": ["DataMigrationTable", "Source Table"],
+        "description": "Source table name from data migration"
+      },
+      {
+        "name": "GLSeqCodeID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["GLSequenceCode", "Ledger Code"],
+        "description": "Reference to the general ledger sequence code"
+      },
+      {
+        "name": "KEPYOStatusID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["KEPYOStatus", "Compliance Status"],
+        "description": "Reference to the KEPYO compliance status"
+      },
+      {
+        "name": "HasCRMTicket",
+        "role": "attribute",
+        "semantic_type": "flag",
+        "aliases": ["CRMTicketExists", "Has Support Ticket"],
+        "description": "Indicates if there is an active CRM ticket"
+      },
+      {
+        "name": "DMCharKey",
+        "role": "attribute",
+        "semantic_type": "code",
+        "aliases": ["DataMigrationCharKey", "Legacy Char Key"],
+        "description": "Character-based data migration key"
+      },
+      {
+        "name": "CustomerSolvencyID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["Solvency", "Credit Status"],
+        "description": "Reference to the customer solvency/creditworthiness status"
+      },
+      {
+        "name": "NoTaxVat",
+        "role": "attribute",
+        "semantic_type": "flag",
+        "aliases": ["VATExempt", "No VAT"],
+        "description": "Indicates if the business is VAT exempt"
+      },
+      {
+        "name": "SpecialInformation",
+        "role": "attribute",
+        "semantic_type": "description",
+        "aliases": ["SpecialNotes", "Special Remarks"],
+        "description": "Special information or notes about the business"
+      },
+      {
+        "name": "ExtraCardInformation",
+        "role": "attribute",
+        "semantic_type": "description",
+        "aliases": ["CardInfo", "Additional Card Details"],
+        "description": "Additional card or payment information"
+      },
+      {
+        "name": "TransferDateToEBS",
+        "role": "attribute",
+        "semantic_type": "timestamp",
+        "aliases": ["EBSTransferDate", "EBS Sync Date"],
+        "description": "Date when data was transferred to EBS system"
+      },
+      {
+        "name": "CustomerSourceModifiedOn",
+        "role": "attribute",
+        "semantic_type": "timestamp",
+        "aliases": ["SourceModifiedDate"],
+        "description": "Date when customer source was last modified"
+      },
+      {
+        "name": "CustomerUpdateModifiedOn",
+        "role": "attribute",
+        "semantic_type": "timestamp",
+        "aliases": ["UpdateModifiedDate"],
+        "description": "Date when customer update record was modified"
+      },
+      {
+        "name": "CustomerUpdateID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["CustomerUpdate", "Update Reference"],
+        "description": "Reference to the customer update record"
+      },
+      {
+        "name": "Version",
+        "role": "attribute",
+        "semantic_type": "version",
+        "aliases": ["RowVersion", "Timestamp"],
+        "description": "Row version for optimistic concurrency control"
+      },
+      {
+        "name": "HasLiveProfilePageInXOGR",
+        "role": "attribute",
+        "semantic_type": "flag",
+        "aliases": ["LiveProfile", "XOGR Profile"],
+        "description": "Indicates if business has a live profile page in XOGR"
+      },
+      {
+        "name": "ShowDistrictInXOGR",
+        "role": "attribute",
+        "semantic_type": "flag",
+        "aliases": ["DisplayDistrict", "Show Area"],
+        "description": "Indicates if district should be shown in XOGR"
+      },
+      {
+        "name": "InitialCustomerSourceID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["OriginalSource", "Initial Lead Source"],
+        "description": "Reference to the original customer acquisition source"
+      }
+    ]
+  },
+  {
+    "name": "Business Point Identification",
+    "source": "dbo.BusinessPointIdentification",
+    "primary_key": ["ID"],
+    "display": {
+      "display_name": "Business Point Identification",
+      "default_label_column": "Name",
+      "default_search_columns": ["Name", "BrandName", "TaxCode", "City"],
+      "default_sort": {"column": "Name", "direction": "asc"}
+    },
+    "columns": [
+      {
+        "name": "ID",
+        "role": "primary_key",
+        "semantic_type": "id",
+        "aliases": ["IdentificationID", "BPIID"],
+        "description": "Unique identifier for the business point identification record"
+      },
+      {
+        "name": "BusinessPointID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["BPID", "Business Point"],
+        "description": "Reference to the parent business point"
+      },
+      {
+        "name": "Name",
+        "role": "label",
+        "semantic_type": "person_or_org_name",
+        "aliases": ["BusinessName", "Company Name", "Legal Name"],
+        "description": "Legal or registered name of the business"
+      },
+      {
+        "name": "BrandName",
+        "role": "attribute",
+        "semantic_type": "person_or_org_name",
+        "aliases": ["TradeName", "DBA", "Commercial Name"],
+        "description": "Commercial or trading brand name"
+      },
+      {
+        "name": "TaxCode",
+        "role": "attribute",
+        "semantic_type": "tax_id",
+        "aliases": ["VAT Number", "AFM", "Tax ID", "TIN"],
+        "description": "Tax identification number (AFM in Greece)"
+      },
+      {
+        "name": "Profession",
+        "role": "attribute",
+        "semantic_type": "category",
+        "aliases": ["BusinessType", "Industry", "Activity"],
+        "description": "Professional activity or business type description"
+      },
+      {
+        "name": "Phone1",
+        "role": "attribute",
+        "semantic_type": "phone",
+        "aliases": ["PrimaryPhone", "MainPhone", "Telephone"],
+        "description": "Primary telephone number"
+      },
+      {
+        "name": "Phone2",
+        "role": "attribute",
+        "semantic_type": "phone",
+        "aliases": ["SecondaryPhone", "AlternatePhone"],
+        "description": "Secondary telephone number"
+      },
+      {
+        "name": "Phone3",
+        "role": "attribute",
+        "semantic_type": "phone",
+        "aliases": ["TertiaryPhone", "ThirdPhone"],
+        "description": "Tertiary telephone number"
+      },
+      {
+        "name": "MobilePhone",
+        "role": "attribute",
+        "semantic_type": "phone",
+        "aliases": ["Mobile", "CellPhone", "Cell"],
+        "description": "Mobile phone number"
+      },
+      {
+        "name": "Fax",
+        "role": "attribute",
+        "semantic_type": "phone",
+        "aliases": ["FaxNumber", "Facsimile"],
+        "description": "Fax number"
+      },
+      {
+        "name": "Email1",
+        "role": "attribute",
+        "semantic_type": "email",
+        "aliases": ["PrimaryEmail", "MainEmail", "Email"],
+        "description": "Primary email address"
+      },
+      {
+        "name": "Email2",
+        "role": "attribute",
+        "semantic_type": "email",
+        "aliases": ["SecondaryEmail", "AlternateEmail"],
+        "description": "Secondary email address"
+      },
+      {
+        "name": "Address",
+        "role": "attribute",
+        "semantic_type": "address",
+        "aliases": ["StreetAddress", "Street", "Location"],
+        "description": "Street address of the business"
+      },
+      {
+        "name": "City",
+        "role": "attribute",
+        "semantic_type": "city",
+        "aliases": ["Town",
+
+=== EXTRACTED JSON ===
+[
+  {
+    "name": "Business Point",
+    "source": "dbo.BusinessPoint",
+    "primary_key": ["ID"],
+    "display": {
+      "display_name": "Business Point",
+      "default_label_column": "Name",
+      "default_search_columns": ["Name", "BrandName", "Code"],
+      "default_sort": {"column": "Name", "direction": "asc"}
+    },
+    "columns": [
+      {
+        "name": "ID",
+        "role": "primary_key",
+        "semantic_type": "id",
+        "aliases": ["BusinessPointID", "BPID"],
+        "description": "Unique identifier for the business point"
+      },
+      {
+        "name": "LocationNodeID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["LocationNode", "Location Node"],
+        "description": "Reference to the location classifier node"
+      },
+      {
+        "name": "LocationAddressID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["LocationAddress", "Location Address"],
+        "description": "Reference to the physical location address"
+      },
+      {
+        "name": "ActivityClassifierNodeID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["ActivityNode", "Activity Classifier"],
+        "description": "Reference to the business activity classification"
+      },
+      {
+        "name": "SalesNodeID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["SalesNode", "Sales Region"],
+        "description": "Reference to the sales territory classifier node"
+      },
+      {
+        "name": "BillingAddressID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["BillingAddress", "Invoice Address"],
+        "description": "Reference to the billing/invoicing address"
+      },
+      {
+        "name": "SalesContactID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["SalesContact", "Sales Rep"],
+        "description": "Reference to the assigned sales contact person"
+      },
+      {
+        "name": "LegalFormID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["LegalForm", "Company Type"],
+        "description": "Reference to the legal entity form (e.g., LLC, Corp)"
+      },
+      {
+        "name": "Name",
+        "role": "label",
+        "semantic_type": "person_or_org_name",
+        "aliases": ["BusinessName", "Company Name", "Organization Name"],
+        "description": "Official registered name of the business point"
+      },
+      {
+        "name": "Url",
+        "role": "attribute",
+        "semantic_type": "url",
+        "aliases": ["Website", "WebAddress", "Homepage"],
+        "description": "Website URL of the business point"
+      },
+      {
+        "name": "IsActive",
+        "role": "attribute",
+        "semantic_type": "flag",
+        "aliases": ["Active", "Status", "Enabled"],
+        "description": "Indicates whether the business point is currently active"
+      },
+      {
+        "name": "DeactivationReason",
+        "role": "attribute",
+        "semantic_type": "description",
+        "aliases": ["InactiveReason", "Closure Reason"],
+        "description": "Reason for deactivating or closing the business point"
+      },
+      {
+        "name": "CreatedOn",
+        "role": "attribute",
+        "semantic_type": "timestamp",
+        "aliases": ["CreateDate", "DateCreated", "Created"],
+        "description": "Date and time when the record was created"
+      },
+      {
+        "name": "CreatedBy",
+        "role": "attribute",
+        "semantic_type": "username",
+        "aliases": ["Creator", "CreatedByUser"],
+        "description": "Username of the person who created the record"
+      },
+      {
+        "name": "ModifiedOn",
+        "role": "attribute",
+        "semantic_type": "timestamp",
+        "aliases": ["UpdateDate", "LastModified", "Modified"],
+        "description": "Date and time of the last modification"
+      },
+      {
+        "name": "ModifiedBy",
+        "role": "attribute",
+        "semantic_type": "username",
+        "aliases": ["Modifier", "UpdatedBy", "LastModifiedBy"],
+        "description": "Username of the person who last modified the record"
+      },
+      {
+        "name": "BrandName",
+        "role": "attribute",
+        "semantic_type": "person_or_org_name",
+        "aliases": ["TradeName", "DBA", "Trading As"],
+        "description": "Commercial brand or trading name of the business"
+      },
+      {
+        "name": "TaxOfficeID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["TaxOffice", "DOY"],
+        "description": "Reference to the associated tax office"
+      },
+      {
+        "name": "VatCategoryID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["VATCategory", "Tax Category"],
+        "description": "Reference to the VAT category classification"
+      },
+      {
+        "name": "Code",
+        "role": "attribute",
+        "semantic_type": "code",
+        "aliases": ["BusinessCode", "CustomerCode", "BP Code"],
+        "description": "Unique business code identifier for the business point"
+      },
+      {
+        "name": "Profession",
+        "role": "attribute",
+        "semantic_type": "category",
+        "aliases": ["BusinessType", "Industry", "Occupation"],
+        "description": "Professional activity or industry type"
+      },
+      {
+        "name": "IsPOI",
+        "role": "attribute",
+        "semantic_type": "flag",
+        "aliases": ["PointOfInterest", "POI Flag"],
+        "description": "Indicates if this is a point of interest"
+      },
+      {
+        "name": "CustomerSourceID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["CustomerSource", "Lead Source"],
+        "description": "Reference to the customer acquisition source"
+      },
+      {
+        "name": "LastUpdateOn",
+        "role": "attribute",
+        "semantic_type": "timestamp",
+        "aliases": ["LastUpdate", "LastRefresh"],
+        "description": "Date of the last data update from external source"
+      },
+      {
+        "name": "LastUpdateBy",
+        "role": "attribute",
+        "semantic_type": "username",
+        "aliases": ["LastUpdater", "UpdatedByUser"],
+        "description": "Username who performed the last update"
+      },
+      {
+        "name": "SalesAddressID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["SalesAddress", "Delivery Address"],
+        "description": "Reference to the sales/delivery address"
+      },
+      {
+        "name": "DMKey",
+        "role": "attribute",
+        "semantic_type": "id",
+        "aliases": ["DataMigrationKey", "Legacy ID"],
+        "description": "Data migration key from legacy system"
+      },
+      {
+        "name": "DMTable",
+        "role": "attribute",
+        "semantic_type": "code",
+        "aliases": ["DataMigrationTable", "Source Table"],
+        "description": "Source table name from data migration"
+      },
+      {
+        "name": "GLSeqCodeID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["GLSequenceCode", "Ledger Code"],
+        "description": "Reference to the general ledger sequence code"
+      },
+      {
+        "name": "KEPYOStatusID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["KEPYOStatus", "Compliance Status"],
+        "description": "Reference to the KEPYO compliance status"
+      },
+      {
+        "name": "HasCRMTicket",
+        "role": "attribute",
+        "semantic_type": "flag",
+        "aliases": ["CRMTicketExists", "Has Support Ticket"],
+        "description": "Indicates if there is an active CRM ticket"
+      },
+      {
+        "name": "DMCharKey",
+        "role": "attribute",
+        "semantic_type": "code",
+        "aliases": ["DataMigrationCharKey", "Legacy Char Key"],
+        "description": "Character-based data migration key"
+      },
+      {
+        "name": "CustomerSolvencyID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["Solvency", "Credit Status"],
+        "description": "Reference to the customer solvency/creditworthiness status"
+      },
+      {
+        "name": "NoTaxVat",
+        "role": "attribute",
+        "semantic_type": "flag",
+        "aliases": ["VATExempt", "No VAT"],
+        "description": "Indicates if the business is VAT exempt"
+      },
+      {
+        "name": "SpecialInformation",
+        "role": "attribute",
+        "semantic_type": "description",
+        "aliases": ["SpecialNotes", "Special Remarks"],
+        "description": "Special information or notes about the business"
+      },
+      {
+        "name": "ExtraCardInformation",
+        "role": "attribute",
+        "semantic_type": "description",
+        "aliases": ["CardInfo", "Additional Card Details"],
+        "description": "Additional card or payment information"
+      },
+      {
+        "name": "TransferDateToEBS",
+        "role": "attribute",
+        "semantic_type": "timestamp",
+        "aliases": ["EBSTransferDate", "EBS Sync Date"],
+        "description": "Date when data was transferred to EBS system"
+      },
+      {
+        "name": "CustomerSourceModifiedOn",
+        "role": "attribute",
+        "semantic_type": "timestamp",
+        "aliases": ["SourceModifiedDate"],
+        "description": "Date when customer source was last modified"
+      },
+      {
+        "name": "CustomerUpdateModifiedOn",
+        "role": "attribute",
+        "semantic_type": "timestamp",
+        "aliases": ["UpdateModifiedDate"],
+        "description": "Date when customer update record was modified"
+      },
+      {
+        "name": "CustomerUpdateID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["CustomerUpdate", "Update Reference"],
+        "description": "Reference to the customer update record"
+      },
+      {
+        "name": "Version",
+        "role": "attribute",
+        "semantic_type": "version",
+        "aliases": ["RowVersion", "Timestamp"],
+        "description": "Row version for optimistic concurrency control"
+      },
+      {
+        "name": "HasLiveProfilePageInXOGR",
+        "role": "attribute",
+        "semantic_type": "flag",
+        "aliases": ["LiveProfile", "XOGR Profile"],
+        "description": "Indicates if business has a live profile page in XOGR"
+      },
+      {
+        "name": "ShowDistrictInXOGR",
+        "role": "attribute",
+        "semantic_type": "flag",
+        "aliases": ["DisplayDistrict", "Show Area"],
+        "description": "Indicates if district should be shown in XOGR"
+      },
+      {
+        "name": "InitialCustomerSourceID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["OriginalSource", "Initial Lead Source"],
+        "description": "Reference to the original customer acquisition source"
+      }
+    ]
+  },
+  {
+    "name": "Business Point Identification",
+    "source": "dbo.BusinessPointIdentification",
+    "primary_key": ["ID"],
+    "display": {
+      "display_name": "Business Point Identification",
+      "default_label_column": "Name",
+      "default_search_columns": ["Name", "BrandName", "TaxCode", "City"],
+      "default_sort": {"column": "Name", "direction": "asc"}
+    },
+    "columns": [
+      {
+        "name": "ID",
+        "role": "primary_key",
+        "semantic_type": "id",
+        "aliases": ["IdentificationID", "BPIID"],
+        "description": "Unique identifier for the business point identification record"
+      },
+      {
+        "name": "BusinessPointID",
+        "role": "foreign_key",
+        "semantic_type": "id",
+        "aliases": ["BPID", "Business Point"],
+        "description": "Reference to the parent business point"
+      },
+      {
+        "name": "Name",
+        "role": "label",
+        "semantic_type": "person_or_org_name",
+        "aliases": ["BusinessName", "Company Name", "Legal Name"],
+        "description": "Legal or registered name of the business"
+      },
+      {
+        "name": "BrandName",
+        "role": "attribute",
+        "semantic_type": "person_or_org_name",
+        "aliases": ["TradeName", "DBA", "Commercial Name"],
+        "description": "Commercial or trading brand name"
+      },
+      {
+        "name": "TaxCode",
+        "role": "attribute",
+        "semantic_type": "tax_id",
+        "aliases": ["VAT Number", "AFM", "Tax ID", "TIN"],
+        "description": "Tax identification number (AFM in Greece)"
+      },
+      {
+        "name": "Profession",
+        "role": "attribute",
+        "semantic_type": "category",
+        "aliases": ["BusinessType", "Industry", "Activity"],
+        "description": "Professional activity or business type description"
+      },
+      {
+        "name": "Phone1",
+        "role": "attribute",
+        "semantic_type": "phone",
+        "aliases": ["PrimaryPhone", "MainPhone", "Telephone"],
+        "description": "Primary telephone number"
+      },
+      {
+        "name": "Phone2",
+        "role": "attribute",
+        "semantic_type": "phone",
+        "aliases": ["SecondaryPhone", "AlternatePhone"],
+        "description": "Secondary telephone number"
+      },
+      {
+        "name": "Phone3",
+        "role": "attribute",
+        "semantic_type": "phone",
+        "aliases": ["TertiaryPhone", "ThirdPhone"],
+        "description": "Tertiary telephone number"
+      },
+      {
+        "name": "MobilePhone",
+        "role": "attribute",
+        "semantic_type": "phone",
+        "aliases": ["Mobile", "CellPhone", "Cell"],
+        "description": "Mobile phone number"
+      },
+      {
+        "name": "Fax",
+        "role": "attribute",
+        "semantic_type": "phone",
+        "aliases": ["FaxNumber", "Facsimile"],
+        "description": "Fax number"
+      },
+      {
+        "name": "Email1",
+        "role": "attribute",
+        "semantic_type": "email",
+        "aliases": ["PrimaryEmail", "MainEmail", "Email"],
+        "description": "Primary email address"
+      },
+      {
+        "name": "Email2",
+        "role": "attribute",
+        "semantic_type": "email",
+        "aliases": ["SecondaryEmail", "AlternateEmail"],
+        "description": "Secondary email address"
+      },
+      {
+        "name": "Address",
+        "role": "attribute",
+        "semantic_type": "address",
+        "aliases": ["StreetAddress", "Street", "Location"]
